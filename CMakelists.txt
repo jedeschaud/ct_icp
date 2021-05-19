@@ -1,0 +1,11 @@
+cmake_minimum_required (VERSION 2.6)
+
+#supress generation of ZERO_CHECK
+set(CMAKE_SUPPRESS_REGENERATION true)
+
+file(GLOB_RECURSE source_files "src/*.cpp")
+
+project(CT_ICP)
+ 
+add_executable(CT_ICP ${source_files})
+
