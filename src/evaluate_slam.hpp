@@ -13,10 +13,10 @@
 #include <map>
 #include <exception>
 
-#include "Eigen/Dense"
+#include "ct_icp/Eigen/Dense"
 
 #include "yaml-cpp/yaml.h"
-#include "types.hpp"
+#include "ct_icp/types.hpp"
 
 using namespace ct_icp;
 

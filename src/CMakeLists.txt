@@ -1,12 +1,5 @@
-set(CT_ICP_SOURCES ct_icp.hpp ct_icp.cpp)
-
-# ADD CT_ICP LIBRARY
-file(GLOB Utilities_SRC "Utilities/*")
-add_library(CT_ICP ct_icp.cpp ct_icp.hpp types.hpp
-        odometry.cpp odometry.hpp
-        dataset.cpp dataset.hpp
-        io.cpp io.hpp
-        ${Utilities_SRC})
+# TODO: - Manage better the include directory of target CT_ICP
+add_subdirectory(ct_icp)
 
 # Main Executable
 add_executable(main main.cpp evaluate_slam.hpp evaluate.hpp)

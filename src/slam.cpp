@@ -10,11 +10,10 @@
 
 #define _USE_MATH_DEFINES
 
-#include "Eigen/Dense"
-
-#include "odometry.hpp"
-#include "dataset.hpp"
-#include "io.hpp"
+#include "ct_icp/Eigen/Dense"
+#include "ct_icp/odometry.hpp"
+#include "ct_icp/dataset.hpp"
+#include "ct_icp/io.hpp"
 #include "evaluate_slam.hpp"
 
 

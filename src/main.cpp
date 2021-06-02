@@ -11,14 +11,14 @@
 #include <stdint.h>
 #include <unordered_map>
 
-#include "Eigen/Dense"
-#include "Eigen/SVD"
-#include "Eigen/Geometry"
+#include "ct_icp/Eigen/Dense"
+#include "ct_icp/Eigen/SVD"
+#include "ct_icp/Eigen/Geometry"
 
-#include "Utilities/PlyFile.h"
-#include "Utilities/PersoTimer.h"
+#include "ct_icp/Utilities/PlyFile.h"
+#include "ct_icp/Utilities/PersoTimer.h"
 
-#include "ct_icp.hpp"
+#include "ct_icp/ct_icp.hpp"
 #include "evaluate_slam.hpp"
 
 using namespace ct_icp;
@@ -489,7 +489,7 @@ int main(int argc, char **argv) {
 
 
                 // Use new sub_sample frame as keypoints
-                std::list<Point3D> keypoints;
+                std::vector<Point3D> keypoints;
                 grid_sampling(frame, keypoints, 1.0);
 
 
@@ -520,7 +520,7 @@ int main(int argc, char **argv) {
                     char *dataOut = new char[(unsigned long long int) numPointsOut *
                                              (unsigned long long int) sizeOfPointOut];
                     int i = 0;
-                    for (std::list<Point3D>::iterator it_pt_key = keypoints.begin();
+                    for (auto it_pt_key = keypoints.begin();
                          it_pt_key != keypoints.end(); ++it_pt_key) {
                         unsigned long long int offset =
                                 (unsigned long long int) i * (unsigned long long int) sizeOfPointOut;
