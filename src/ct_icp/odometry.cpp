@@ -6,11 +6,7 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     size_t Odometry::MapSize() const {
-        size_t map_size(0);
-        for (auto &itr_voxel_map : voxel_map_) {
-            map_size += (itr_voxel_map.second).size();
-        }
-        return map_size;
+        return ::ct_icp::MapSize(voxel_map_);
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -101,16 +97,8 @@ namespace ct_icp {
 
             // Remove voxels too far from actual position of the vehicule
             const double kMaxDistance = options_->max_distance;
-            std::vector<Voxel> voxels_to_erase;
-            voxels_to_erase.reserve(frame.size());
-            for (auto &pair : voxel_map_) {
-                Eigen::Vector3d pt = pair.second.front();
-                if ((pt - trajectory_[index_frame].end_t).squaredNorm() > (kMaxDistance * kMaxDistance)) {
-                    voxels_to_erase.push_back(pair.first);
-                }
-            }
-            for (auto &vox : voxels_to_erase)
-                voxel_map_.erase(vox);
+            const Eigen::Vector3d location = trajectory_[index_frame].end_t;
+            RemovePointsFarFromLocation(voxel_map_, location, kMaxDistance);
 
             if (kDisplay)
                 log_out << "Number of points in map : " << MapSize() << std::endl;
@@ -178,31 +166,7 @@ namespace ct_icp {
         }
 
         //Update Voxel Map
-        for (int i = 0; i < (int) frame.size(); i++) {
-            short kx = static_cast<short>(frame[i].pt[0] / kSizeVoxelMap);
-            short ky = static_cast<short>(frame[i].pt[1] / kSizeVoxelMap);
-            short kz = static_cast<short>(frame[i].pt[2] / kSizeVoxelMap);
-
-            auto search = voxel_map_.find(Voxel(kx, ky, kz));
-            if (search != voxel_map_.end()) {
-                std::list<Eigen::Vector3d> *current_list = &(search->second);
-
-                if ((*current_list).size() < kMaxNumPointsInVoxel) {
-                    double sq_dist_min_to_points = 10 * kSizeVoxelMap * kSizeVoxelMap;
-                    for (auto &point : *current_list) {
-                        double sq_dist = (point - frame[i].pt).squaredNorm();
-                        if (sq_dist < sq_dist_min_to_points) {
-                            sq_dist_min_to_points = sq_dist;
-                        }
-                    }
-                    if (sq_dist_min_to_points > (kMinDistancePoints * kMinDistancePoints)) {
-                        (*current_list).push_back(frame[i].pt);
-                    }
-                }
-            } else {
-                voxel_map_[Voxel(kx, ky, kz)].push_back(frame[i].pt);
-            }
-        }
+        AddPointsToMap(voxel_map_, frame, kSizeVoxelMap, kMaxNumPointsInVoxel, kMinDistancePoints);
 
         if (kDisplay)
             log_out << "Done" << std::endl;
@@ -227,15 +191,88 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     ArrayVector3d Odometry::GetLocalMap() const {
+        return MapAsPointcloud(voxel_map_);
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    ArrayVector3d MapAsPointcloud(const VoxelHashMap &map) {
         ArrayVector3d points;
-        points.reserve(MapSize());
-        for (auto &voxel : voxel_map_) {
+        points.reserve(MapSize(map));
+        for (auto &voxel : map) {
             for (auto &point: voxel.second)
                 points.push_back(point);
         }
-
         return points;
     }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    size_t MapSize(const VoxelHashMap &map) {
+        size_t map_size(0);
+        for (auto &itr_voxel_map : map) {
+            map_size += (itr_voxel_map.second).size();
+        }
+        return map_size;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    void RemovePointsFarFromLocation(VoxelHashMap &map, const Eigen::Vector3d &location, double distance) {
+        std::vector<Voxel> voxels_to_erase;
+        for (auto &pair : map) {
+            Eigen::Vector3d pt = pair.second.front();
+            if ((pt - location).squaredNorm() > (distance * distance)) {
+                voxels_to_erase.push_back(pair.first);
+            }
+        }
+        for (auto &vox : voxels_to_erase)
+            map.erase(vox);
+
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    inline void AddPointToMap(VoxelHashMap &map, const Eigen::Vector3d &point, double voxel_size,
+                              int max_num_points_in_voxel, double min_distance_points) {
+        short kx = static_cast<short>(point[0] / voxel_size);
+        short ky = static_cast<short>(point[1] / voxel_size);
+        short kz = static_cast<short>(point[2] / voxel_size);
+
+        auto search = map.find(Voxel(kx, ky, kz));
+        if (search != map.end()) {
+            auto *current_list = &(search->second);
+
+            if ((*current_list).size() < max_num_points_in_voxel) {
+                double sq_dist_min_to_points = 10 * voxel_size * voxel_size;
+                for (auto &_point : *current_list) {
+                    double sq_dist = (_point - point).squaredNorm();
+                    if (sq_dist < sq_dist_min_to_points) {
+                        sq_dist_min_to_points = sq_dist;
+                    }
+                }
+                if (sq_dist_min_to_points > (min_distance_points * min_distance_points)) {
+                    (*current_list).push_back(point);
+                }
+            }
+        } else {
+            map[Voxel(kx, ky, kz)].push_back(point);
+        }
+
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    void AddPointsToMap(VoxelHashMap &map, const vector<Point3D> &points, double voxel_size,
+                        int max_num_points_in_voxel, double min_distance_points) {
+        //Update Voxel Map
+        for (const auto &point : points) {
+            AddPointToMap(map, point.pt, voxel_size, max_num_points_in_voxel, min_distance_points);
+        }
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    void AddPointsToMap(VoxelHashMap &map, const ArrayVector3d &points, double voxel_size,
+                        int max_num_points_in_voxel, double min_distance_points) {
+        for (const auto &point: points)
+            AddPointToMap(map, point, voxel_size, max_num_points_in_voxel, min_distance_points);
+    }
+    /* -------------------------------------------------------------------------------------------------------------- */
 
 
 } // namespace ct_icp

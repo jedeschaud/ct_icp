@@ -53,7 +53,7 @@ namespace ct_icp {
         short z;
     };
 
-    typedef std::unordered_map<Voxel, std::list<Eigen::Vector3d>> VoxelHashMap;
+    typedef std::unordered_map<Voxel, std::vector<Eigen::Vector3d>> VoxelHashMap;
     typedef std::vector<Eigen::Vector3d, EIGEN_ALIGNED_ALLOCATOR<Eigen::Vector3d>> ArrayVector3d;
     typedef std::vector<Eigen::Matrix4d, EIGEN_ALIGNED_ALLOCATOR<Eigen::Matrix4d>> ArrayMatrix4d;
     typedef ArrayMatrix4d ArrayPoses;

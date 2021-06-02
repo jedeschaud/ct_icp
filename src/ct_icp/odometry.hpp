@@ -26,6 +26,24 @@ namespace ct_icp {
 
     };
 
+    // Add Points To the Map
+    inline void AddPointsToMap(VoxelHashMap &map, const std::vector<Point3D> &points,
+                               double voxel_size, int max_num_points_in_voxel, double min_distance_points);
+
+    // Add Points To the Map
+    inline void AddPointsToMap(VoxelHashMap &map, const ArrayVector3d &points, double voxel_size,
+                               int max_num_points_in_voxel, double min_distance_points);
+
+    // Remove voxels far from the given location
+    inline void RemovePointsFarFromLocation(VoxelHashMap &map, const Eigen::Vector3d &location, double distance);
+
+    // Extracts points of the local map into a PointCloud
+    inline ArrayVector3d MapAsPointcloud(const VoxelHashMap &map);
+
+    // Compute the size of a VoxelHashMap
+    inline size_t MapSize(const VoxelHashMap &map);
+
+
     class Odometry {
     public:
 

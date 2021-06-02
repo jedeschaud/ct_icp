@@ -83,14 +83,14 @@ namespace ct_icp {
     // Search Neighbors with VoxelHashMap lookups
 #define  kNB_VOXELS 1
 
-    inline std::vector<std::list<Eigen::Vector3d> const *>
+    inline std::vector<std::vector<Eigen::Vector3d> const *>
     search_neighbors(const VoxelHashMap &map,
                      const Eigen::Vector3d &point,
                      int nb_voxels_visited,
                      double size_voxel_map,
                      int &out_number_neighbors) {
 
-        std::vector<std::list<Eigen::Vector3d> const *> neighbors_ptr;
+        std::vector<std::vector<Eigen::Vector3d> const *> neighbors_ptr;
         const int max_size = (2 * nb_voxels_visited + 1) * (2 * nb_voxels_visited + 1) * (2 * nb_voxels_visited + 1);
         neighbors_ptr.reserve(max_size);
         short kx = static_cast<short>(point[0] / size_voxel_map);
@@ -98,7 +98,7 @@ namespace ct_icp {
         short kz = static_cast<short>(point[2] / size_voxel_map);
         out_number_neighbors = 0;
 
-        if (nb_voxels_visited == 1) {
+        if (nb_voxels_visited == kNB_VOXELS) {
             for (short kxx = kx - kNB_VOXELS; kxx < kx + kNB_VOXELS + 1; ++kxx) {
                 for (short kyy = ky - kNB_VOXELS; kyy < ky + kNB_VOXELS + 1; ++kyy) {
                     for (short kzz = kz - kNB_VOXELS; kzz < kz + kNB_VOXELS + 1; ++kzz) {
@@ -131,7 +131,7 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     inline ArrayVector3d
-    select_closest_neighbors(const std::vector<std::list<Eigen::Vector3d> const *> &neighbors_ptr,
+    select_closest_neighbors(const std::vector<std::vector<Eigen::Vector3d> const *> &neighbors_ptr,
                              const Eigen::Vector3d &pt_keypoint,
                              int num_neighbors, int max_num_neighbors) {
         std::vector<std::pair<double, Eigen::Vector3d>> distance_neighbors;
