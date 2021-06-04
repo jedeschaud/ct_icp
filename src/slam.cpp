@@ -36,6 +36,8 @@ namespace ct_icp {
         std::string output_dir = "./outputs"; // The output path (relative or absolute) to save the pointclouds
 
         int max_frames = -1; // The maximum number of frames to register (if -1 all frames in the Dataset are registered)
+
+        bool display_debug = true; // Whether to display timing and debug information
     };
 
 }
@@ -60,12 +62,16 @@ SLAMOptions read_arguments(int argc, char **argv) {
 
         TCLAP::ValueArg<std::string> output_directory_arg("o", "output_dir", "The Output Directory",
                                                           false, "", "string");
+
+        TCLAP::ValueArg<bool> debug_arg("p", "debug", "Whether to display debug information (true by default)",
+                                        false, true, "bool");
         // TODO : Add Command Line to change Odometry Options
 
         cmd.add(dataset_arg);
         cmd.add(dataset_root_arg);
         cmd.add(max_num_threads_arg);
         cmd.add(output_directory_arg);
+        cmd.add(debug_arg);
 
         // Parse the arguments of the command line
         cmd.parse(argc, argv);
@@ -86,6 +92,9 @@ SLAMOptions read_arguments(int argc, char **argv) {
         options.output_dir = output_directory_arg.getValue();
         if (!options.output_dir.empty() && options.output_dir[-1] != '/')
             options.output_dir += '/';
+        options.display_debug = debug_arg.getValue();
+        options.odometry_options.debug_print = options.display_debug;
+        options.odometry_options.ct_icp_options.debug_print = options.display_debug;
 
         // Sanity check on the options
 

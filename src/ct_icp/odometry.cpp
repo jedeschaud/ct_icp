@@ -35,7 +35,8 @@ namespace ct_icp {
         } else {
             sub_sample_frame(frame, kSizeVoxelInitSample);
         }
-        log_out << "Sampled Points " << frame.size() << " / " << const_frame.size() << std::endl;
+        if (kDisplay)
+            log_out << "Sampled Points " << frame.size() << " / " << const_frame.size() << std::endl;
 
         RegistrationSummary summary;
         // Initial Trajectory Estimate
@@ -77,7 +78,7 @@ namespace ct_icp {
             }
 
             Eigen::Vector3d t_diff = trajectory_[index_frame].end_t - trajectory_[index_frame].begin_t;
-            if (options_->debug_print)
+            if (kDisplay)
                 log_out << "Initial ego-motion distance : " << t_diff.norm() << std::endl;
 
         }
@@ -130,7 +131,8 @@ namespace ct_icp {
                 }
                 auto end_ct_icp = std::chrono::steady_clock::now();
                 std::chrono::duration<double> elapsed_icp = (end_ct_icp - start);
-                log_out << "Elapsed CT_ICP: " << (elapsed_icp.count()) * 1000.0 << std::endl;
+                if (kDisplay)
+                    log_out << "Elapsed CT_ICP: " << (elapsed_icp.count()) * 1000.0 << std::endl;
             }
             summary.number_keypoints = number_keypoints_used;
             if (kDisplay) {
@@ -173,7 +175,8 @@ namespace ct_icp {
 
         auto end = std::chrono::steady_clock::now();
         std::chrono::duration<double> elapsed_seconds = end - start;
-        log_out << "Elapsed Time: " << elapsed_seconds.count() * 1000.0 << " (ms)" << std::endl;
+        if (kDisplay)
+            log_out << "Elapsed Time: " << elapsed_seconds.count() * 1000.0 << " (ms)" << std::endl;
 
         for (auto &point : frame)
             point.index_frame = index_frame;
