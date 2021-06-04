@@ -407,29 +407,30 @@ namespace ct_icp {
             elapsed_update += _elapsed_update.count() * 1000.0;
 
 
-            if (x_bundle.norm() < options.norm_x_end_iteration_ct_icp && options.debug_print) {
-                std::cout << "Number iterations CT-ICP : " << iter << std::endl;
-
-                std::cout << "Elapsed Normals: " << elapsed_normals << std::endl;
-                std::cout << "Elapsed Search Neighbors: " << elapsed_search_neighbors << std::endl;
-                std::cout << "Elapsed A Construction: " << elapsed_A_construction << std::endl;
-                std::cout << "Elapsed Select closest: " << elapsed_select_closest_neighbors << std::endl;
-                std::cout << "Elapsed Solve: " << elapsed_solve << std::endl;
-                std::cout << "Elapsed Solve: " << elapsed_update << std::endl;
+            if (x_bundle.norm() < options.norm_x_end_iteration_ct_icp) {
+                if (options.debug_print) {
+                    std::cout << "Number iterations CT-ICP : " << iter << std::endl;
+                    std::cout << "Elapsed Normals: " << elapsed_normals << std::endl;
+                    std::cout << "Elapsed Search Neighbors: " << elapsed_search_neighbors << std::endl;
+                    std::cout << "Elapsed A Construction: " << elapsed_A_construction << std::endl;
+                    std::cout << "Elapsed Select closest: " << elapsed_select_closest_neighbors << std::endl;
+                    std::cout << "Elapsed Solve: " << elapsed_solve << std::endl;
+                    std::cout << "Elapsed Solve: " << elapsed_update << std::endl;
+                }
                 return number_keypoints_used;
             }
         }
 
-        std::cout << "Elapsed Normals: " << elapsed_normals << std::endl;
-        std::cout << "Elapsed Search Neighbors: " << elapsed_search_neighbors << std::endl;
-        std::cout << "Elapsed A Construction: " << elapsed_A_construction << std::endl;
-        std::cout << "Elapsed Select closest: " << elapsed_select_closest_neighbors << std::endl;
-        std::cout << "Elapsed Solve: " << elapsed_solve << std::endl;
-        std::cout << "Elapsed Solve: " << elapsed_update << std::endl;
-
-
-        if (options.debug_print)
+        if (options.debug_print) {
+            std::cout << "Elapsed Normals: " << elapsed_normals << std::endl;
+            std::cout << "Elapsed Search Neighbors: " << elapsed_search_neighbors << std::endl;
+            std::cout << "Elapsed A Construction: " << elapsed_A_construction << std::endl;
+            std::cout << "Elapsed Select closest: " << elapsed_select_closest_neighbors << std::endl;
+            std::cout << "Elapsed Solve: " << elapsed_solve << std::endl;
+            std::cout << "Elapsed Solve: " << elapsed_update << std::endl;
             std::cout << "Number iterations CT-ICP : " << options.num_iters_icp << std::endl;
+        }
+
         return number_keypoints_used;
     }
 
