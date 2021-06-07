@@ -124,7 +124,7 @@ namespace ct_icp {
             int sequence_id, sequence_size;
             if (options.dataset == KITTI) {
                 sequence_id = KITTI_SEQUENCE_IDS[i];
-                sequence_size = LENGTH_SEQUENCE_KITTI[i];
+                sequence_size = LENGTH_SEQUENCE_KITTI[i] + 1;
             } else {
                 sequence_id = i;
                 sequence_size = 5000;
