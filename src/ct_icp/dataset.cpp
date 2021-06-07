@@ -94,7 +94,7 @@ namespace ct_icp {
 
         switch (options.dataset) {
             case KITTI:
-                ground_truth_path += "poses/" + sequence_name + ".txt";
+                ground_truth_path += sequence_name + "/" + sequence_name + ".txt";
                 break;
             case KITTI_CARLA:
                 ground_truth_path += sequence_name + "/poses_gt.txt";
@@ -124,7 +124,7 @@ namespace ct_icp {
             int sequence_id, sequence_size;
             if (options.dataset == KITTI) {
                 sequence_id = KITTI_SEQUENCE_IDS[i];
-                sequence_size = LENGTH_SEQUENCE_KITTI[i] + 1;
+                sequence_size = LENGTH_SEQUENCE_KITTI[sequence_id] + 1;
             } else {
                 sequence_id = i;
                 sequence_size = 5000;
