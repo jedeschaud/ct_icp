@@ -14,9 +14,10 @@
 #include <random>
 #include <unordered_map>
 
-#include "Eigen/Dense"
+#include <Eigen/Dense>
 
 #include "types.hpp"
+#include "cost_functions.h"
 
 
 namespace ct_icp {
@@ -26,6 +27,14 @@ namespace ct_icp {
 
     // Samples Keypoints randomly in a voxel grid
     void grid_sampling(std::vector<Point3D> &frame, std::vector<Point3D> &keypoints, double size_voxel_subsampling);
+
+
+    enum LEAST_SQUARES {
+        STANDARD,
+        CAUCHY,
+        HUBER,
+        TOLERANT
+    };
 
     // Options for the CT_ICP
     struct CTICPOptions {
@@ -45,6 +54,21 @@ namespace ct_icp {
         bool debug_print = true; // Whether to output debug information to std::cout
 
         bool debug_interactive = true; // Whether to stop when an error has occured (calls std::system("PAUSE"))
+
+        CT_ICP_DISTANCE distance = CT_POINT_TO_PLANE;
+
+        LEAST_SQUARES loss_function = CAUCHY;
+
+        double least_square_param = 0.1; // The robust parameter (for Cauchy, Huber or truncated least square)
+
+        double tolerant_least_square_param = 0.05; // The Tolerant
+
+        int num_closest_neighbors = 3;
+
+        // TODO : Add Trajectory Constraints Options
+        double alpha_location_consistency = 1.e-4; // Constraints on location
+
+        double alpha_constant_velocity = 1.e-4; // Constraint on velocity
 
     };
 

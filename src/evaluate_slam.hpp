@@ -13,7 +13,7 @@
 #include <map>
 #include <exception>
 
-#include "ct_icp/Eigen/Dense"
+#include <Eigen/Dense>
 
 #include "yaml-cpp/yaml.h"
 #include "ct_icp/types.hpp"

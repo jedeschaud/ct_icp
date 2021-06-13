@@ -138,8 +138,6 @@ namespace ct_icp {
             if (kDisplay) {
                 log_out << "Number keypoints used : " << number_keypoints_used << std::endl;
             }
-
-
         }
 
         summary.frame = trajectory_[index_frame];
@@ -165,6 +163,10 @@ namespace ct_icp {
             }
 
             log_out << "Updating the Map" << std::endl;
+        }
+
+        if (index_frame == 1) {
+            voxel_map_.clear();
         }
 
         //Update Voxel Map

@@ -8,7 +8,7 @@
 
 #define _USE_MATH_DEFINES
 
-#include "ct_icp/Eigen/Dense"
+#include <Eigen/Dense>
 #include "ct_icp/odometry.hpp"
 #include "ct_icp/dataset.hpp"
 #include "ct_icp/io.hpp"

@@ -4,46 +4,10 @@ project(CT_ICP)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# External projects
-include(FetchContent)
+include(cmake/external.cmake)
 
-# TCLAP For argument reader
-FetchContent_Declare(
-        tclap
-        GIT_REPOSITORY https://github.com/mirror/tclap
-        GIT_TAG 1.4)
+include(cmake/test.cmake)
 
-FetchContent_GetProperties(tclap)
-if (NOT TCLAP_POPULATED)
-    # Import Only TCLAP Header library (Without the unit tests)
-    FetchContent_Populate(tclap)
-
-    add_library(TCLAP INTERFACE)
-    target_include_directories(TCLAP INTERFACE "${tclap_SOURCE_DIR}/include/")
-    add_subdirectory("${tclap_SOURCE_DIR}/include/tclap" "${tclap_BINARY_DIR}/include/tclap")
-endif ()
-
-
-# YAML-CPP To read/write Yaml configuration files
-FetchContent_Declare(
-        yaml-cpp
-        GIT_REPOSITORY https://github.com/jbeder/yaml-cpp
-        GIT_TAG yaml-cpp-0.6.3
-)
-FetchContent_GetProperties(yaml-cpp)
-if (NOT yaml-cpp_POPULATED)
-    FetchContent_Populate(yaml-cpp)
-
-    set(YAML_CPP_BUILD_TESTS OFF) # Do not build the tests
-    add_subdirectory(${yaml-cpp_SOURCE_DIR} ${yaml-cpp_BINARY_DIR})
-endif ()
-
-# Google Test For Testing
-FetchContent_Declare(
-        googletest
-        GIT_REPOSITORY https://github.com/google/googletest.git
-        GIT_TAG release-1.8.0)
-FetchContent_MakeAvailable(googletest)
 
 find_package(OpenMP)
 if (OPENMP_FOUND)

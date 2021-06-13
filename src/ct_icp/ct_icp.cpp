@@ -1,10 +1,9 @@
-//
-// Created by pdell on 31.05.21.
-//
-
 #include <chrono>
+#include <Eigen/StdVector>
+#include <ceres/ceres.h>
+
 #include "ct_icp.hpp"
-#include "Eigen/StdVector"
+#include "cost_functions.h"
 
 namespace ct_icp {
 
@@ -159,11 +158,178 @@ namespace ct_icp {
         return neighbors;
     }
 
-
     /* -------------------------------------------------------------------------------------------------------------- */
     int CT_ICP(const CTICPOptions &options,
                const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
                std::vector<TrajectoryFrame> &trajectory, int index_frame) {
+        // TODO:
+        //  - Step 1: TEST -> See how CT_ICP behaves with the naive implementation of Ceres
+        //  - Step 2: Try and make it performant
+        //  - Step 3: Abstract and build a better API (which takes into account more of the things to vary)
+
+        const short nb_voxels_visited = index_frame < 50 ? 2 : 1;
+        const int kMinNumNeighbors = options.min_number_neighbors;
+
+
+        ceres::Solver::Options ceres_options;
+        ceres_options.max_num_iterations = 1;
+        ceres_options.num_threads = 4;
+
+        TrajectoryFrame *previous_estimate = nullptr;
+        Eigen::Vector3d previous_velocity = Eigen::Vector3d::Zero();
+        if (index_frame > 0) {
+            previous_estimate = &trajectory[index_frame - 1];
+            previous_velocity = previous_estimate->end_t - previous_estimate->begin_t;
+        }
+
+
+        TrajectoryFrame &current_estimate = trajectory[index_frame];
+        Eigen::Quaterniond begin_quat = Eigen::Quaterniond(current_estimate.begin_R);
+        Eigen::Quaterniond end_quat = Eigen::Quaterniond(current_estimate.end_R);
+        Eigen::Vector3d begin_t = current_estimate.begin_t;
+        Eigen::Vector3d end_t = current_estimate.end_t;
+
+        int number_keypoints_used;
+
+        for (int iter(0); iter < options.num_iters_icp; iter++) {
+            ceres::LossFunction *loss_function = nullptr;
+
+            ceres::EigenQuaternionParameterization *parameterization = new ceres::EigenQuaternionParameterization();
+            switch (options.loss_function) {
+                case LEAST_SQUARES::STANDARD:
+                    break;
+                case LEAST_SQUARES::CAUCHY:
+                    loss_function = new ceres::CauchyLoss(options.least_square_param);
+                    break;
+                case LEAST_SQUARES::HUBER:
+                    loss_function = new ceres::HuberLoss(options.least_square_param);
+                    break;
+                case LEAST_SQUARES::TOLERANT:
+                    loss_function = new ceres::TolerantLoss(options.tolerant_least_square_param,
+                                                            options.least_square_param);
+                    break;
+            }
+
+            ceres::Problem problem;
+            ceres::Solver::Summary summary;
+
+            problem.AddParameterBlock(&begin_quat.x(), 4, parameterization);
+            problem.AddParameterBlock(&end_quat.x(), 4, parameterization);
+            problem.AddParameterBlock(&begin_t(0, 0), 3);
+            problem.AddParameterBlock(&end_t(0, 0), 3);
+
+            number_keypoints_used = 0;
+
+            // Add Point-to-plane residuals
+            for (auto &keypoint : keypoints) {
+                auto &raw_point = keypoint.raw_pt;
+                // Neighborhood search
+                int number_neighbors;
+                auto neighbors_ptr = search_neighbors(voxels_map, keypoint.pt,
+                                                      nb_voxels_visited, options.size_voxel_map,
+                                                      number_neighbors);
+                if (number_neighbors <= kMinNumNeighbors)
+                    continue;
+                number_keypoints_used++;
+
+
+                // Select the closest neighbors
+                ArrayVector3d vector_neighbors = select_closest_neighbors(neighbors_ptr, keypoint.pt,
+                                                                          number_neighbors,
+                                                                          options.max_number_neighbors);
+                // Compute normals from neighbors
+                double a2D; // The planarity coefficient
+                auto normal = compute_normal(vector_neighbors, a2D);
+
+                if (normal.dot(trajectory[index_frame].begin_t - raw_point) < 0) {
+                    normal = -1.0 * normal;
+                }
+
+                // TODO : Add multiple neighbors ?
+                for (int i(0); i < options.num_closest_neighbors; ++i) {
+                    problem.AddResidualBlock(
+                            new ceres::AutoDiffCostFunction<CTPointToPlaneFunctor, 1, 4, 3, 4, 3>(
+                                    new CTPointToPlaneFunctor(vector_neighbors[i], raw_point, normal,
+                                                              keypoint.alpha_timestamp, a2D * a2D)),
+                            loss_function,
+                            &begin_quat.x(),
+                            &begin_t.x(),
+                            &end_quat.x(),
+                            &end_t.x());
+                }
+            }
+
+
+            if (index_frame > 0) {
+
+                // Add Regularisation residuals
+                problem.AddResidualBlock(new ceres::AutoDiffCostFunction<LocationConsistencyFunctor,
+                                                 LocationConsistencyFunctor::NumResiduals(), 3>(
+                        new LocationConsistencyFunctor(previous_estimate->end_t, options.alpha_location_consistency)),
+                                         nullptr,
+                                         &begin_t.x());
+                problem.AddResidualBlock(new ceres::AutoDiffCostFunction<ConstantVelocityFunctor,
+                                                 ConstantVelocityFunctor::NumResiduals(), 3, 3>(
+                        new ConstantVelocityFunctor(previous_velocity, options.alpha_constant_velocity)),
+                                         nullptr,
+                                         &begin_t.x(),
+                                         &end_t.x());
+
+
+            }
+            if (number_keypoints_used < 100) {
+                if (options.debug_print) {
+                    std::cout << "Error : not enough keypoints selected in ct-icp !" << std::endl;
+                    std::cout << "number_keypoints : " << number_keypoints_used << std::endl;
+                }
+                exit(1);
+            }
+
+
+            ceres::Solve(ceres_options, &problem, &summary);
+            if (!summary.IsSolutionUsable()) {
+                std::cout << summary.FullReport() << std::endl;
+                throw std::runtime_error("Error During Optimization");
+            }
+            if (options.debug_print) {
+                std::cout << summary.BriefReport() << std::endl;
+            }
+
+            begin_quat.normalize();
+            end_quat.normalize();
+
+            double diff_trans = (current_estimate.begin_t - begin_t).norm() + (current_estimate.end_t - end_t).norm();
+            double diff_rot = (current_estimate.begin_R * (begin_quat.toRotationMatrix().transpose()) -
+                               Eigen::Matrix3d::Identity()).norm();
+            diff_rot += (current_estimate.end_R * (end_quat.toRotationMatrix().transpose()) -
+                         Eigen::Matrix3d::Identity()).norm();
+
+            current_estimate.begin_t = begin_t;
+            current_estimate.end_t = end_t;
+            current_estimate.begin_R = begin_quat.toRotationMatrix();
+            current_estimate.end_R = end_quat.toRotationMatrix();
+
+            for (auto &keypoint : keypoints) {
+                double alpha_timestamp = keypoint.alpha_timestamp;
+                Eigen::Quaterniond q = begin_quat.slerp(alpha_timestamp, end_quat);
+                q.normalize();
+                Eigen::Matrix3d R = q.toRotationMatrix();
+                Eigen::Vector3d t = (1.0 - alpha_timestamp) * begin_t + alpha_timestamp * end_t;
+                keypoint.pt = R * keypoint.raw_pt + t;
+            }
+
+            if (diff_rot < 1.e-4 && diff_trans < 1.e-3) {
+                break;
+            }
+        }
+
+        return (int) keypoints.size();
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    int CT_ICP_old(const CTICPOptions &options,
+                   const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
+                   std::vector<TrajectoryFrame> &trajectory, int index_frame) {
 
         //Optimization with Traj constraints
         const double ALPHA_C = 0.001;
