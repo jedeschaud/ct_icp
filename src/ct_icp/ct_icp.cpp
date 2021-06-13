@@ -208,6 +208,9 @@ namespace ct_icp {
                     loss_function = new ceres::TolerantLoss(options.tolerant_least_square_param,
                                                             options.least_square_param);
                     break;
+                case LEAST_SQUARES::TRUNCATED:
+                    loss_function = new ct_icp::TruncatedLoss(options.least_square_param);
+                    break;
             }
 
             ceres::Problem problem;

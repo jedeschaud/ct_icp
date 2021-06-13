@@ -1,6 +1,9 @@
 #ifndef CT_ICP_COST_FUNCTIONS_H
 #define CT_ICP_COST_FUNCTIONS_H
 
+#include <ceres/loss_function.h>
+#include <Eigen/Dense>
+
 namespace ct_icp {
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -138,6 +141,25 @@ namespace ct_icp {
     private:
         Eigen::Vector3d previous_velocity_;
         double alpha_ = 1.e-4;
+    };
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// LOSS FUNCTIONS
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    // Truncated L2
+    //
+    //   rho(s) = ceres::min(sigma * sigma , s * s ).
+    //
+    class TruncatedLoss : public ceres::LossFunction {
+    public:
+        explicit TruncatedLoss(double sigma) : sigma2_(sigma * sigma) {}
+
+        void Evaluate(double, double *) const override;
+
+    private:
+        const double sigma2_;
     };
 
 

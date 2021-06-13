@@ -33,7 +33,8 @@ namespace ct_icp {
         STANDARD,
         CAUCHY,
         HUBER,
-        TOLERANT
+        TOLERANT,
+        TRUNCATED
     };
 
     // Options for the CT_ICP
@@ -57,9 +58,9 @@ namespace ct_icp {
 
         CT_ICP_DISTANCE distance = CT_POINT_TO_PLANE;
 
-        LEAST_SQUARES loss_function = CAUCHY;
+        LEAST_SQUARES loss_function = TRUNCATED;
 
-        double least_square_param = 0.1; // The robust parameter (for Cauchy, Huber or truncated least square)
+        double least_square_param = 0.4; // The robust parameter (for Cauchy, Huber or truncated least square)
 
         double tolerant_least_square_param = 0.05; // The Tolerant
 
