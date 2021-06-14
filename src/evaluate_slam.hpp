@@ -37,6 +37,7 @@ namespace evaluate {
         double max_ape;
         double mean_local_err;
         double max_local_err;
+        double average_elapsed_ms = -1.0;
         int index_max_local_err;
     };
 
@@ -192,6 +193,7 @@ namespace evaluate {
             out << YAML::Key << "MAX_LOCAL_ERROR" << YAML::Value << pair.second.max_local_err;
             out << YAML::Key << "INDEX_MAX_LOCAL_ERROR" << YAML::Value << pair.second.index_max_local_err;
             out << YAML::Key << "Success" << YAML::Value << success;
+            out << YAML::Key << "Average(ms)" << YAML::Value << pair.second.average_elapsed_ms;
 
             out << YAML::EndMap;
         }

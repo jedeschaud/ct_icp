@@ -3,6 +3,7 @@
 #include <string>
 #include <math.h>
 #include <vector>
+#include <chrono>
 
 #include <tclap/CmdLine.h>
 
@@ -126,10 +127,23 @@ int main(int argc, char **argv) {
                             std::min(sequences[i].second, options.max_frames);
         ct_icp::Odometry ct_icp_odometry(&options.odometry_options);
 
+        double total_elapsed_ms = 0.0;
+        double registration_elapsed_ms = 0.0;
+
         for (int frame_id(0); frame_id < sequence_size; ++frame_id) {
+            auto time_start_frame = std::chrono::steady_clock::now();
             std::vector<Point3D> frame = read_pointcloud(options.dataset_options, sequence_id, frame_id);
+            auto time_read_pointcloud = std::chrono::steady_clock::now();
 
             auto summary = ct_icp_odometry.RegisterFrame(frame);
+            auto time_register_frame = std::chrono::steady_clock::now();
+
+            std::chrono::duration<double> total_elapsed = time_register_frame - time_start_frame;
+            std::chrono::duration<double> registration_elapsed = time_register_frame - time_read_pointcloud;
+
+            registration_elapsed_ms += registration_elapsed.count() * 1000;
+            total_elapsed_ms += total_elapsed.count() * 1000;
+
             if (!summary.success) {
                 std::cerr << "Error while running SLAM for sequence " << sequence_id <<
                           ", at frame index " << frame_id << std::endl;
@@ -167,6 +181,7 @@ int main(int argc, char **argv) {
                 ground_truth_poses.resize(trajectory_absolute_poses.size());
 
             evaluate::seq_errors seq_error = evaluate::eval(ground_truth_poses, trajectory_absolute_poses);
+            seq_error.average_elapsed_ms = registration_elapsed_ms / sequence_size;
 
             std::cout << "[RESULTS] Sequence " << _sequence_name << std::endl;
             if (!valid_trajectory) {
@@ -179,13 +194,16 @@ int main(int argc, char **argv) {
             std::cout << "Mean Local Error : " << seq_error.mean_local_err << std::endl;
             std::cout << "Max Local Error : " << seq_error.max_local_err << std::endl;
             std::cout << "Index Max Local Error : " << seq_error.index_max_local_err << std::endl;
+            std::cout << "Average Duration : " << registration_elapsed_ms / sequence_size << std::endl;
 
 
 # pragma omp critical
             {
                 sequence_name_to_errors[_sequence_name] = seq_error;
                 // Save Metrics to file
-                evaluate::SaveMetrics(sequence_name_to_errors, options.output_dir + "metrics.yaml", valid_trajectory);
+                evaluate::SaveMetrics(sequence_name_to_errors, options.output_dir + "metrics.yaml",
+                                      valid_trajectory);
+
             };
 
 //            if (!valid_trajectory)

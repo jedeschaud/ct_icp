@@ -1,4 +1,6 @@
 #include <chrono>
+#include <queue>
+
 #include <Eigen/StdVector>
 #include <ceres/ceres.h>
 
@@ -80,14 +82,22 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     // Search Neighbors with VoxelHashMap lookups
-#define  kNB_VOXELS 1
+    using pair_distance_t = std::pair<double, Eigen::Vector3d>;
 
-    inline std::vector<std::vector<Eigen::Vector3d> const *>
+    struct Comparator {
+        bool operator()(const pair_distance_t &left, const pair_distance_t &right) const {
+            return left.first < right.first;
+        }
+    };
+
+    using priority_queue_t = std::priority_queue<pair_distance_t, std::vector<pair_distance_t>, Comparator>;
+
+    inline ArrayVector3d
     search_neighbors(const VoxelHashMap &map,
                      const Eigen::Vector3d &point,
                      int nb_voxels_visited,
                      double size_voxel_map,
-                     int &out_number_neighbors) {
+                     int max_num_neighbors) {
 
         std::vector<std::vector<Eigen::Vector3d> const *> neighbors_ptr;
         const int max_size = (2 * nb_voxels_visited + 1) * (2 * nb_voxels_visited + 1) * (2 * nb_voxels_visited + 1);
@@ -95,37 +105,37 @@ namespace ct_icp {
         short kx = static_cast<short>(point[0] / size_voxel_map);
         short ky = static_cast<short>(point[1] / size_voxel_map);
         short kz = static_cast<short>(point[2] / size_voxel_map);
-        out_number_neighbors = 0;
 
-        if (nb_voxels_visited == kNB_VOXELS) {
-            for (short kxx = kx - kNB_VOXELS; kxx < kx + kNB_VOXELS + 1; ++kxx) {
-                for (short kyy = ky - kNB_VOXELS; kyy < ky + kNB_VOXELS + 1; ++kyy) {
-                    for (short kzz = kz - kNB_VOXELS; kzz < kz + kNB_VOXELS + 1; ++kzz) {
-                        auto search = map.find(Voxel(kxx, kyy, kzz));
-                        if (search != map.end()) {
-                            neighbors_ptr.push_back(&(search->second));
-                            out_number_neighbors += (int) (search->second).size();
+        priority_queue_t priority_queue;
+
+        for (short kxx = kx - nb_voxels_visited; kxx < kx + nb_voxels_visited + 1; ++kxx) {
+            for (short kyy = ky - nb_voxels_visited; kyy < ky + nb_voxels_visited + 1; ++kyy) {
+                for (short kzz = kz - nb_voxels_visited; kzz < kz + nb_voxels_visited + 1; ++kzz) {
+                    auto search = map.find(Voxel(kxx, kyy, kzz));
+                    if (search != map.end()) {
+                        for (auto &neighbor : search->second) {
+                            double distance = (neighbor - point).norm();
+                            if (priority_queue.size() == max_num_neighbors) {
+                                if (distance < priority_queue.top().first) {
+                                    priority_queue.pop();
+                                    priority_queue.emplace(distance, neighbor);
+                                }
+                            } else
+                                priority_queue.emplace(distance, neighbor);
                         }
                     }
                 }
-            }
-        } else {
-            for (short kxx = kx - nb_voxels_visited; kxx < kx + nb_voxels_visited + 1; ++kxx) {
-                for (short kyy = ky - nb_voxels_visited; kyy < ky + nb_voxels_visited + 1; ++kyy) {
-                    for (short kzz = kz - nb_voxels_visited; kzz < kz + nb_voxels_visited + 1; ++kzz) {
-                        auto search = map.find(Voxel(kxx, kyy, kzz));
-                        if (search != map.end()) {
-                            neighbors_ptr.push_back(&(search->second));
-                            out_number_neighbors += (int) (search->second).size();
-                        }
-                    }
-                }
-
             }
         }
 
+        auto size = priority_queue.size();
+        ArrayVector3d closest_neighbors(size);
+        for (auto i = 0; i < size; ++i) {
+            closest_neighbors[size - 1 - i] = priority_queue.top().second;
+            priority_queue.pop();
+        }
 
-        return neighbors_ptr;
+        return closest_neighbors;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -172,8 +182,9 @@ namespace ct_icp {
 
 
         ceres::Solver::Options ceres_options;
-        ceres_options.max_num_iterations = 1;
-        ceres_options.num_threads = 4;
+        ceres_options.max_num_iterations = options.ls_max_num_iters;
+        ceres_options.num_threads = options.ls_num_threads;
+        ceres_options.trust_region_strategy_type = ceres::TrustRegionStrategyType::DOGLEG;
 
         TrajectoryFrame *previous_estimate = nullptr;
         Eigen::Vector3d previous_velocity = Eigen::Vector3d::Zero();
@@ -199,17 +210,17 @@ namespace ct_icp {
                 case LEAST_SQUARES::STANDARD:
                     break;
                 case LEAST_SQUARES::CAUCHY:
-                    loss_function = new ceres::CauchyLoss(options.least_square_param);
+                    loss_function = new ceres::CauchyLoss(options.ls_sigma);
                     break;
                 case LEAST_SQUARES::HUBER:
-                    loss_function = new ceres::HuberLoss(options.least_square_param);
+                    loss_function = new ceres::HuberLoss(options.ls_sigma);
                     break;
                 case LEAST_SQUARES::TOLERANT:
-                    loss_function = new ceres::TolerantLoss(options.tolerant_least_square_param,
-                                                            options.least_square_param);
+                    loss_function = new ceres::TolerantLoss(options.ls_tolerant_min_threshold,
+                                                            options.ls_sigma);
                     break;
                 case LEAST_SQUARES::TRUNCATED:
-                    loss_function = new ct_icp::TruncatedLoss(options.least_square_param);
+                    loss_function = new ct_icp::TruncatedLoss(options.ls_sigma);
                     break;
             }
 
@@ -223,23 +234,22 @@ namespace ct_icp {
 
             number_keypoints_used = 0;
 
+            using PointToPLaneResidual = ceres::AutoDiffCostFunction<CTPointToPlaneFunctor, 1, 4, 3, 4, 3>;
+            std::vector<PointToPLaneResidual *> residuals_blocks(keypoints.size() * options.num_closest_neighbors);
+
             // Add Point-to-plane residuals
-            for (auto &keypoint : keypoints) {
+#pragma omp parallel for num_threads(options.ls_num_threads)
+            for (int k = 0; k < keypoints.size(); ++k) {
+                auto &keypoint = keypoints[k];
                 auto &raw_point = keypoint.raw_pt;
                 // Neighborhood search
-                int number_neighbors;
-                auto neighbors_ptr = search_neighbors(voxels_map, keypoint.pt,
-                                                      nb_voxels_visited, options.size_voxel_map,
-                                                      number_neighbors);
-                if (number_neighbors <= kMinNumNeighbors)
+                auto vector_neighbors = search_neighbors(voxels_map, keypoint.pt,
+                                                         nb_voxels_visited, options.size_voxel_map,
+                                                         options.max_number_neighbors);
+                if (vector_neighbors.size() < kMinNumNeighbors)
                     continue;
                 number_keypoints_used++;
 
-
-                // Select the closest neighbors
-                ArrayVector3d vector_neighbors = select_closest_neighbors(neighbors_ptr, keypoint.pt,
-                                                                          number_neighbors,
-                                                                          options.max_number_neighbors);
                 // Compute normals from neighbors
                 double a2D; // The planarity coefficient
                 auto normal = compute_normal(vector_neighbors, a2D);
@@ -250,16 +260,23 @@ namespace ct_icp {
 
                 // TODO : Add multiple neighbors ?
                 for (int i(0); i < options.num_closest_neighbors; ++i) {
-                    problem.AddResidualBlock(
-                            new ceres::AutoDiffCostFunction<CTPointToPlaneFunctor, 1, 4, 3, 4, 3>(
-                                    new CTPointToPlaneFunctor(vector_neighbors[i], raw_point, normal,
-                                                              keypoint.alpha_timestamp, a2D * a2D)),
-                            loss_function,
-                            &begin_quat.x(),
-                            &begin_t.x(),
-                            &end_quat.x(),
-                            &end_t.x());
+                    residuals_blocks[options.num_closest_neighbors * k +
+                                     i] = new ceres::AutoDiffCostFunction<CTPointToPlaneFunctor, 1, 4, 3, 4, 3>(
+                            new CTPointToPlaneFunctor(vector_neighbors[i], raw_point, normal,
+                                                      keypoint.alpha_timestamp, a2D * a2D));
+
+
                 }
+            }
+            for (auto &residual_ptr : residuals_blocks) {
+                if (residual_ptr == nullptr)
+                    continue;
+                problem.AddResidualBlock(residual_ptr,
+                                         loss_function,
+                                         &begin_quat.x(),
+                                         &begin_t.x(),
+                                         &end_quat.x(),
+                                         &end_t.x());
             }
 
 
@@ -321,7 +338,7 @@ namespace ct_icp {
                 keypoint.pt = R * keypoint.raw_pt + t;
             }
 
-            if (diff_rot < 1.e-4 && diff_trans < 1.e-3) {
+            if (diff_rot < options.norm_x_end_iteration_ct_icp && diff_trans < options.norm_x_end_iteration_ct_icp) {
                 break;
             }
         }
@@ -370,20 +387,15 @@ namespace ct_icp {
                 auto &pt_keypoint = keypoint.pt;
 
                 // Neighborhood search
-                int number_neighbors;
-                auto neighbors_ptr = search_neighbors(voxels_map, pt_keypoint,
-                                                      nb_voxels_visited, options.size_voxel_map,
-                                                      number_neighbors);
+                ArrayVector3d vector_neighbors = search_neighbors(voxels_map, pt_keypoint,
+                                                                  nb_voxels_visited, options.size_voxel_map,
+                                                                  options.max_number_neighbors);
                 auto step1 = std::chrono::steady_clock::now();
                 std::chrono::duration<double> _elapsed_search_neighbors = step1 - start;
                 elapsed_search_neighbors += _elapsed_search_neighbors.count() * 1000.0;
 
-                if (number_neighbors > kMinNumNeighbors) {
+                if (vector_neighbors.size() > kMinNumNeighbors) {
 
-                    // Select the closest neighbors
-                    ArrayVector3d vector_neighbors = select_closest_neighbors(neighbors_ptr, pt_keypoint,
-                                                                              number_neighbors,
-                                                                              options.max_number_neighbors);
                     auto step2 = std::chrono::steady_clock::now();
                     std::chrono::duration<double> _elapsed_neighbors_selection = step2 - step1;
                     elapsed_select_closest_neighbors += _elapsed_neighbors_selection.count() * 1000.0;

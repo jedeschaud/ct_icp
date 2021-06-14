@@ -162,18 +162,20 @@ namespace ct_icp {
                 log_out << "Final ego-motion distance: " << summary.relative_distance << std::endl;
             }
 
-            log_out << "Updating the Map" << std::endl;
         }
 
         if (index_frame == 1) {
             voxel_map_.clear();
         }
 
-        //Update Voxel Map
+        //Update Voxel Map+
         AddPointsToMap(voxel_map_, frame, kSizeVoxelMap, kMaxNumPointsInVoxel, kMinDistancePoints);
 
-        if (kDisplay)
-            log_out << "Done" << std::endl;
+        if (kDisplay) {
+            log_out << "Average Load Factor (Map):" << voxel_map_.load_factor() << std::endl;
+            log_out << "Number of Buckets (Map):" << voxel_map_.bucket_count() << std::endl;
+
+        }
 
         auto end = std::chrono::steady_clock::now();
         std::chrono::duration<double> elapsed_seconds = end - start;

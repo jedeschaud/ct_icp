@@ -42,13 +42,13 @@ namespace ct_icp {
 
         double size_voxel_map = 1.0; //Max Voxel : -32767 to 32767 then 32km map for SIZE_VOXEL_MAP = 1m
 
-        int num_iters_icp = 10;
+        int num_iters_icp = 3; // The Maximum number of ICP iterations performed
 
         int min_number_neighbors = 20;
 
         int max_number_neighbors = 20;
 
-        double max_dist_to_plane_ct_icp = 0.3;
+        double max_dist_to_plane_ct_icp = 0.3; // The maximum distance point-to-plane (OLD Version of ICP)
 
         double norm_x_end_iteration_ct_icp = 0.001; // The threshold on the norm of the parameters vector
 
@@ -58,18 +58,25 @@ namespace ct_icp {
 
         CT_ICP_DISTANCE distance = CT_POINT_TO_PLANE;
 
-        LEAST_SQUARES loss_function = TRUNCATED;
-
-        double least_square_param = 0.4; // The robust parameter (for Cauchy, Huber or truncated least square)
-
-        double tolerant_least_square_param = 0.05; // The Tolerant
-
-        int num_closest_neighbors = 3;
+        int num_closest_neighbors = 1; // The number of closest neighbors considered as residuals
 
         // TODO : Add Trajectory Constraints Options
         double alpha_location_consistency = 1.e-4; // Constraints on location
 
         double alpha_constant_velocity = 1.e-4; // Constraint on velocity
+
+        /* ---------------------------------------------------------------------------------------------------------- */
+        /* LEAST SQUARE OPTIMIZATION PARAMETERS                                                                       */
+
+        LEAST_SQUARES loss_function = CAUCHY;
+
+        int ls_max_num_iters = 1;
+
+        int ls_num_threads = 6;
+
+        double ls_sigma = 0.1; // The robust parameter (for Cauchy, Huber or truncated least square)
+
+        double ls_tolerant_min_threshold = 0.05; // The Tolerant
 
     };
 
