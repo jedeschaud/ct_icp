@@ -56,8 +56,6 @@ namespace ct_icp {
 
         bool debug_print = true; // Whether to output debug information to std::cout
 
-        bool debug_interactive = true; // Whether to stop when an error has occured (calls std::system("PAUSE"))
-
         bool point_to_plane_with_distortion = true; // Whether to distort the frames at each ICP iteration
 
         ICP_DISTANCE distance = CT_POINT_TO_PLANE;

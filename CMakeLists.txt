@@ -2,10 +2,10 @@ cmake_minimum_required(VERSION 3.14)
 project(CT_ICP)
 
 set(CMAKE_CXX_STANDARD 17)
+
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(cmake/external.cmake)
-
 include(cmake/test.cmake)
 
 
@@ -17,3 +17,9 @@ if (OPENMP_FOUND)
 endif ()
 
 add_subdirectory(src)
+target_compile_definitions(CT_ICP PUBLIC CT_ICP_CPP_STANDARD=${CMAKE_CXX_STANDARD})
+
+# Installation options
+install(TARGETS slam
+        CONFIGURATIONS Release
+        RUNTIME DESTINATION ${CMAKE_SOURCE_DIR})

@@ -4,6 +4,7 @@ add_library(CT_ICP ct_icp.cpp ct_icp.hpp types.hpp
         cost_functions.h cost_function.cpp
         odometry.cpp odometry.hpp
         dataset.cpp dataset.hpp
+        utils.hpp
         io.cpp io.hpp
         ${Utilities_SRC})
 

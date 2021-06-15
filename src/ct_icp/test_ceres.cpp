@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 #include <Eigen/Dense>
 
-#include <ceres/jet.h>
 #include <ceres/internal/eigen.h>
 #include <ceres/ceres.h>
 #include <ceres/rotation.h>

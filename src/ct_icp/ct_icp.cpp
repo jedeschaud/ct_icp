@@ -348,7 +348,7 @@ namespace ct_icp {
         ceres::Solver::Options ceres_options;
         ceres_options.max_num_iterations = options.ls_max_num_iters;
         ceres_options.num_threads = options.ls_num_threads;
-        ceres_options.trust_region_strategy_type = ceres::TrustRegionStrategyType::DOGLEG;
+        ceres_options.trust_region_strategy_type = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
 
         TrajectoryFrame *previous_estimate = nullptr;
         Eigen::Vector3d previous_velocity = Eigen::Vector3d::Zero();
@@ -403,7 +403,7 @@ namespace ct_icp {
                     point_to_plane_dist = std::abs((keypoint.pt - vector_neighbors[i]).transpose() * normal);
                     if (point_to_plane_dist < options.max_dist_to_plane_ct_icp) {
                         builder.SetResidualBlock(options.num_closest_neighbors * k + i, k, vector_neighbors[i],
-                                                 normal, keypoint.alpha_timestamp, a2D * a2D);
+                                                 normal, a2D * a2D, keypoint.alpha_timestamp);
                     }
                 }
             }
