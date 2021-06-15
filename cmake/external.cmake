@@ -64,3 +64,15 @@ FetchContent_Declare(
         GIT_TAG release-1.8.0)
 FetchContent_MakeAvailable(googletest)
 include(GoogleTest)
+
+# Tessil (For Google hashing)
+FetchContent_Declare(
+        tessil
+        GIT_REPOSITORY https://github.com/Tessil/robin-map
+        GIT_TAG v0.6.3)
+
+if (NOT tessil_POPULATED)
+    set(BUILD_TESTING OFF)
+    FetchContent_Populate(tessil)
+    add_subdirectory(${tessil_SOURCE_DIR} ${tessil_BINARY_DIR})
+endif ()

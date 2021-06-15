@@ -605,7 +605,7 @@ int main(int argc, char **argv) {
                 int number_keypoints_used = 0;
                 {
                     //CT ICP
-                    number_keypoints_used = CT_ICP(options, voxels_map, keypoints, trajectory, index_frame);
+                    number_keypoints_used = Elastic_ICP(options, voxels_map, keypoints, trajectory, index_frame);
 
                     //Update frame
                     Eigen::Quaterniond q_begin = Eigen::Quaterniond(trajectory[index_frame].begin_R);

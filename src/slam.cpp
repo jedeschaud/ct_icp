@@ -50,7 +50,7 @@ SLAMOptions read_arguments(int argc, char **argv) {
     ct_icp::SLAMOptions options;
 
     try {
-        TCLAP::CmdLine cmd("Runs the CT_ICP-SLAM on all sequences of the selected odometry dataset", ' ', "0.9");
+        TCLAP::CmdLine cmd("Runs the Elastic_ICP-SLAM on all sequences of the selected odometry dataset", ' ', "0.9");
         TCLAP::ValueArg<std::string> dataset_arg("d", "dataset",
                                                  "Dataset run for the execution (must be in [KITTI, KITTI-CARLA])",
                                                  false, "KITTI", "string");

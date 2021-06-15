@@ -37,14 +37,16 @@ namespace ct_icp {
         TRUNCATED
     };
 
-    // Options for the CT_ICP
+    // Options for the Elastic_ICP
     struct CTICPOptions {
 
         double size_voxel_map = 1.0; //Max Voxel : -32767 to 32767 then 32km map for SIZE_VOXEL_MAP = 1m
 
-        int num_iters_icp = 3; // The Maximum number of ICP iterations performed
+        int num_iters_icp = 5; // The Maximum number of ICP iterations performed
 
         int min_number_neighbors = 20;
+
+        short voxel_neighborhood = 1; // Visits the (2 * voxel_neighborhood)^3 neighboring voxels
 
         int max_number_neighbors = 20;
 
@@ -56,9 +58,11 @@ namespace ct_icp {
 
         bool debug_interactive = true; // Whether to stop when an error has occured (calls std::system("PAUSE"))
 
-        CT_ICP_DISTANCE distance = CT_POINT_TO_PLANE;
+        bool point_to_plane_with_distortion = true; // Whether to distort the frames at each ICP iteration
 
-        int num_closest_neighbors = 1; // The number of closest neighbors considered as residuals
+        ICP_DISTANCE distance = CT_POINT_TO_PLANE;
+
+        int num_closest_neighbors = 3; // The number of closest neighbors considered as residuals
 
         // TODO : Add Trajectory Constraints Options
         double alpha_location_consistency = 1.e-4; // Constraints on location
@@ -70,7 +74,7 @@ namespace ct_icp {
 
         LEAST_SQUARES loss_function = CAUCHY;
 
-        int ls_max_num_iters = 1;
+        int ls_max_num_iters = 4;
 
         int ls_num_threads = 6;
 
@@ -80,14 +84,32 @@ namespace ct_icp {
 
     };
 
-    // CT-ICP : Registers keypoints into the voxel_map
-    // Note: CT_ICP will modify the last TrajectoryFrame of the trajectory vector
-    int CT_ICP(const CTICPOptions &options,
-               const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-               std::vector<TrajectoryFrame> &trajectory, int index_frame);
+    // Elastic_ICP : Registers keypoints into the voxel_map taking into account the motion of the
+    //               Sensor during the acquisition of the LiDAR Frame
+    //
+    // Refines the estimate of `trajectory[index_frame]` by registering the points of vector `keypoints`
+    // Into the voxel map `voxels_map`. The points of the vector `keypoints` are also modified by interpolation
+    // of the beginning and end pose of the associated trajectory frame, using the timestamp alpha_timestamp.
+    //
+    // For distance CT_POINT_TO_PLANE:
+    //      Both the beginning and end pose of the trajectory are chosen as parameters
+    //      Each residual is the point-to-plane residual of the point transformed using the interpolated pose
+    //      Note:
+    //          CT_POINT_TO_PLANE requires meaningful timestamps. When timestamps are not known, they should
+    //          all be set to 1.0, and the distance POINT_TO_PLANE should be selected.
+    //
+    // For distance POINT_TO_PLANE:
+    //      Only the end pose of the trajectory is optimized (the beginning of the trajectory is not refined).
+    //      If `options.point_to_plane_with_distortion` is true, then at each step, the keypoints are distorted
+    //      At each iteration, after refinement of the estimate of the end pose of the trajectory frame
+    //
+    // Note: Elastic_ICP will modify the last TrajectoryFrame of the trajectory vector
+    int Elastic_ICP(const CTICPOptions &options,
+                    const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
+                    std::vector<TrajectoryFrame> &trajectory, int index_frame);
 
 
-} // namespace CT_ICP
+} // namespace Elastic_ICP
 
 
 #endif //CT_ICP_CT_ICP_H

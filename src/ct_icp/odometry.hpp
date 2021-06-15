@@ -18,7 +18,7 @@ namespace ct_icp {
 
         bool debug_print = true; // Whether to print debug information into the console
 
-        double min_distance_points = 0.1; // The minimal distance between points in the map
+        double min_distance_points = 0.2; // The minimal distance between points in the map
 
         double distance_error_threshold = 5.0; // The Ego-Motion Distance considered as an error
 
@@ -67,7 +67,6 @@ namespace ct_icp {
         };
 
         explicit Odometry(const OdometryOptions *options) : options_(options) {
-            voxel_map_.reserve(300000);
         }
 
         // Registers a new Frame to the Map

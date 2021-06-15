@@ -10,7 +10,7 @@ namespace ct_icp {
     /// GEOMETRIC COST FUNCTORS
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    enum CT_ICP_DISTANCE {
+    enum ICP_DISTANCE {
         POINT_TO_PLANE,
         CT_POINT_TO_PLANE
     };

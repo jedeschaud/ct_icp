@@ -110,11 +110,11 @@ namespace ct_icp {
                 auto start_ct_icp = std::chrono::steady_clock::now();
 
                 if (kDisplay)
-                    log_out << "Starting CT_ICP " << std::endl;
+                    log_out << "Starting Elastic_ICP " << std::endl;
 
                 //CT ICP
-                number_keypoints_used = CT_ICP(kCTICPOptions, voxel_map_,
-                                               keypoints, trajectory_, index_frame);
+                number_keypoints_used = Elastic_ICP(kCTICPOptions, voxel_map_,
+                                                    keypoints, trajectory_, index_frame);
 
                 //Update frame
                 Eigen::Quaterniond q_begin = Eigen::Quaterniond(trajectory_[index_frame].begin_R);
@@ -132,7 +132,7 @@ namespace ct_icp {
                 auto end_ct_icp = std::chrono::steady_clock::now();
                 std::chrono::duration<double> elapsed_icp = (end_ct_icp - start);
                 if (kDisplay)
-                    log_out << "Elapsed CT_ICP: " << (elapsed_icp.count()) * 1000.0 << std::endl;
+                    log_out << "Elapsed Elastic_ICP: " << (elapsed_icp.count()) * 1000.0 << std::endl;
             }
             summary.number_keypoints = number_keypoints_used;
             if (kDisplay) {
@@ -206,8 +206,8 @@ namespace ct_icp {
         ArrayVector3d points;
         points.reserve(MapSize(map));
         for (auto &voxel : map) {
-            for (auto &point: voxel.second)
-                points.push_back(point);
+            for (int i(0); i < voxel.second.NumPoints(); ++i)
+                points.push_back(voxel.second.points[i]);
         }
         return points;
     }
@@ -216,7 +216,7 @@ namespace ct_icp {
     size_t MapSize(const VoxelHashMap &map) {
         size_t map_size(0);
         for (auto &itr_voxel_map : map) {
-            map_size += (itr_voxel_map.second).size();
+            map_size += (itr_voxel_map.second).NumPoints();
         }
         return map_size;
     }
@@ -225,7 +225,7 @@ namespace ct_icp {
     void RemovePointsFarFromLocation(VoxelHashMap &map, const Eigen::Vector3d &location, double distance) {
         std::vector<Voxel> voxels_to_erase;
         for (auto &pair : map) {
-            Eigen::Vector3d pt = pair.second.front();
+            Eigen::Vector3d pt = pair.second.points[0];
             if ((pt - location).squaredNorm() > (distance * distance)) {
                 voxels_to_erase.push_back(pair.first);
             }
@@ -242,24 +242,27 @@ namespace ct_icp {
         short ky = static_cast<short>(point[1] / voxel_size);
         short kz = static_cast<short>(point[2] / voxel_size);
 
-        auto search = map.find(Voxel(kx, ky, kz));
+        VoxelHashMap::iterator search = map.find(Voxel(kx, ky, kz));
         if (search != map.end()) {
-            auto *current_list = &(search->second);
+            auto &voxel_block = (search.value());
 
-            if ((*current_list).size() < max_num_points_in_voxel) {
+            if (!voxel_block.IsFull()) {
                 double sq_dist_min_to_points = 10 * voxel_size * voxel_size;
-                for (auto &_point : *current_list) {
+                for (int i(0); i < voxel_block.NumPoints(); ++i) {
+                    auto &_point = voxel_block.points[i];
                     double sq_dist = (_point - point).squaredNorm();
                     if (sq_dist < sq_dist_min_to_points) {
                         sq_dist_min_to_points = sq_dist;
                     }
                 }
                 if (sq_dist_min_to_points > (min_distance_points * min_distance_points)) {
-                    (*current_list).push_back(point);
+                    voxel_block.AddPoint(point);
                 }
             }
         } else {
-            map[Voxel(kx, ky, kz)].push_back(point);
+            VoxelBlock block(max_num_points_in_voxel);
+            block.AddPoint(point);
+            map[Voxel(kx, ky, kz)] = std::move(block);
         }
 
     }

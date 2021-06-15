@@ -5,8 +5,11 @@
 #include <unordered_map>
 #include <list>
 
+#include <tsl/robin_map.h>
+
 #include <Eigen/Dense>
 #include <Eigen/StdVector>
+#include <glog/logging.h>
 
 
 namespace ct_icp {
@@ -32,6 +35,8 @@ namespace ct_icp {
         Eigen::Matrix3d end_R;
         Eigen::Vector3d end_t;
 
+        // TODO : Add begin and end Timestamp
+
         TrajectoryFrame() = default;
     };
 
@@ -53,12 +58,35 @@ namespace ct_icp {
         short z;
     };
 
-    typedef std::unordered_map<Voxel, std::vector<Eigen::Vector3d>> VoxelHashMap;
+    struct VoxelBlock {
+
+        explicit VoxelBlock(int num_points = 20) : num_points_(num_points) { points.reserve(num_points); }
+
+        std::vector<Eigen::Vector3d> points;
+
+        bool IsFull() const { return num_points_ == points.size(); }
+
+        void AddPoint(const Eigen::Vector3d &point) {
+            CHECK(num_points_ >= points.size()) << "Voxel Is Full";
+            points.push_back(point);
+        }
+
+        inline int NumPoints() const { return points.size(); }
+
+        inline int Capacity() { return num_points_; }
+
+    private:
+        int num_points_;
+    };
+
+
+    typedef tsl::robin_map<Voxel, VoxelBlock> VoxelHashMap;
+
     typedef std::vector<Eigen::Vector3d, EIGEN_ALIGNED_ALLOCATOR<Eigen::Vector3d>> ArrayVector3d;
     typedef std::vector<Eigen::Matrix4d, EIGEN_ALIGNED_ALLOCATOR<Eigen::Matrix4d>> ArrayMatrix4d;
     typedef ArrayMatrix4d ArrayPoses;
 
-} // namespace CT_ICP
+} // namespace Elastic_ICP
 
 
 // Specialization of std::hash for our custom type Voxel

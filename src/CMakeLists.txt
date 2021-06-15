@@ -1,4 +1,4 @@
-# TODO: - Manage better the include directory of target CT_ICP
+# TODO: - Manage better the include directory of target Elastic_ICP
 add_subdirectory(ct_icp)
 
 # Main Executable
