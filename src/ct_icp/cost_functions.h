@@ -81,6 +81,7 @@ namespace ct_icp {
 
             residual[0] = weight_ * (reference_point_.template cast<T>() - transformed).transpose() *
                           reference_normal_.template cast<T>();
+
             return true;
         }
 

@@ -42,6 +42,7 @@ FetchContent_GetProperties(eigen3)
 if (NOT eigen3_POPULATED)
     set(BUILD_TESTING OFF)
     FetchContent_Populate(eigen3)
+    set(BUILD_TESTING OFF)
     add_subdirectory(${eigen3_SOURCE_DIR} ${eigen3_BINARY_DIR})
 endif ()
 

@@ -71,10 +71,15 @@ namespace ct_icp {
 
         // Compute planarity from the eigen values
         double sigma_1 = sqrt(
-                es.eigenvalues()[2]); //Be careful, the eigenvalues are not correct with the iterative way to compute the covariance matrix
-        double sigma_2 = sqrt(es.eigenvalues()[1]);
-        double sigma_3 = sqrt(es.eigenvalues()[0]);
+                std::abs(es.eigenvalues()[2])); //Be careful, the eigenvalues are not correct with the iterative way to compute the covariance matrix
+        double sigma_2 = sqrt(std::abs(es.eigenvalues()[1]));
+        double sigma_3 = sqrt(std::abs(es.eigenvalues()[0]));
         out_a2D = (sigma_2 - sigma_3) / sigma_1;
+
+        if (out_a2D != out_a2D) {
+            LOG(ERROR) << "FOUND NAN!!!";
+            throw std::runtime_error("error");
+        }
 
         return normal;
     }
@@ -392,6 +397,8 @@ namespace ct_icp {
                 // Compute normals from neighbors
                 double a2D; // The planarity coefficient
                 auto normal = compute_normal(vector_neighbors, a2D);
+
+
 
                 if (normal.dot(trajectory[index_frame].begin_t - raw_point) < 0) {
                     normal = -1.0 * normal;
