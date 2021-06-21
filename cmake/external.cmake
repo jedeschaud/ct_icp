@@ -8,7 +8,7 @@ FetchContent_Declare(
         GIT_TAG 1.4)
 
 FetchContent_GetProperties(tclap)
-if (NOT TCLAP_POPULATED)
+if (NOT tclap_POPULATED)
     # Import Only TCLAP Header library (Without the unit tests)
     FetchContent_Populate(tclap)
 
