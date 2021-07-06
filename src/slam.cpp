@@ -258,7 +258,7 @@ int main(int argc, char **argv) {
 
     int max_num_threads = std::max(options.max_num_threads, 1);
 
-    std::map<std::string, evaluate::seq_errors> sequence_name_to_errors;
+    std::map<std::string, ct_icp::seq_errors> sequence_name_to_errors;
 
 #pragma omp parallel for num_threads(max_num_threads)
     for (int i = 0; i < num_sequences; ++i) {
@@ -321,7 +321,7 @@ int main(int argc, char **argv) {
             if (!valid_trajectory)
                 ground_truth_poses.resize(trajectory_absolute_poses.size());
 
-            evaluate::seq_errors seq_error = evaluate::eval(ground_truth_poses, trajectory_absolute_poses);
+            ct_icp::seq_errors seq_error = ct_icp::eval(ground_truth_poses, trajectory_absolute_poses);
             seq_error.average_elapsed_ms = registration_elapsed_ms / sequence_size;
 
             std::cout << "[RESULTS] Sequence " << _sequence_name << std::endl;
@@ -342,8 +342,8 @@ int main(int argc, char **argv) {
             {
                 sequence_name_to_errors[_sequence_name] = seq_error;
                 // Save Metrics to file
-                evaluate::SaveMetrics(sequence_name_to_errors, options.output_dir + "metrics.yaml",
-                                      valid_trajectory);
+                ct_icp::SaveMetrics(sequence_name_to_errors, options.output_dir + "metrics.yaml",
+                                    valid_trajectory);
 
 
             };
