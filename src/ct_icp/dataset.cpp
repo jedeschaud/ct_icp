@@ -147,6 +147,7 @@ namespace ct_icp {
             case KITTI_CARLA:
                 return read_kitti_carla_pointcloud(options, frame_path);
         }
+        throw std::runtime_error("Dataset not recognised");
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -157,6 +158,7 @@ namespace ct_icp {
             case KITTI_CARLA:
                 return KITTI_CARLA_SEQUENCE_NAMES[sequence_id];
         }
+        throw std::runtime_error("Dataset not recognised");
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -356,6 +358,8 @@ namespace ct_icp {
             case KITTI_CARLA:
                 return kitti_carla_transform_trajectory_frame(trajectory);
         }
+
+        throw std::runtime_error("Dataset Option not recognised");
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -367,12 +371,29 @@ namespace ct_icp {
             case KITTI_CARLA:
                 return sequence_id >= 0 && sequence_id < KITTI_CARLA_NUM_SEQUENCES;
         }
+        throw std::runtime_error("Dataset Option not recognised");
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
     ArrayPoses load_ground_truth(const DatasetOptions &options, int sequence_id) {
         std::string ground_truth_file = ground_truth_path(options, sequence_name(options, sequence_id));
         return LoadPoses(ground_truth_file);
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    ArrayPoses load_sensor_ground_truth(const DatasetOptions &options, int sequence_id) {
+        auto gt = load_ground_truth(options, sequence_id);
+        if (options.dataset == KITTI) {
+            Eigen::Matrix3d R_Tr = R_Tr_array_KITTI[sequence_id].transpose();
+            Eigen::Vector3d T_Tr = T_Tr_array_KITTI[sequence_id];
+            Eigen::Matrix4d Tr = Eigen::Matrix4d::Identity();
+            Tr.block<3, 3>(0, 0) = R_Tr;
+            Tr.block<3, 1>(0, 3) = T_Tr;
+            for (auto &pose : gt) {
+                pose = Tr * pose * Tr.inverse();
+            }
+        }
+        return gt;
     }
 
 

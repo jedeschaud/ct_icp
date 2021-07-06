@@ -51,6 +51,9 @@ namespace ct_icp {
     // Loads the Ground Truth of a given sequence of a Dataset
     ArrayPoses load_ground_truth(const DatasetOptions &, int sequence_id);
 
+    // Loads the Ground Truth in the sensor's reference frame
+    ArrayPoses load_sensor_ground_truth(const DatasetOptions &, int sequence_id);
+
 }
 
 
