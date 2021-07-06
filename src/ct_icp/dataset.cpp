@@ -390,7 +390,7 @@ namespace ct_icp {
             Tr.block<3, 3>(0, 0) = R_Tr;
             Tr.block<3, 1>(0, 3) = T_Tr;
             for (auto &pose : gt) {
-                pose = Tr * pose * Tr.inverse();
+                pose = Tr.inverse() * pose * Tr;
             }
         }
         return gt;
