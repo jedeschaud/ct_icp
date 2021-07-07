@@ -1,8 +1,12 @@
+#include <iomanip>
+#include <iostream>
+#include <fstream>
+
 #include "dataset.hpp"
 #include "Utilities/PlyFile.h"
 #include "io.hpp"
+#include "utils.hpp"
 
-#include <iomanip>
 
 namespace ct_icp {
 
@@ -66,6 +70,18 @@ namespace ct_icp {
     const int KITTI_CARLA_NUM_SEQUENCES = 7;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// HARD CODED VALUES FOR NCLT
+
+    const char *NCLT_SEQUENCE_NAMES[] = {
+            "2012-01-08", "2012-01-15", "2012-01-22", "2012-02-02", "2012-02-04", "2012-02-05", "2012-02-12",
+            "2012-02-18", "2012-02-19", "2012-03-17", "2012-03-25", "2012-03-31", "2012-04-29", "2012-05-11",
+            "2012-05-26", "2012-06-15", "2012-08-04", "2012-08-20", "2012-09-28", "2012-10-28", "2012-11-04",
+            "2012-11-16", "2012-11-17", "2012-12-01", "2013-01-10", "2013-02-23", "2013-04-05"
+    };
+
+    const int NCLT_NUM_SEQUENCES = 27;
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
     // Returns the Path to the folder containing a sequence's point cloud Data
@@ -114,22 +130,58 @@ namespace ct_icp {
         // TODO Use a FileSystem library (e.g. C++17 standard library) / other to test existence of files
         std::vector<std::pair<int, int>> sequences;
         int num_sequences;
-        if (options.dataset == KITTI)
-            num_sequences = NUMBER_SEQUENCES_KITTI;
-        else
-            num_sequences = 7;
+        switch (options.dataset) {
+            case KITTI:
+                num_sequences = NUMBER_SEQUENCES_KITTI;
+                break;
+            case KITTI_CARLA:
+                num_sequences = 7;
+                break;
+            case NCLT:
+                num_sequences = 27;
+                break;
+        }
 
-        sequences.resize(num_sequences);
+        sequences.reserve(num_sequences);
+
         for (auto i(0); i < num_sequences; ++i) {
             int sequence_id, sequence_size;
-            if (options.dataset == KITTI) {
-                sequence_id = KITTI_SEQUENCE_IDS[i];
-                sequence_size = LENGTH_SEQUENCE_KITTI[sequence_id] + 1;
-            } else {
-                sequence_id = i;
-                sequence_size = 5000;
+
+            std::string sequence_name;
+
+            switch (options.dataset) {
+                case KITTI:
+                    sequence_id = KITTI_SEQUENCE_IDS[i];
+                    sequence_size = LENGTH_SEQUENCE_KITTI[sequence_id] + 1;
+                    sequence_name = KITTI_SEQUENCE_NAMES[sequence_id];
+                    break;
+                case KITTI_CARLA:
+                    sequence_id = i;
+                    sequence_size = 5000;
+                    sequence_name = KITTI_CARLA_SEQUENCE_NAMES[sequence_id];
+                    break;
+                case NCLT:
+                    sequence_id = i;
+                    sequence_size = -1;
+                    sequence_name = std::string(NCLT_SEQUENCE_NAMES[sequence_id]) + "_vel";
+                    break;
             }
-            sequences[i] = std::make_pair(sequence_id, sequence_size);
+
+            bool add_sequence = true;
+#ifdef WITH_STD_FILESYSTEM
+            std::filesystem::path root_path(options.root_path);
+            auto sequence_path = root_path / sequence_name;
+            if (!fs::exists(sequence_path)) {
+                add_sequence = false;
+                LOG(INFO) << "Could not find sequence directory at " << sequence_path.string()
+                          << "... Skipping sequence " << sequence_name;
+            } else {
+                LOG(INFO) << "Found Sequence " << sequence_name << std::endl;
+            }
+#endif
+
+            if (add_sequence)
+                sequences.push_back(std::make_pair(sequence_id, sequence_size));
         }
         return sequences;
     }
@@ -146,6 +198,9 @@ namespace ct_icp {
                 return read_kitti_pointcloud(options, frame_path);
             case KITTI_CARLA:
                 return read_kitti_carla_pointcloud(options, frame_path);
+            case NCLT:
+                throw std::runtime_error(
+                        "PointClouds from the NCLT Dataset do not allow random access (reading velodyne_hits.bin for timestamps)");
         }
         throw std::runtime_error("Dataset not recognised");
     }
@@ -370,6 +425,9 @@ namespace ct_icp {
                 return sequence_id >= 0 && sequence_id <= 10 && sequence_id != 3;
             case KITTI_CARLA:
                 return sequence_id >= 0 && sequence_id < KITTI_CARLA_NUM_SEQUENCES;
+            case NCLT:
+                // TODO Ground truth for NCLT
+                return false;
         }
         throw std::runtime_error("Dataset Option not recognised");
     }
@@ -394,6 +452,154 @@ namespace ct_icp {
             }
         }
         return gt;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    PointCloudIterator::~PointCloudIterator() = default;
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    /// DirectoryIterator for KITTI and KITTI_CARLA
+    class DirectoryIterator : public PointCloudIterator {
+    public:
+        explicit DirectoryIterator(const DatasetOptions &options, int sequence_id) : options_(options),
+                                                                                     sequence_id_(sequence_id) {
+            switch (options.dataset) {
+                case KITTI:
+                    num_frames_ = LENGTH_SEQUENCE_KITTI[sequence_id] + 1;
+                case KITTI_CARLA:
+                    num_frames_ = 5000;
+                default:
+                    num_frames_ = -1;
+            }
+        }
+
+        ~DirectoryIterator() = default;
+
+        std::vector<Point3D> Next() override {
+            return read_pointcloud(options_, sequence_id_, frame_id_++);
+        }
+
+        [[nodiscard]] bool HasNext() const override {
+            return frame_id_ < num_frames_;
+        }
+
+    private:
+        DatasetOptions options_;
+        int sequence_id_;
+        int frame_id_ = 0;
+        int num_frames_;
+    };
+
+    /// NCLT Iterator for NCLT
+    class NCLTIterator final : public PointCloudIterator {
+    public:
+        explicit NCLTIterator(const DatasetOptions &options, int sequence_id) :
+                num_aggregated_pc_(options.nclt_num_aggregated_pc) {
+
+            auto sequence_name = std::string(NCLT_SEQUENCE_NAMES[sequence_id]);
+#ifdef WITH_STD_FILESYSTEM
+            std::filesystem::path root_path(options.root_path);
+            auto _hits_file_path = root_path / (sequence_name + "_vel") / sequence_name / "velodyne_hits.bin";
+            CHECK(std::filesystem::exists(_hits_file_path))
+            << "The file " << _hits_file_path << " does not exist on disk" << std::endl;
+            auto hits_file_path = _hits_file_path.string();
+#elif
+            auto hits_file_path = options.root_path + sequence_name + "_vel/" + sequence_name + "/velodyne_hits.bin";
+#endif
+            file = std::make_unique<std::ifstream>(hits_file_path);
+        }
+
+        [[nodiscard]] bool HasNext() const override {
+            CHECK(file != nullptr) << "An error has occured, the velodyne hits file is closed" << std::endl;
+            return !file->eof();
+        }
+
+        std::vector<ct_icp::Point3D> Next() override {
+
+            std::vector<ct_icp::Point3D> points;
+            for (int iter(0); iter < num_aggregated_pc_; ++iter) {
+                if (!HasNext())
+                    break;
+
+                auto next_batch = NextBatch();
+                auto old_size = points.size();
+
+                points.resize(old_size + next_batch.size());
+                std::copy(next_batch.begin(), next_batch.end(), points.begin() + old_size);
+            }
+            return points;
+        }
+
+        std::vector<ct_icp::Point3D> NextBatch() {
+            CHECK(HasNext()) << "No more points to read" << std::endl;
+            std::vector<ct_icp::Point3D> points;
+
+            unsigned short magic[4];
+            const unsigned short magic_number = 44444;
+            file->read(reinterpret_cast<char *>(magic), 8);
+
+            for (unsigned short i : magic)
+                CHECK(i == magic_number);
+
+            unsigned int num_hits, padding;
+            unsigned long long utime;
+
+            file->read(reinterpret_cast<char *>(&num_hits), 4);
+            file->read(reinterpret_cast<char *>(&utime), 8);
+            file->read(reinterpret_cast<char *>(&padding), 4);
+
+            points.resize(num_hits);
+            unsigned short xyz[3];
+            unsigned char il[2];
+
+            Point3D point;
+            double _x, _y, _z;
+            for (int pid(0); pid < num_hits; pid++) {
+                file->read(reinterpret_cast<char *>(xyz), sizeof(xyz));
+                file->read(reinterpret_cast<char *>(il), sizeof(il));
+
+                _x = ((double) xyz[0]) * 0.005 - 100.0;
+                _y = ((double) xyz[1]) * 0.005 - 100.0;
+                _z = ((double) xyz[2]) * 0.005 - 100.0;
+
+                auto &point_3d = points[pid];
+                point_3d.raw_pt = Eigen::Vector3d(_x, _y, _z);
+                point_3d.alpha_timestamp = (double) utime;
+                point_3d.pt = point_3d.raw_pt;
+            }
+            return points;
+        }
+
+
+        ~NCLTIterator() final {
+            Close();
+        }
+
+    private:
+        void Close() {
+            if (file) {
+                file->close();
+                file = nullptr;
+            }
+        }
+
+        int num_aggregated_pc_;
+
+        std::unique_ptr<std::ifstream> file = nullptr;
+    };
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    std::shared_ptr<PointCloudIterator> get_iterator(const DatasetOptions &options, int sequence_id) {
+        switch (options.dataset) {
+            case KITTI:
+            case KITTI_CARLA:
+                return std::make_shared<DirectoryIterator>(options, sequence_id);
+            case NCLT:
+                return std::make_shared<NCLTIterator>(options, sequence_id);
+
+            default:
+                throw std::runtime_error("Not Implemented Error");
+        }
     }
 
 

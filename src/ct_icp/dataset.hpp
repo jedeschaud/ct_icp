@@ -8,7 +8,18 @@ namespace ct_icp {
 
     enum DATASET {
         KITTI = 0,
-        KITTI_CARLA = 1
+        KITTI_CARLA = 1,
+        NCLT = 2
+        // TODO KITTI-360
+    };
+
+    class PointCloudIterator {
+    public:
+        virtual ~PointCloudIterator() = 0;
+
+        virtual bool HasNext() const = 0;
+
+        virtual std::vector<Point3D> Next() = 0;
     };
 
     struct DatasetOptions {
@@ -23,15 +34,16 @@ namespace ct_icp {
 
         double max_dist_lidar_center = 100.0; // Threshold to filter points too far to the LiDAR center
 
+        int nclt_num_aggregated_pc = 220; // The number of hits to aggregate for NCLT Dataset
     };
 
     // Returns the Pairs sequence_id, sequence_size found on disk for the provided options
     std::vector<std::pair<int, int>> get_sequences(const DatasetOptions &);
 
-    // Reads PointCloud from the Dataset KITTI
+    // Reads a PointCloud from the Dataset KITTI
     std::vector<Point3D> read_kitti_pointcloud(const DatasetOptions &, const std::string &path);
 
-    // Reads PointCloud from the Dataset KITTI_CARLA
+    // Reads a PointCloud from the Dataset KITTI_CARLA
     std::vector<Point3D> read_kitti_carla_pointcloud(const DatasetOptions &, const std::string &path);
 
     // Reads a PointCloud from the disk
@@ -53,6 +65,9 @@ namespace ct_icp {
 
     // Loads the Ground Truth in the sensor's reference frame
     ArrayPoses load_sensor_ground_truth(const DatasetOptions &, int sequence_id);
+
+    // Returns a PointCloud iterator
+    std::shared_ptr<PointCloudIterator> get_iterator(const DatasetOptions &, int sequence_id);
 
 }
 
