@@ -26,6 +26,11 @@ FetchContent_Declare(
 )
 FetchContent_GetProperties(yaml-cpp)
 if (NOT yaml-cpp_POPULATED)
+
+    set(YAML_CPP_BUILD_TESTS OFF)
+    set(YAML_CPP_BUILD_TOOLS OFF)
+    set(YAML_CPP_BUILD_CONTRIB OFF)
+    set(YAML_CPP_INSTALL OFF)
     FetchContent_Populate(yaml-cpp)
 
     set(YAML_CPP_BUILD_TESTS OFF) # Do not build the tests
@@ -54,6 +59,7 @@ FetchContent_Declare(
 if (NOT ceres_POPULATED)
     set(BUILD_TESTING OFF)
     set(PROVIDE_UNINSTALL_TARGET OFF)
+    set(BUILD_EXAMPLES OFF)
     FetchContent_Populate(ceres)
     add_subdirectory(${ceres_SOURCE_DIR} ${ceres_BINARY_DIR})
 endif ()
@@ -77,3 +83,16 @@ if (NOT tessil_POPULATED)
     FetchContent_Populate(tessil)
     add_subdirectory(${tessil_SOURCE_DIR} ${tessil_BINARY_DIR})
 endif ()
+
+if (WITH_VIZ3D)
+
+    # VIZ 3D (For Visualization)
+    FetchContent_Declare(
+            viz3d
+            GIT_REPOSITORY git@gitlab.com:pdell/viz3d.git)
+    if (NOT viz3d_POPULATED)
+        set(BUILD_TESTING OFF)
+        FetchContent_Populate(viz3d)
+        add_subdirectory(${viz3d_SOURCE_DIR} ${viz3d_BINARY_DIR})
+    endif ()
+endif (WITH_VIZ3D)

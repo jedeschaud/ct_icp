@@ -7,6 +7,7 @@
 #include <math.h>
 #include <vector>
 #include <chrono>
+#include <thread>
 
 #include <yaml-cpp/yaml.h>
 #include <tclap/CmdLine.h>
@@ -18,6 +19,12 @@
 #include "ct_icp/io.hpp"
 #include "evaluate_slam.hpp"
 #include "ct_icp/utils.hpp"
+
+#ifdef CT_ICP_WITH_VIZ
+
+#include <viz3d/engine.hpp>
+
+#endif
 
 
 using namespace ct_icp;
@@ -79,7 +86,7 @@ SLAMOptions read_config(const std::string &config_path) {
                 dataset_options.dataset = KITTI;
             if (dataset == "KITTI_CARLA")
                 dataset_options.dataset = KITTI_CARLA;
-            if(dataset == "NCLT")
+            if (dataset == "NCLT")
                 dataset_options.dataset = NCLT;
         }
         OPTION_CLAUSE(dataset_node, dataset_options, root_path, std::string);
@@ -259,6 +266,12 @@ int main(int argc, char **argv) {
     int num_sequences = (int) sequences.size();
 
     int max_num_threads = std::max(options.max_num_threads, 1);
+#ifdef CT_ICP_WITH_VIZ
+    max_num_threads = 1;
+    std::thread gui_thread{viz::ExplorationEngine::LaunchMainLoop};
+    auto &instance = viz::ExplorationEngine::Instance();
+#endif
+
 
     std::map<std::string, ct_icp::seq_errors> sequence_name_to_errors;
 
@@ -291,14 +304,40 @@ int main(int argc, char **argv) {
             registration_elapsed_ms += registration_elapsed.count() * 1000;
             total_elapsed_ms += total_elapsed.count() * 1000;
 
+#ifdef CT_ICP_WITH_VIZ
+            {
+                auto model_ptr = std::make_shared<viz::PointCloudModel>();
+                auto &model_data = model_ptr->ModelData();
+                model_data.xyz.resize(summary.corrected_points.size());
+                for (size_t i(0); i < summary.corrected_points.size(); ++i) {
+                    model_data.xyz[i] = summary.corrected_points[i].pt.cast<float>();
+                }
+                instance.AddModel(frame_id % 100, model_ptr);
+            }
+
+            {
+                auto model_ptr = std::make_shared<viz::PosesModel>();
+                auto &model_data = model_ptr->ModelData();
+                auto trajectory = ct_icp_odometry.Trajectory();
+                model_data.instance_model_to_world.resize(trajectory.size());
+                for (size_t i(0); i < trajectory.size(); ++i) {
+                    model_data.instance_model_to_world[i] = trajectory[i].MidPose().cast<float>();
+                }
+                instance.AddModel(-11, model_ptr);
+            }
+#endif
             if (!summary.success) {
                 std::cerr << "Error while running SLAM for sequence " << sequence_id <<
                           ", at frame index " << frame_id << std::endl;
                 if (options.suspend_on_failure) {
+#ifdef CT_ICP_WITH_VIZ
+                    gui_thread.join();
+#endif
                     exit(1);
                 }
                 break;
             }
+            frame_id++;
         }
 
         auto trajectory = ct_icp_odometry.Trajectory();
@@ -314,8 +353,12 @@ int main(int argc, char **argv) {
                 std::cerr << "Error while saving the poses to " << filepath << std::endl;
                 std::cerr << "Make sure output directory " << options.output_dir << " exists" << std::endl;
 
-                if (options.suspend_on_failure)
+                if (options.suspend_on_failure) {
+#ifdef CT_ICP_WITH_VIZ
+                    gui_thread.join();
+#endif
                     exit(1);
+                }
             }
         }
 
@@ -351,12 +394,12 @@ int main(int argc, char **argv) {
                 ct_icp::SaveMetrics(sequence_name_to_errors, options.output_dir + "metrics.yaml",
                                     valid_trajectory);
             };
-
-//            if (!valid_trajectory)
-//                exit(1);
-
         }
     }
+
+#ifdef CT_ICP_WITH_VIZ
+    gui_thread.join();
+#endif
 
     return 0;
 }

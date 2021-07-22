@@ -102,7 +102,7 @@ namespace ct_icp {
     //      At each iteration, after refinement of the estimate of the end pose of the trajectory frame
     //
     // Note: Elastic_ICP will modify the last TrajectoryFrame of the trajectory vector
-    int Elastic_ICP(const CTICPOptions &options,
+    bool Elastic_ICP(const CTICPOptions &options,
                     const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
                     std::vector<TrajectoryFrame> &trajectory, int index_frame);
 

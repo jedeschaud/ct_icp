@@ -38,6 +38,19 @@ namespace ct_icp {
         // TODO : Add begin and end Timestamp
 
         TrajectoryFrame() = default;
+
+        [[nodiscard]] inline Eigen::Matrix4d MidPose() const {
+            Eigen::Matrix4d mid_pose = Eigen::Matrix4d::Identity();
+            auto q_begin = Eigen::Quaterniond(begin_R);
+            auto q_end = Eigen::Quaterniond(end_R);
+            Eigen::Vector3d t_begin = begin_t;
+            Eigen::Vector3d t_end = end_t;
+            Eigen::Quaterniond q = q_begin.slerp(0.5, q_end);
+            q.normalize();
+            mid_pose.block<3, 3>(0, 0) = q.toRotationMatrix();
+            mid_pose.block<3, 1>(0, 3) = 0.5 * t_begin + 0.5 * t_end;
+            return mid_pose;
+        }
     };
 
 

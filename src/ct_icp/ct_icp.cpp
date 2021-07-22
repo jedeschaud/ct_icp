@@ -7,6 +7,11 @@
 #include "ct_icp.hpp"
 #include "cost_functions.h"
 
+#ifdef CT_ICP_WITH_VIZ
+
+#include <viz3d/engine.hpp>
+
+#endif
 namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -71,7 +76,8 @@ namespace ct_icp {
 
         // Compute planarity from the eigen values
         double sigma_1 = sqrt(
-                std::abs(es.eigenvalues()[2])); //Be careful, the eigenvalues are not correct with the iterative way to compute the covariance matrix
+                std::abs(
+                        es.eigenvalues()[2])); //Be careful, the eigenvalues are not correct with the iterative way to compute the covariance matrix
         double sigma_2 = sqrt(std::abs(es.eigenvalues()[1]));
         double sigma_3 = sqrt(std::abs(es.eigenvalues()[0]));
         out_a2D = (sigma_2 - sigma_3) / sigma_1;
@@ -342,9 +348,9 @@ namespace ct_icp {
     };
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    int Elastic_ICP(const CTICPOptions &options,
-                    const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-                    std::vector<TrajectoryFrame> &trajectory, int index_frame) {
+    bool Elastic_ICP(const CTICPOptions &options,
+                     const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
+                     std::vector<TrajectoryFrame> &trajectory, int index_frame) {
 
         const short nb_voxels_visited = index_frame < 50 ? 2 : options.voxel_neighborhood;
         const int kMinNumNeighbors = options.min_number_neighbors;
@@ -378,9 +384,9 @@ namespace ct_icp {
 
         for (int iter(0); iter < options.num_iters_icp; iter++) {
 
+
             builder.InitProblem(keypoints.size() * options.num_closest_neighbors);
             builder.AddParameterBlocks(begin_quat, end_quat, begin_t, end_t);
-
 
             // Add Point-to-plane residuals
 #pragma omp parallel for num_threads(options.ls_num_threads)
@@ -397,7 +403,6 @@ namespace ct_icp {
                 // Compute normals from neighbors
                 double a2D; // The planarity coefficient
                 auto normal = compute_normal(vector_neighbors, a2D);
-
 
 
                 if (normal.dot(trajectory[index_frame].begin_t - raw_point) < 0) {
@@ -439,9 +444,8 @@ namespace ct_icp {
                     std::cout << "Error : not enough keypoints selected in ct-icp !" << std::endl;
                     std::cout << "number_keypoints : " << number_keypoints_used << std::endl;
                 }
-                exit(1);
+                return false;
             }
-
 
             ceres::Solver::Summary summary;
             ceres::Solve(ceres_options, problem.get(), &summary);
@@ -476,6 +480,8 @@ namespace ct_icp {
                 Eigen::Vector3d t = (1.0 - alpha_timestamp) * begin_t + alpha_timestamp * end_t;
                 keypoint.pt = R * keypoint.raw_pt + t;
             }
+
+
             if (options.point_to_plane_with_distortion) {
                 builder.DistortFrame(begin_quat, end_quat, begin_t, end_t);
             }
@@ -485,7 +491,7 @@ namespace ct_icp {
             }
         }
 
-        return (int) keypoints.size();
+        return true;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */

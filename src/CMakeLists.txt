@@ -3,3 +3,7 @@ add_subdirectory(ct_icp)
 
 add_executable(slam slam.cpp ct_icp/evaluate_slam.hpp)
 target_link_libraries(slam PUBLIC CT_ICP TCLAP)
+if (WITH_VIZ3D)
+    target_link_libraries(slam PUBLIC viz3d)
+    target_compile_definitions(slam PUBLIC CT_ICP_WITH_VIZ=1)
+endif ()

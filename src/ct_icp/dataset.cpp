@@ -212,6 +212,8 @@ namespace ct_icp {
                 return KITTI_SEQUENCE_NAMES[sequence_id];
             case KITTI_CARLA:
                 return KITTI_CARLA_SEQUENCE_NAMES[sequence_id];
+            case NCLT:
+                return NCLT_SEQUENCE_NAMES[sequence_id];
         }
         throw std::runtime_error("Dataset not recognised");
     }
@@ -403,6 +405,15 @@ namespace ct_icp {
         return poses;
     }
 
+    /* -------------------------------------------------------------------------------------------------------------- */
+    ArrayPoses nclt_transform_trajectory_frame(const vector<TrajectoryFrame> &trajectory) {
+        ArrayPoses poses(trajectory.size());
+        for (auto i(0); i < trajectory.size(); ++i) {
+            poses[i] = trajectory[i].MidPose();
+        }
+        return poses;
+
+    }
 
     /* -------------------------------------------------------------------------------------------------------------- */
     ArrayPoses transform_trajectory_frame(const DatasetOptions &options, const vector<TrajectoryFrame> &trajectory,
@@ -412,6 +423,8 @@ namespace ct_icp {
                 return kitti_transform_trajectory_frame(trajectory, sequence_id);
             case KITTI_CARLA:
                 return kitti_carla_transform_trajectory_frame(trajectory);
+            case NCLT:
+                return nclt_transform_trajectory_frame(trajectory);
         }
 
         throw std::runtime_error("Dataset Option not recognised");
@@ -466,10 +479,13 @@ namespace ct_icp {
             switch (options.dataset) {
                 case KITTI:
                     num_frames_ = LENGTH_SEQUENCE_KITTI[sequence_id] + 1;
+                    break;
                 case KITTI_CARLA:
                     num_frames_ = 5000;
+                    break;
                 default:
                     num_frames_ = -1;
+                    break;
             }
         }
 
@@ -517,6 +533,8 @@ namespace ct_icp {
         std::vector<ct_icp::Point3D> Next() override {
 
             std::vector<ct_icp::Point3D> points;
+            // Normalize timestamps
+            double min_timestamp = std::numeric_limits<double>::infinity(), max_timestamp = std::numeric_limits<double>::lowest();
             for (int iter(0); iter < num_aggregated_pc_; ++iter) {
                 if (!HasNext())
                     break;
@@ -524,9 +542,21 @@ namespace ct_icp {
                 auto next_batch = NextBatch();
                 auto old_size = points.size();
 
+                if (!next_batch.empty()) {
+                    auto timestamp = next_batch[0].alpha_timestamp;
+                    if (timestamp < min_timestamp)
+                        min_timestamp = timestamp;
+                    if (timestamp > max_timestamp)
+                        max_timestamp = timestamp;
+                }
+
                 points.resize(old_size + next_batch.size());
                 std::copy(next_batch.begin(), next_batch.end(), points.begin() + old_size);
             }
+            for (auto &point : points)
+                point.alpha_timestamp = (point.alpha_timestamp - min_timestamp) / (max_timestamp - min_timestamp);
+
+
             return points;
         }
 

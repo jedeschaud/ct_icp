@@ -113,8 +113,13 @@ namespace ct_icp {
                     log_out << "Starting Elastic_ICP " << std::endl;
 
                 //CT ICP
-                number_keypoints_used = Elastic_ICP(kCTICPOptions, voxel_map_,
-                                                    keypoints, trajectory_, index_frame);
+                bool success = Elastic_ICP(kCTICPOptions, voxel_map_,
+                                           keypoints, trajectory_, index_frame);
+
+                if (!success) {
+                    summary.success = false;
+                    return summary;
+                }
 
                 //Update frame
                 Eigen::Quaterniond q_begin = Eigen::Quaterniond(trajectory_[index_frame].begin_R);
@@ -135,9 +140,6 @@ namespace ct_icp {
                     log_out << "Elapsed Elastic_ICP: " << (elapsed_icp.count()) * 1000.0 << std::endl;
             }
             summary.number_keypoints = number_keypoints_used;
-            if (kDisplay) {
-                log_out << "Number keypoints used : " << number_keypoints_used << std::endl;
-            }
         }
 
         summary.frame = trajectory_[index_frame];

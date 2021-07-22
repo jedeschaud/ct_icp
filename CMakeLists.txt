@@ -4,6 +4,7 @@ project(CT_ICP)
 set(CMAKE_CXX_STANDARD 17)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+option(WITH_VIZ3D "Search and install viz3d (disabled by default)" OFF)
 
 include(cmake/external.cmake)
 include(cmake/test.cmake)
@@ -18,6 +19,7 @@ endif ()
 
 add_subdirectory(src)
 target_compile_definitions(CT_ICP PUBLIC CT_ICP_CPP_STANDARD=${CMAKE_CXX_STANDARD})
+
 
 # Installation options
 install(TARGETS slam
