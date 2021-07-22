@@ -97,6 +97,8 @@ namespace ct_icp {
             case KITTI_CARLA:
                 folder_path += sequence_name + "/frames/";
                 break;
+            case NCLT:
+                throw std::runtime_error("Not Implemented!");
         };
         return folder_path;
     }
@@ -115,6 +117,8 @@ namespace ct_icp {
             case KITTI_CARLA:
                 ground_truth_path += sequence_name + "/poses_gt.txt";
                 break;
+            case NCLT:
+                throw std::runtime_error("Not Implemented!");
         }
         return ground_truth_path;
     }
