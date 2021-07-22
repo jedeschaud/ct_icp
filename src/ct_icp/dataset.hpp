@@ -36,7 +36,6 @@ namespace ct_icp {
 
         int nclt_num_aggregated_pc = 220; // The number of hits to aggregate for NCLT Dataset
 
-        bool relative_timestamps = true; // Whether to add relative timestamps or absolute timestamps
     };
 
     // Returns the Pairs sequence_id, sequence_size found on disk for the provided options
