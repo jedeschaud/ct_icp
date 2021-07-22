@@ -492,7 +492,11 @@ namespace ct_icp {
         ~DirectoryIterator() = default;
 
         std::vector<Point3D> Next() override {
-            return read_pointcloud(options_, sequence_id_, frame_id_++);
+            int frame_id = frame_id_++;
+            auto pc = read_pointcloud(options_, sequence_id_, frame_id);
+            for (auto &point : pc)
+                point.timestamp = frame_id + point.alpha_timestamp;
+            return pc;
         }
 
         [[nodiscard]] bool HasNext() const override {
@@ -543,7 +547,7 @@ namespace ct_icp {
                 auto old_size = points.size();
 
                 if (!next_batch.empty()) {
-                    auto timestamp = next_batch[0].alpha_timestamp;
+                    auto timestamp = next_batch[0].timestamp;
                     if (timestamp < min_timestamp)
                         min_timestamp = timestamp;
                     if (timestamp > max_timestamp)
@@ -554,7 +558,7 @@ namespace ct_icp {
                 std::copy(next_batch.begin(), next_batch.end(), points.begin() + old_size);
             }
             for (auto &point : points)
-                point.alpha_timestamp = (point.alpha_timestamp - min_timestamp) / (max_timestamp - min_timestamp);
+                point.alpha_timestamp = (point.timestamp - min_timestamp) / (max_timestamp - min_timestamp);
 
 
             return points;
@@ -594,7 +598,7 @@ namespace ct_icp {
 
                 auto &point_3d = points[pid];
                 point_3d.raw_pt = Eigen::Vector3d(_x, _y, _z);
-                point_3d.alpha_timestamp = (double) utime;
+                point_3d.timestamp = (double) utime;
                 point_3d.pt = point_3d.raw_pt;
             }
             return points;
