@@ -1,0 +1,14 @@
+from setuptools import setup
+
+setup(
+    name="pylsfm",
+    version="0.0.1",
+    author="Pierre Dellenbach",
+    author_email="pierre.dellenbach@kitware.com",
+    description="A Lidar Structure from motion",
+    package_dir={'': '${CMAKE_CURRENT_BINARY_DIR}'},
+    packages=['pylsfm'],
+    package_data={'': ['*.so']},
+    long_description="",
+    zip_safe=False,
+)
