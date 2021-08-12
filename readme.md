@@ -2,6 +2,14 @@
 
 # Installation
 
+# Python binding
+
+> To Install a python binding project as pyct_icp:
+- Go into the build folder (e.g `cd ./cmake-release`) 
+- Build the target `pyct_icp` with `make pyct_icp -j6`
+- Install the python project `pip install ./src/binding` 
+
+
 # Install Datasets
 
 # Running the SLAM
@@ -13,7 +21,7 @@
 - [x] Test on KITTI
 - [x] Test The code on KITTI-CARLA to verify you have the same results as JE
 - [x] Export all options in a yaml config file
-- [ ] Add Optional Python binding ?
+- [x] Add Optional Python binding ?
 - [ ] Add Unit Tests
 - [ ] Test the build on Windows (Github CI ?)
 - [ ] Write a small Readme.md to explain how it works / How to build it

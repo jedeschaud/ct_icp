@@ -13,13 +13,25 @@ namespace ct_icp {
         // TODO KITTI-360
     };
 
-    class PointCloudIterator {
+    class DatasetSequence {
     public:
-        virtual ~PointCloudIterator() = 0;
+        virtual ~DatasetSequence() = 0;
 
         virtual bool HasNext() const = 0;
 
         virtual std::vector<Point3D> Next() = 0;
+
+        virtual size_t NumFrames() const {
+            return -1;
+        }
+
+        virtual std::vector<Point3D> Frame(size_t index) const {
+            throw std::runtime_error("Random Access is not supported");
+        }
+
+        virtual bool WithRandomAccess() const {
+            return false;
+        }
     };
 
     struct DatasetOptions {
@@ -67,8 +79,8 @@ namespace ct_icp {
     // Loads the Ground Truth in the sensor's reference frame
     ArrayPoses load_sensor_ground_truth(const DatasetOptions &, int sequence_id);
 
-    // Returns a PointCloud iterator
-    std::shared_ptr<PointCloudIterator> get_iterator(const DatasetOptions &, int sequence_id);
+    // Returns a DatasetSequence
+    std::shared_ptr<DatasetSequence> get_dataset_sequence(const DatasetOptions &, int sequence_id);
 
 }
 

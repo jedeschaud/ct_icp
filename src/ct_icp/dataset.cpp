@@ -472,11 +472,11 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    PointCloudIterator::~PointCloudIterator() = default;
+    DatasetSequence::~DatasetSequence() = default;
 
     /* -------------------------------------------------------------------------------------------------------------- */
     /// DirectoryIterator for KITTI and KITTI_CARLA
-    class DirectoryIterator : public PointCloudIterator {
+    class DirectoryIterator : public DatasetSequence {
     public:
         explicit DirectoryIterator(const DatasetOptions &options, int sequence_id) : options_(options),
                                                                                      sequence_id_(sequence_id) {
@@ -507,6 +507,21 @@ namespace ct_icp {
             return frame_id_ < num_frames_;
         }
 
+        bool WithRandomAccess() const override { return true; }
+
+        size_t NumFrames() const override { return num_frames_; }
+
+        std::vector<Point3D> Frame(size_t index) const override {
+            int frame_id = index;
+            auto pc = read_pointcloud(options_, sequence_id_, frame_id);
+            if (options_.dataset == KITTI || options_.dataset == KITTI_CARLA) {
+                for (auto &point : pc) {
+                    point.timestamp = frame_id + point.alpha_timestamp;
+                }
+            }
+            return pc;
+        }
+
     private:
         DatasetOptions options_;
         int sequence_id_;
@@ -515,7 +530,7 @@ namespace ct_icp {
     };
 
     /// NCLT Iterator for NCLT
-    class NCLTIterator final : public PointCloudIterator {
+    class NCLTIterator final : public DatasetSequence {
     public:
         explicit NCLTIterator(const DatasetOptions &options, int sequence_id) :
                 num_aggregated_pc_(options.nclt_num_aggregated_pc) {
@@ -627,7 +642,7 @@ namespace ct_icp {
     };
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    std::shared_ptr<PointCloudIterator> get_iterator(const DatasetOptions &options, int sequence_id) {
+    std::shared_ptr<DatasetSequence> get_dataset_sequence(const DatasetOptions &options, int sequence_id) {
         switch (options.dataset) {
             case KITTI:
             case KITTI_CARLA:

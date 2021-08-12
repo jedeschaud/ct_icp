@@ -14,14 +14,14 @@ namespace ct_icp {
         auto start = std::chrono::steady_clock::now();
 
         auto &log_out = std::cout;
-        const bool kDisplay = options_->debug_print;
-        const CTICPOptions &kCTICPOptions = options_->ct_icp_options;
-        const double kSizeVoxelInitSample = options_->voxel_size;
-        const double kSizeVoxelMap = options_->ct_icp_options.size_voxel_map;
-        const double kMinDistancePoints = options_->min_distance_points;
+        const bool kDisplay = options_.debug_print;
+        const CTICPOptions &kCTICPOptions = options_.ct_icp_options;
+        const double kSizeVoxelInitSample = options_.voxel_size;
+        const double kSizeVoxelMap = options_.ct_icp_options.size_voxel_map;
+        const double kMinDistancePoints = options_.min_distance_points;
         std::vector<Point3D> frame(const_frame);
         int index_frame = registered_frames_++;
-        const int kMaxNumPointsInVoxel = options_->max_num_points_in_voxel;
+        const int kMaxNumPointsInVoxel = options_.max_num_points_in_voxel;
 
         if (kDisplay) {
             log_out << "/* ------------------------------------------------------------------------ */" << std::endl;
@@ -88,7 +88,7 @@ namespace ct_icp {
 
             // Use new sub_sample frame as keypoints
             std::vector<Point3D> keypoints;
-            grid_sampling(frame, keypoints, options_->sample_voxel_size);
+            grid_sampling(frame, keypoints, options_.sample_voxel_size);
 
             auto num_keypoints = (int) keypoints.size();
             if (kDisplay) {
@@ -97,7 +97,7 @@ namespace ct_icp {
             summary.sample_size = num_keypoints;
 
             // Remove voxels too far from actual position of the vehicule
-            const double kMaxDistance = options_->max_distance;
+            const double kMaxDistance = options_.max_distance;
             const Eigen::Vector3d location = trajectory_[index_frame].end_t;
             RemovePointsFarFromLocation(voxel_map_, location, kMaxDistance);
 
@@ -150,7 +150,7 @@ namespace ct_icp {
 
         summary.relative_distance = (trajectory_[index_frame].begin_t - trajectory_[index_frame].end_t).norm();
 
-        if (summary.relative_distance > options_->distance_error_threshold) {
+        if (summary.relative_distance > options_.distance_error_threshold) {
             summary.success = false;
             if (kDisplay)
                 log_out << "Error in ego-motion distance !" << std::endl;

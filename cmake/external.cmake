@@ -84,6 +84,19 @@ if (NOT tessil_POPULATED)
     add_subdirectory(${tessil_SOURCE_DIR} ${tessil_BINARY_DIR})
 endif ()
 
+if (WITH_PYTHON_BINDING)
+    # /////////////////////////////////////////////////////////////////////////////////////////////
+    # PyBind11
+    FetchContent_Declare(
+            pybind11 GIT_REPOSITORY https://github.com/pybind/pybind11
+            GIT_TAG v2.7.1)
+
+    if (NOT pybind11_POPULATED)
+        FetchContent_Populate(pybind11)
+        add_subdirectory(${pybind11_SOURCE_DIR} ${pybind11_BINARY_DIR})
+    endif ()
+endif ()
+
 if (WITH_VIZ3D)
 
     # VIZ 3D (For Visualization)

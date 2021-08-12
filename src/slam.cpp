@@ -286,7 +286,7 @@ int main(int argc, char **argv) {
         double total_elapsed_ms = 0.0;
         double registration_elapsed_ms = 0.0;
 
-        auto iterator_ptr = get_iterator(options.dataset_options, sequence_id);
+        auto iterator_ptr = get_dataset_sequence(options.dataset_options, sequence_id);
 
         int frame_id(0);
         while (iterator_ptr->HasNext() && (options.max_frames < 0 || frame_id < options.max_frames)) {

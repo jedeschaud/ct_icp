@@ -66,8 +66,9 @@ namespace ct_icp {
 
         };
 
-        explicit Odometry(const OdometryOptions *options) : options_(options) {
-        }
+        explicit Odometry(const OdometryOptions *options) : options_(*options) {}
+
+        explicit Odometry(const OdometryOptions &options) : options_(options) {}
 
         // Registers a new Frame to the Map
         RegistrationSummary RegisterFrame(const std::vector<Point3D> &frame);
@@ -86,7 +87,7 @@ namespace ct_icp {
         std::vector<TrajectoryFrame> trajectory_;
         VoxelHashMap voxel_map_;
         int registered_frames_ = 0;
-        const OdometryOptions *options_;
+        const OdometryOptions options_;
     };
 
 } // namespace ct_icp

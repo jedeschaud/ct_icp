@@ -4,7 +4,10 @@ project(CT_ICP)
 set(CMAKE_CXX_STANDARD 17)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(WITH_VIZ3D "Search and install viz3d (disabled by default)" OFF)
+option(WITH_PYTHON_BINDING "Install Python bindings" OFF)
+
 
 include(cmake/external.cmake)
 include(cmake/test.cmake)
