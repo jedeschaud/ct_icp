@@ -4,11 +4,14 @@
 
 # Python binding
 
-> To Install a python binding project as pyct_icp:
-- Go into the build folder (e.g `cd ./cmake-release`) 
-- Build the target `pyct_icp` with `make pyct_icp -j6`
-- Install the python project `pip install ./src/binding` 
+> To Install a python binding project named `pyct_icp`:
 
+- Generate the cmake project with the following arguments:
+    - `-DWITH_PYTHON_BINDING=ON`: Activate the option to build the python binding
+    - `-DPYTHON_EXECUTABLE=<path-to-target-python-exe>`: Path to the target python executable
+- Go into the build folder (e.g `cd ./cmake-release`)
+- Build the target `pyct_icp` with `make pyct_icp -j6`
+- Install the python project `pip install ./src/binding`
 
 # Install Datasets
 
