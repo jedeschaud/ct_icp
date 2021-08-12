@@ -181,7 +181,7 @@ PYBIND11_MODULE(pyct_icp, m) {
 
     py::class_<ct_icp::Odometry,
             std::shared_ptr<ct_icp::Odometry>>(m, "Odometry")
-            .def(py::init([](ct_icp::OdometryOptions& options) {
+            .def(py::init([](ct_icp::OdometryOptions &options) {
                 return ct_icp::Odometry(options);
             }))
             .def("RegisterFrame", [](ct_icp::Odometry &odometry, const LiDARFrame &frame) {
@@ -232,6 +232,7 @@ PYBIND11_MODULE(pyct_icp, m) {
     m.def("get_sequences", &ct_icp::get_sequences);
     m.def("has_ground_truth", &ct_icp::has_ground_truth);
     m.def("get_dataset_sequence", &ct_icp::get_dataset_sequence);
-
+    m.def("load_sensor_ground_truth", &ct_icp::load_sensor_ground_truth);
+    m.def("load_ground_truth", &ct_icp::load_sensor_ground_truth);
 
 }
