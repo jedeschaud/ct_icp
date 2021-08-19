@@ -2,10 +2,17 @@
 #include <iostream>
 #include <fstream>
 
+
 #include "dataset.hpp"
 #include "Utilities/PlyFile.h"
 #include "io.hpp"
 #include "utils.hpp"
+
+#ifdef CT_ICP_IS_WINDOWS
+#define _USE_MATH_DEFINES
+#include <math.h>
+#endif
+
 
 
 namespace ct_icp {

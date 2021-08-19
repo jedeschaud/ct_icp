@@ -8,6 +8,11 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(WITH_VIZ3D "Search and install viz3d (disabled by default)" OFF)
 option(WITH_PYTHON_BINDING "Install Python bindings" OFF)
 
+# Set the LIBRARY and RUNTIME output directory to a specific location
+#set (CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/install)
+#set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/install)
+#set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/install)
+
 
 include(cmake/external.cmake)
 include(cmake/test.cmake)
@@ -23,8 +28,3 @@ endif ()
 add_subdirectory(src)
 target_compile_definitions(CT_ICP PUBLIC CT_ICP_CPP_STANDARD=${CMAKE_CXX_STANDARD})
 
-
-# Installation options
-install(TARGETS slam
-        CONFIGURATIONS Release
-        RUNTIME DESTINATION ${CMAKE_SOURCE_DIR})

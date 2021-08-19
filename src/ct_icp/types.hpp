@@ -96,8 +96,8 @@ namespace ct_icp {
 
     typedef tsl::robin_map<Voxel, VoxelBlock> VoxelHashMap;
 
-    typedef std::vector<Eigen::Vector3d, EIGEN_ALIGNED_ALLOCATOR<Eigen::Vector3d>> ArrayVector3d;
-    typedef std::vector<Eigen::Matrix4d, EIGEN_ALIGNED_ALLOCATOR<Eigen::Matrix4d>> ArrayMatrix4d;
+    typedef std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> ArrayVector3d;
+    typedef std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>> ArrayMatrix4d;
     typedef ArrayMatrix4d ArrayPoses;
 
 } // namespace Elastic_ICP

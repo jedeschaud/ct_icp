@@ -2,6 +2,33 @@
 
 # Installation
 
+### Step 1: Install or build [GLOG](https://github.com/google/glog)
+
+##### Ubuntu
+
+```sudo apt-get install glog libgoogle-glog-dev```
+
+##### Windows (Build from sources)
+
+```
+git clone https://github.com/google/glog
+mkdir ../glog-build && cd ../glog-build
+
+cmake -G "Unix Makefiles" -S ../glog -DCMAKE_BUILD_TYPE=Release
+
+... # Build or install the sources
+```
+
+### Step 2: Clone and build the project
+
+```bash
+git clone https://github.com/jedeschaud/ct_icp/tree/ceres
+mkdir ../ct_icp-build && cd ../ct_icp-build
+cmake -G "Unix Makefiles" -S ../ct_icp -DGLOG_DIR=<path-to-glog-build/install-dir>
+
+... # Build or install the sources
+```
+
 # Python binding
 
 > To Install a python binding project named `pyct_icp`:

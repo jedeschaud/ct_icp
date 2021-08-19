@@ -37,6 +37,9 @@ if (NOT yaml-cpp_POPULATED)
     add_subdirectory(${yaml-cpp_SOURCE_DIR} ${yaml-cpp_BINARY_DIR})
 endif ()
 
+# Glog
+find_package(glog REQUIRED)
+
 # Eigen
 FetchContent_Declare(
         Eigen3
@@ -48,6 +51,7 @@ if (NOT eigen3_POPULATED)
     set(BUILD_TESTING OFF)
     FetchContent_Populate(eigen3)
     set(BUILD_TESTING OFF)
+
     add_subdirectory(${eigen3_SOURCE_DIR} ${eigen3_BINARY_DIR})
 endif ()
 

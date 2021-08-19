@@ -70,7 +70,7 @@ SLAMOptions read_config(const std::string &config_path) {
         OPTION_CLAUSE(slam_node, options, save_trajectory, bool);
         OPTION_CLAUSE(slam_node, options, suspend_on_failure, bool);
         OPTION_CLAUSE(slam_node, options, output_dir, std::string);
-        if (!options.output_dir.empty() && options.output_dir[-1] != '/')
+		if (!options.output_dir.empty() && options.output_dir[options.output_dir.size() - 1] != '/')
             options.output_dir += '/';
         OPTION_CLAUSE(slam_node, options, max_frames, int);
         OPTION_CLAUSE(slam_node, options, display_debug, bool);
