@@ -6,28 +6,27 @@
 
 ##### Ubuntu
 
-```sudo apt-get install glog libgoogle-glog-dev```
+```
+mkdir cmake-build-release 
+mkdir cmake-build-release/external
+cd cmake-build-release/external
 
-##### Windows (Build from sources)
+# Build the external dependencies 
+cmake -G "Unix Makefiles" -S ../../external -DCMAKE_BUILD_TYPE=Release
+cmake --build . --config Release
+
+# Build the external dependencies 
+cd ..
+cmake -G "Unix Makefiles" -S ../. -DCMAKE_BUILD_TYPE=Releaqe
+cmake --build . --target install --config Release
+
 
 ```
-git clone https://github.com/google/glog
-mkdir ../glog-build && cd ../glog-build
 
-cmake -G "Unix Makefiles" -S ../glog -DCMAKE_BUILD_TYPE=Release
-
-... # Build or install the sources
-```
-
-### Step 2: Clone and build the project
-
+##### Windows 
 ```bash
-git clone https://github.com/jedeschaud/ct_icp/tree/ceres
-mkdir ../ct_icp-build && cd ../ct_icp-build
-cmake -G "Unix Makefiles" -S ../ct_icp -DGLOG_DIR=<path-to-glog-build/install-dir>
-
-... # Build or install the sources
-```
+.\ct_icp_build.bat
+ ```
 
 # Python binding
 
@@ -52,6 +51,7 @@ cmake -G "Unix Makefiles" -S ../ct_icp -DGLOG_DIR=<path-to-glog-build/install-di
 - [x] Test The code on KITTI-CARLA to verify you have the same results as JE
 - [x] Export all options in a yaml config file
 - [x] Add Optional Python binding ?
+- [x] Windows Build
+- [x] Superbuild to install external dependencies
 - [ ] Add Unit Tests
-- [ ] Test the build on Windows (Github CI ?)
 - [ ] Write a small Readme.md to explain how it works / How to build it
