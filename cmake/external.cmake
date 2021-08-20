@@ -209,7 +209,7 @@ if (WITH_VIZ3D)
     # VIZ 3D (For Visualization)
     FetchContent_Declare(
             viz3d
-            GIT_REPOSITORY git@gitlab.com:pdell/viz3d.git)
+            GIT_REPOSITORY https://gitlab.com/pdell/viz3d.git)
     if (NOT viz3d_POPULATED)
         set(BUILD_TESTING OFF)
         FetchContent_Populate(viz3d)

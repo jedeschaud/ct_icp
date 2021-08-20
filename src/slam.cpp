@@ -265,7 +265,7 @@ int main(int argc, char **argv) {
     auto sequences = ct_icp::get_sequences(options.dataset_options);
     int num_sequences = (int) sequences.size();
 
-//    int max_num_threads = std::max(options.max_num_threads, 1);
+    int max_num_threads = std::max(options.max_num_threads, 1);
 #ifdef CT_ICP_WITH_VIZ
     max_num_threads = 1;
     std::thread gui_thread{viz::ExplorationEngine::LaunchMainLoop};
