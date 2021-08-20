@@ -8,5 +8,11 @@ _build*
 # Configuration files (e.g. idea)
 .*
 
+# shared libraries
+*.dll
+*.so
+*.exe
+slam
+
 # Commit the .gitignore
 !.gitignore

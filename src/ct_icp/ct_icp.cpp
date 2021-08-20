@@ -1,5 +1,7 @@
+#include <omp.h>
 #include <chrono>
 #include <queue>
+#include <thread>
 
 #include <Eigen/StdVector>
 #include <ceres/ceres.h>
@@ -313,7 +315,8 @@ namespace ct_icp {
                     out_number_of_residuals++;
                     problem->AddResidualBlock(pt_to_plane_residual, loss_function,
                                               begin_quat_, begin_t_, end_quat_, end_t_);
-                    pt_to_plane_residual = nullptr;
+
+                     pt_to_plane_residual = nullptr;
                 }
             }
             for (auto &pt_to_plane_residual : vector_pt_to_pl_residuals_) {
@@ -321,7 +324,7 @@ namespace ct_icp {
                     out_number_of_residuals++;
                     problem->AddResidualBlock(pt_to_plane_residual, loss_function,
                                               end_quat_, end_t_);
-                    pt_to_plane_residual = nullptr;
+					 pt_to_plane_residual = nullptr;
                 }
             }
             return std::move(problem);
@@ -389,8 +392,10 @@ namespace ct_icp {
             builder.AddParameterBlocks(begin_quat, end_quat, begin_t, end_t);
 
             // Add Point-to-plane residuals
-#pragma omp parallel for num_threads(options.ls_num_threads)
-            for (int k = 0; k < keypoints.size(); ++k) {
+            int num_keypoints = keypoints.size();
+            int num_threads = options.ls_num_threads;
+            #pragma omp parallel for num_threads(num_threads)
+            for (int k = 0; k < num_keypoints; ++k) {
                 auto &keypoint = keypoints[k];
                 auto &raw_point = keypoint.raw_pt;
                 // Neighborhood search

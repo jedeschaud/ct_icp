@@ -1,3 +1,4 @@
+#include <omp.h>
 #include <chrono>
 #include "odometry.hpp"
 #include "Utilities/PersoTimer.h"
@@ -182,7 +183,10 @@ namespace ct_icp {
         auto end = std::chrono::steady_clock::now();
         std::chrono::duration<double> elapsed_seconds = end - start;
         if (kDisplay)
+        {
             log_out << "Elapsed Time: " << elapsed_seconds.count() * 1000.0 << " (ms)" << std::endl;
+            log_out << "[OPENMP]" << omp_get_max_threads() << " / Num Procs " << omp_get_num_procs() << std::endl;
+        }
 
         for (auto &point : frame)
             point.index_frame = index_frame;

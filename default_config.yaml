@@ -1,4 +1,4 @@
-max_num_threads: 1
+max_num_threads:  1 
 save_trajectory: true
 suspend_on_failure: false
 output_dir: .outputs
@@ -8,7 +8,7 @@ display_debug: true
 # DATASET OPTIONS ----
 dataset_options:
   dataset: KITTI # Options: [KITTI / KITTI_CARLA]
-  root_path: ../.kitti_raw # Set to the root path of kitti's directory
+  root_path: C:\dev\ct_icp\.kitti # Set to the root path of kitti's directory
   fail_if_incomplete: false
   min_dist_lidar_center: 3.0 # Suppresses points to close to the center of the sensor
   max_dist_lidar_center: 100.0 # Suppresses points to far from the center of the sensor
@@ -25,23 +25,23 @@ odometry_options:
 
   # CT_ICP OPTIONS ----
   ct_icp_options:
-    size_voxel_map: 1.0 # The voxel size of in the voxel map
+    size_voxel_map: 1.5 # The voxel size of in the voxel map
     num_iters_icp: 5 # The number of iterations of the ICP
     min_number_neighbors: 20 # The minimum number of neighbor points to define a valid neighborhood
     voxel_neighborhood: 1
     max_number_neighbors: 20
     max_dist_to_plane_icp: 0.3
     norm_x_end_iteration_ct_icp: 0.001
-    debug_print: true
+    debug_print: false
     point_to_plane_with_distortion: true
-    distance: CT_POINT_TO_PLANE # Options: [CT_POINT_TO_PLANE, POINT_TO_PLANE]
+    distance: POINT_TO_PLANE # Options: [CT_POINT_TO_PLANE, POINT_TO_PLANE]
     num_closest_neighbors: 1
     alpha_location_consistency: 0.0001
     alpha_constant_velocity: 0.0001
 
     loss_function: CAUCHY # Options: [CAUCHY, STANDARD, HUBER, TOLERANT, TRUNCATED]
-    ls_max_num_iters: 5 # The number of steps performed by ceres for each iteration of the ICP
-    ls_num_threads: 6 # The number of threads to build and solve the least square system
+    ls_max_num_iters: 1 # The number of steps performed by ceres for each iteration of the ICP
+    ls_num_threads:  16 # The number of threads to build and solve the least square system
     ls_sigma: 0.1
     ls_tolerant_min_threshold: 0.05
 

@@ -1,6 +1,16 @@
 # External projects
 include(FetchContent)
 
+set(LOG_PREFIX " [CT_ICP] -- ")
+if (NOT CMAKE_BUILD_TYPE)
+	set(CMAKE_BUILD_TYPE Release)
+endif()
+
+if(NOT EXT_INSTALL_ROOT)
+	set(EXT_INSTALL_ROOT ${CMAKE_BINARY_DIR}/external/install/${CMAKE_BUILD_TYPE})
+	message(INFO "${LOG_PREFIX}Setting the external installation root directory to ${EXT_INSTALL_ROOT}")
+endif()
+
 # TCLAP For argument reader
 FetchContent_Declare(
         tclap
@@ -14,69 +24,46 @@ if (NOT tclap_POPULATED)
 
     add_library(TCLAP INTERFACE)
     target_include_directories(TCLAP INTERFACE "${tclap_SOURCE_DIR}/include/")
-    add_subdirectory("${tclap_SOURCE_DIR}/include/tclap" "${tclap_BINARY_DIR}/include/tclap")
 endif ()
 
 
-# YAML-CPP To read/write Yaml configuration files
-FetchContent_Declare(
-        yaml-cpp
-        GIT_REPOSITORY https://github.com/jbeder/yaml-cpp
-        GIT_TAG yaml-cpp-0.6.3
-)
-FetchContent_GetProperties(yaml-cpp)
-if (NOT yaml-cpp_POPULATED)
+# Find Ceres
+if(NOT YAML_CPP_DIR)
+    set(YAML_CPP_DIR ${EXT_INSTALL_ROOT}/yaml-cpp/lib/cmake)
+endif()
+find_package(yaml-cpp REQUIRED CONFIG PATHS ${YAML_CPP_DIR})
+if(NOT TARGET yaml-cpp)
+    message(FATAL_ERROR "${LOG_PREFIX}Could not find target yaml-cpp")
+endif()
 
-    set(YAML_CPP_BUILD_TESTS OFF)
-    set(YAML_CPP_BUILD_TOOLS OFF)
-    set(YAML_CPP_BUILD_CONTRIB OFF)
-    set(YAML_CPP_INSTALL OFF)
-    FetchContent_Populate(yaml-cpp)
 
-    set(YAML_CPP_BUILD_TESTS OFF) # Do not build the tests
-    add_subdirectory(${yaml-cpp_SOURCE_DIR} ${yaml-cpp_BINARY_DIR})
-endif ()
-
-# Glog
+# Find GLOG
+if(NOT GLOG_DIR)
+	set(GLOG_DIR ${EXT_INSTALL_ROOT}/glog)
+endif()
 find_package(glog REQUIRED)
+message(INFO "${LOG_PREFIX}Successfully Found GLOG")
 
-# Eigen
-FetchContent_Declare(
-        Eigen3
-        GIT_REPOSITORY https://gitlab.com/libeigen/eigen
-        GIT_TAG 3.3.7
-)
-FetchContent_GetProperties(eigen3)
-if (NOT eigen3_POPULATED)
-    set(BUILD_TESTING OFF)
-    FetchContent_Populate(eigen3)
-    set(BUILD_TESTING OFF)
+# Find Eigen
+if(NOT EIGEN_DIR)
+	set(EIGEN_DIR ${EXT_INSTALL_ROOT}/Eigen3)
+endif()
+find_package(Eigen3 REQUIRED)
+if(NOT TARGET Eigen3::Eigen)
+       message(FATAL_ERROR "${LOG_PREFIX}Could not find target Eigen3::Eigen")
+endif()
+message(INFO "${LOG_PREFIX}Successfully Found Eigen3")
 
-    add_subdirectory(${eigen3_SOURCE_DIR} ${eigen3_BINARY_DIR})
-endif ()
+# Find Ceres
+if(NOT CERES_DIR)
+    set(CERES_DIR ${EXT_INSTALL_ROOT}/Ceres/CMake)
+endif()
+find_package(Ceres REQUIRED CONFIG PATHS ${CERES_DIR})
+if(NOT TARGET Ceres::ceres)
+    message(FATAL_ERROR "${LOG_PREFIX}Could not find target Ceres::ceres")
+endif()
 
-# Ceres
-FetchContent_Declare(
-        ceres
-        GIT_REPOSITORY https://ceres-solver.googlesource.com/ceres-solver
-        GIT_TAG 2.0.0)
-if (NOT ceres_POPULATED)
-    set(BUILD_TESTING OFF)
-    set(PROVIDE_UNINSTALL_TARGET OFF)
-    set(BUILD_EXAMPLES OFF)
-    FetchContent_Populate(ceres)
-    add_subdirectory(${ceres_SOURCE_DIR} ${ceres_BINARY_DIR})
-endif ()
-
-# Google Test For Testing
-FetchContent_Declare(
-        googletest
-        GIT_REPOSITORY https://github.com/google/googletest.git
-        GIT_TAG release-1.8.0)
-FetchContent_MakeAvailable(googletest)
-include(GoogleTest)
-
-# Tessil (For Google hashing)
+# Tessil (As a hashmap)
 FetchContent_Declare(
         tessil
         GIT_REPOSITORY https://github.com/Tessil/robin-map
@@ -85,7 +72,24 @@ FetchContent_Declare(
 if (NOT tessil_POPULATED)
     set(BUILD_TESTING OFF)
     FetchContent_Populate(tessil)
-    add_subdirectory(${tessil_SOURCE_DIR} ${tessil_BINARY_DIR})
+
+    add_library(robin_map INTERFACE)
+    # Use tsl::robin_map as target, more consistent with other libraries conventions (Boost, Qt, ...)
+    add_library(tsl::robin_map ALIAS robin_map)
+
+    target_include_directories(robin_map INTERFACE
+                            "$<BUILD_INTERFACE:${tessil_SOURCE_DIR}/include>")
+
+    list(APPEND headers "${tessil_SOURCE_DIR}/include/tsl/robin_growth_policy.h"
+                        "${tessil_SOURCE_DIR}/include/tsl/robin_hash.h"
+                        "${tessil_SOURCE_DIR}/include/tsl/robin_map.h"
+                        "${tessil_SOURCE_DIR}/include/tsl/robin_set.h")
+    target_sources(robin_map INTERFACE "$<BUILD_INTERFACE:${headers}>")
+
+    if(MSVC)
+        target_sources(robin_map INTERFACE
+                    "$<BUILD_INTERFACE:${tessil_SOURCE_DIR}/tsl-robin-map.natvis>")
+    endif()
 endif ()
 
 if (WITH_PYTHON_BINDING)
@@ -101,7 +105,103 @@ if (WITH_PYTHON_BINDING)
     endif ()
 endif ()
 
+
 if (WITH_VIZ3D)
+    message(INFO "${LOG_PREFIX}Searching/Installing VIZ3D dependencies.")
+    # A Color Map
+    FetchContent_Declare(
+            colormap
+            GIT_REPOSITORY https://github.com/jgreitemann/colormap)
+    if (NOT colormap_POPULATED)
+        FetchContent_Populate(colormap)    
+        # Include the directories of colormap
+        include_directories(${colormap_SOURCE_DIR}/include)
+    endif ()
+
+    if (NOT GLAD_DIR)
+        set(GLAD_DIR ${EXT_INSTALL_ROOT}/glad/lib/cmake)
+    endif()
+    find_package(glad REQUIRED CONFIG PATHS ${GLAD_DIR})
+    if (NOT TARGET glad::glad)
+        message(FATAL_ERROR "${LOG_PREFIX}Could not load target glad")
+    endif()
+    message(INFO "${LOG_PREFIX}Successfully Found Glad")
+
+    # OpenGL
+    find_package(OpenGL REQUIRED)
+    if (NOT TARGET OpenGL::GL)
+        message(FATAL_ERROR "${LOG_PREFIX}OpenGL::GL target could not be found")
+    endif ()
+
+
+    # GLFW : Windowing System
+    if (NOT GLFW_DIR)
+        set(GLFW_DIR ${EXT_INSTALL_ROOT}/glfw/lib/cmake/glfw3)
+    endif()
+    find_package(glfw3 REQUIRED CONFIG PATHS ${GLFW_DIR})
+    if(NOT TARGET glfw)
+            message(FATAL_ERROR "${LOG_PREFIX}Target glfw could not be found")
+    endif()
+    message(INFO "${LOG_PREFIX}Successfully Found GLFW")
+
+
+    FetchContent_Declare(
+            imgui
+            GIT_REPOSITORY https://gitlab.com/pdell/imgui
+            GIT_TAG docking)
+
+    if (NOT imgui_POPULATED)
+        FetchContent_Populate(imgui)
+        set(_IMGUI_SOURCE_DIR ${imgui_SOURCE_DIR})
+        set(FONTS_DIR ${_IMGUI_SOURCE_DIR}/misc/fonts)
+
+        ##################################################################################################################
+        # Project Files
+        ##################################################################################################################
+        set(HEADERS_CXX_FILES
+                ${_IMGUI_SOURCE_DIR}/imgui.h
+                ${_IMGUI_SOURCE_DIR}/imconfig.h
+                ${_IMGUI_SOURCE_DIR}/imgui_internal.h
+                ${_IMGUI_SOURCE_DIR}/imstb_rectpack.h
+                ${_IMGUI_SOURCE_DIR}/imstb_textedit.h
+                ${_IMGUI_SOURCE_DIR}/imstb_truetype.h)
+
+        set(SOURCES_CXX_FILES
+                ${_IMGUI_SOURCE_DIR}/imgui.cpp
+                ${_IMGUI_SOURCE_DIR}/imgui_draw.cpp
+                ${_IMGUI_SOURCE_DIR}/imgui_widgets.cpp
+                ${_IMGUI_SOURCE_DIR}/imgui_tables.cpp
+                ${_IMGUI_SOURCE_DIR}/imgui_demo.cpp)
+
+        file(GLOB FONTS_FILES ${FONTS_DIR}/*.ttf)
+
+        set(HEADERS_CXX_IMPL_FILES
+                ${_IMGUI_SOURCE_DIR}/backends/imgui_impl_opengl3.h
+                ${_IMGUI_SOURCE_DIR}/backends/imgui_impl_glfw.h
+                )
+        set(SOURCES_CXX_IMPL_FILES
+                ${_IMGUI_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+                ${_IMGUI_SOURCE_DIR}/backends/imgui_impl_glfw.cpp)
+
+
+        ##################################################################################################################
+        # Target
+        ##################################################################################################################
+        add_library(imgui
+                ${HEADERS_CXX_FILES}
+                ${SOURCES_CXX_FILES}
+                ${HEADERS_CXX_IMPL_FILES}
+                ${SOURCES_CXX_IMPL_FILES}
+                ${FONTS_FILES}
+                )
+        target_include_directories(imgui PUBLIC
+                ${_IMGUI_SOURCE_DIR}
+                ${_IMGUI_SOURCE_DIR}/backends
+                )
+        target_link_libraries(imgui PUBLIC OpenGL::GL glfw glad::glad)
+        target_compile_definitions(imgui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
+    endif ()
+
 
     # VIZ 3D (For Visualization)
     FetchContent_Declare(

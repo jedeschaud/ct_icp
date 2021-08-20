@@ -1,7 +1,7 @@
 // TODO:
 //  - Save configuration in a YAML file
 
-#include <omp.h>
+//#include <omp.h>
 #include <iostream>
 #include <string>
 #include <math.h>
@@ -265,7 +265,7 @@ int main(int argc, char **argv) {
     auto sequences = ct_icp::get_sequences(options.dataset_options);
     int num_sequences = (int) sequences.size();
 
-    int max_num_threads = std::max(options.max_num_threads, 1);
+//    int max_num_threads = std::max(options.max_num_threads, 1);
 #ifdef CT_ICP_WITH_VIZ
     max_num_threads = 1;
     std::thread gui_thread{viz::ExplorationEngine::LaunchMainLoop};
@@ -275,7 +275,7 @@ int main(int argc, char **argv) {
 
     std::map<std::string, ct_icp::seq_errors> sequence_name_to_errors;
 
-#pragma omp parallel for num_threads(max_num_threads)
+//#pragma omp parallel for num_threads(max_num_threads)
     for (int i = 0; i < num_sequences; ++i) {
 
         int sequence_id = sequences[i].first;
