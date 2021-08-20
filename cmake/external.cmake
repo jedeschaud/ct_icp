@@ -35,6 +35,7 @@ find_package(yaml-cpp REQUIRED CONFIG PATHS ${YAML_CPP_DIR})
 if(NOT TARGET yaml-cpp)
     message(FATAL_ERROR "${LOG_PREFIX}Could not find target yaml-cpp")
 endif()
+message(FATAL_ERROR "${LOG_PREFIX}Succesfully found target yaml-cpp")
 
 
 # Find GLOG
@@ -42,7 +43,7 @@ if(NOT GLOG_DIR)
 	set(GLOG_DIR ${EXT_INSTALL_ROOT}/glog)
 endif()
 find_package(glog REQUIRED)
-message(INFO "${LOG_PREFIX}Successfully Found GLOG")
+message(INFO "${LOG_PREFIX}Successfully Found glog::glog")
 
 # Find Eigen
 if(NOT EIGEN_DIR)
@@ -52,7 +53,7 @@ find_package(Eigen3 REQUIRED)
 if(NOT TARGET Eigen3::Eigen)
        message(FATAL_ERROR "${LOG_PREFIX}Could not find target Eigen3::Eigen")
 endif()
-message(INFO "${LOG_PREFIX}Successfully Found Eigen3")
+message(INFO "${LOG_PREFIX}Successfully Found Target Eigen3::Eigen")
 
 # Find Ceres
 if(NOT CERES_DIR)
@@ -62,6 +63,8 @@ find_package(Ceres REQUIRED CONFIG PATHS ${CERES_DIR})
 if(NOT TARGET Ceres::ceres)
     message(FATAL_ERROR "${LOG_PREFIX}Could not find target Ceres::ceres")
 endif()
+message(INFO "${LOG_PREFIX}Found Target Ceres::ceres")
+
 
 # Tessil (As a hashmap)
 FetchContent_Declare(
