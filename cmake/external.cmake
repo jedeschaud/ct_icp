@@ -35,7 +35,7 @@ find_package(yaml-cpp REQUIRED CONFIG PATHS ${YAML_CPP_DIR})
 if(NOT TARGET yaml-cpp)
     message(FATAL_ERROR "${LOG_PREFIX}Could not find target yaml-cpp")
 endif()
-message(FATAL_ERROR "${LOG_PREFIX}Succesfully found target yaml-cpp")
+message(INFO "${LOG_PREFIX}Succesfully found target yaml-cpp")
 
 
 # Find GLOG
