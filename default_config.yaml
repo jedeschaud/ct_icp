@@ -8,7 +8,7 @@ display_debug: true
 # DATASET OPTIONS ----
 dataset_options:
   dataset: KITTI # Options: [KITTI / KITTI_CARLA]
-  root_path: C:\dev\ct_icp\.kitti # Set to the root path of kitti's directory
+  root_path: ../.kitti_raw # Set to the root path of kitti's directory
   fail_if_incomplete: false
   min_dist_lidar_center: 3.0 # Suppresses points to close to the center of the sensor
   max_dist_lidar_center: 100.0 # Suppresses points to far from the center of the sensor
@@ -34,7 +34,7 @@ odometry_options:
     norm_x_end_iteration_ct_icp: 0.001
     debug_print: false
     point_to_plane_with_distortion: true
-    distance: POINT_TO_PLANE # Options: [CT_POINT_TO_PLANE, POINT_TO_PLANE]
+    distance: CT_POINT_TO_PLANE # Options: [CT_POINT_TO_PLANE, POINT_TO_PLANE]
     num_closest_neighbors: 1
     alpha_location_consistency: 0.0001
     alpha_constant_velocity: 0.0001

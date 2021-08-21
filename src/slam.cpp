@@ -76,7 +76,7 @@ SLAMOptions read_config(const std::string &config_path) {
         OPTION_CLAUSE(slam_node, options, display_debug, bool);
 
         CHECK(slam_node["dataset_options"]) << "The node dataset_options must be specified in the config";
-        auto dataset_node = slam_node["dataset_options"].as<YAML::Node>();
+        auto dataset_node = slam_node["dataset_options"];
         auto &dataset_options = options.dataset_options;
 
         if (dataset_node["dataset"]) {
@@ -95,7 +95,7 @@ SLAMOptions read_config(const std::string &config_path) {
         OPTION_CLAUSE(dataset_node, dataset_options, max_dist_lidar_center, float);
 
         if (slam_node["odometry_options"]) {
-            auto odometry_node = slam_node["odometry_options"].as<YAML::Node>();
+            auto odometry_node = slam_node["odometry_options"];
             auto &odometry_options = options.odometry_options;
 
             OPTION_CLAUSE(odometry_node, odometry_options, voxel_size, double);
@@ -108,7 +108,7 @@ SLAMOptions read_config(const std::string &config_path) {
             OPTION_CLAUSE(odometry_node, odometry_options, distance_error_threshold, double);
 
             if (odometry_node["ct_icp_options"]) {
-                auto icp_node = odometry_node["ct_icp_options"].as<YAML::Node>();
+                auto icp_node = odometry_node["ct_icp_options"];
                 auto &icp_options = odometry_options.ct_icp_options;
 
                 OPTION_CLAUSE(icp_node, icp_options, size_voxel_map, double);
@@ -305,6 +305,12 @@ int main(int argc, char **argv) {
             total_elapsed_ms += total_elapsed.count() * 1000;
 
 #ifdef CT_ICP_WITH_VIZ
+            Eigen::Matrix4d camera_pose = Eigen::Matrix4d::Identity();
+            camera_pose.block<3, 3>(0, 0) = summary.frame.begin_R;
+            camera_pose.block<3, 1>(0, 3) = summary.frame.begin_t;
+            camera_pose = camera_pose.inverse();
+
+            instance.SetCameraPose(camera_pose);
             {
                 auto model_ptr = std::make_shared<viz::PointCloudModel>();
                 auto &model_data = model_ptr->ModelData();

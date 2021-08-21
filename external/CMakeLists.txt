@@ -28,8 +28,7 @@ ExternalProject_Add(
 		-DCMAKE_CXX_STANDARD=${CMAKE_CXX_STANDARD}
 
 	STEP_TARGETS 	  install 
-	BUILD_COMMAND     ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_BUILD_TYPE} --target install
-	COMMAND ${CMAKE_COMMAND} -E copy_directory "${EXT_INSTALL_DIR}/glog/bin" ${GLOBAL_RUNTIME_DIR})
+	BUILD_COMMAND     ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_BUILD_TYPE} --target install --parallel 6)
 
 # INSTALL EIGEN
 ExternalProject_Add(
@@ -47,7 +46,7 @@ ExternalProject_Add(
 
 		
 	STEP_TARGETS 	install	
-	BUILD_COMMAND     ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_BUILD_TYPE})
+	BUILD_COMMAND     ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_BUILD_TYPE} --parallel 6)
 	
 
 # INSTALL CERES
@@ -72,8 +71,7 @@ ExternalProject_Add(
 		-DBUILD_SHARED_LIBS=ON
 	
 	DEPENDS	 ${GLOG_DEF}-install Eigen3_ext-install
-	BUILD_COMMAND     ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_BUILD_TYPE} --target install
-	COMMAND ${CMAKE_COMMAND} -E copy_directory "${EXT_INSTALL_DIR}/Ceres/bin" ${GLOBAL_RUNTIME_DIR})
+	BUILD_COMMAND     ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_BUILD_TYPE} --target install --parallel 6)
 
 # Install YAML-CPP
 ExternalProject_Add(
@@ -93,7 +91,7 @@ ExternalProject_Add(
 		-DYAML_CPP_BUILD_TESTS=OFF
 	
 	DEPENDS	 	
-	BUILD_COMMAND     ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_BUILD_TYPE})
+	BUILD_COMMAND     ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_BUILD_TYPE} --parallel 6)
 
 
 if (WITH_VIZ3D)
@@ -113,7 +111,7 @@ if (WITH_VIZ3D)
 			-DGLAD_INSTALL=ON
 			-DCMAKE_CXX_STANDARD=${CMAKE_CXX_STANDARD}
 			
-		BUILD_COMMAND     ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_BUILD_TYPE} --target install)
+		BUILD_COMMAND     ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_BUILD_TYPE} --target install --parallel 6)
 		
 		
 	# INSTALL GLFW
@@ -131,6 +129,6 @@ if (WITH_VIZ3D)
 			-DCMAKE_CXX_STANDARD=${CMAKE_CXX_STANDARD}
 
 			
-		BUILD_COMMAND     ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_BUILD_TYPE} --target install)
+		BUILD_COMMAND     ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_BUILD_TYPE} --target install --parallel 6)
 endif()
 

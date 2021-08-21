@@ -11,7 +11,7 @@ mkdir %BUILD_DIR%\external
 cd %BUILD_DIR%\external
 @echo "[CT_ICP] Building External Dependencies"
 cmake -G %CMAKE_GENERATOR% -S %SRC_DIR%\external -DWITH_VIZ3D=%WITH_VIZ3D%
-cmake --build . --config %BUILD_CONFIG% 
+cmake --build . --config %BUILD_CONFIG% --target install
 
 
 @echo "[CT_ICP] Building main project"

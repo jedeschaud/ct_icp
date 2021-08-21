@@ -1,15 +1,17 @@
 # External projects
 include(FetchContent)
 
+option(SSH_GIT "Option to clone git project using ssh (instead of HTTPS)" ON)
+
 set(LOG_PREFIX " [CT_ICP] -- ")
 if (NOT CMAKE_BUILD_TYPE)
-	set(CMAKE_BUILD_TYPE Release)
-endif()
+    set(CMAKE_BUILD_TYPE Release)
+endif ()
 
-if(NOT EXT_INSTALL_ROOT)
-	set(EXT_INSTALL_ROOT ${CMAKE_BINARY_DIR}/external/install/${CMAKE_BUILD_TYPE})
-	message(INFO "${LOG_PREFIX}Setting the external installation root directory to ${EXT_INSTALL_ROOT}")
-endif()
+if (NOT EXT_INSTALL_ROOT)
+    set(EXT_INSTALL_ROOT ${CMAKE_BINARY_DIR}/external/install/${CMAKE_BUILD_TYPE})
+    message(INFO "${LOG_PREFIX}Setting the external installation root directory to ${EXT_INSTALL_ROOT}")
+endif ()
 
 # TCLAP For argument reader
 FetchContent_Declare(
@@ -28,41 +30,45 @@ endif ()
 
 
 # Find Ceres
-if(NOT YAML_CPP_DIR)
+if (NOT YAML_CPP_DIR)
     set(YAML_CPP_DIR ${EXT_INSTALL_ROOT}/yaml-cpp/lib/cmake)
-endif()
+endif ()
 find_package(yaml-cpp REQUIRED CONFIG PATHS ${YAML_CPP_DIR})
-if(NOT TARGET yaml-cpp)
+if (NOT TARGET yaml-cpp)
     message(FATAL_ERROR "${LOG_PREFIX}Could not find target yaml-cpp")
-endif()
+endif ()
 message(INFO "${LOG_PREFIX}Succesfully found target yaml-cpp")
 
 
 # Find GLOG
-if(NOT GLOG_DIR)
-	set(GLOG_DIR ${EXT_INSTALL_ROOT}/glog)
-endif()
-find_package(glog REQUIRED)
+if (NOT GLOG_DIR)
+    set(GLOG_DIR ${EXT_INSTALL_ROOT}/glog/lib/cmake/glog)
+endif ()
+find_package(glog REQUIRED CONFIG PATHS ${GLOG_DIR})
 message(INFO "${LOG_PREFIX}Successfully Found glog::glog")
 
 # Find Eigen
-if(NOT EIGEN_DIR)
-	set(EIGEN_DIR ${EXT_INSTALL_ROOT}/Eigen3)
-endif()
+if (NOT EIGEN_DIR)
+    set(EIGEN_DIR ${EXT_INSTALL_ROOT}/Eigen3)
+endif ()
 find_package(Eigen3 REQUIRED)
-if(NOT TARGET Eigen3::Eigen)
-       message(FATAL_ERROR "${LOG_PREFIX}Could not find target Eigen3::Eigen")
-endif()
+if (NOT TARGET Eigen3::Eigen)
+    message(FATAL_ERROR "${LOG_PREFIX}Could not find target Eigen3::Eigen")
+endif ()
 message(INFO "${LOG_PREFIX}Successfully Found Target Eigen3::Eigen")
 
 # Find Ceres
-if(NOT CERES_DIR)
-    set(CERES_DIR ${EXT_INSTALL_ROOT}/Ceres/CMake)
-endif()
-find_package(Ceres REQUIRED CONFIG PATHS ${CERES_DIR})
-if(NOT TARGET Ceres::ceres)
+if (NOT CERES_DIR)
+    if (WIN32)
+        set(CERES_DIR ${EXT_INSTALL_ROOT}/Ceres/CMake)
+    else ()
+        set(CERES_DIR ${EXT_INSTALL_ROOT}/Ceres/lib/cmake/Ceres)
+    endif ()
+endif ()
+find_package(Ceres REQUIRED CONFIG PATHS ${CERES_DIR} NO_DEFAULT_PATH)
+if (NOT TARGET Ceres::ceres)
     message(FATAL_ERROR "${LOG_PREFIX}Could not find target Ceres::ceres")
-endif()
+endif ()
 message(INFO "${LOG_PREFIX}Found Target Ceres::ceres")
 
 
@@ -81,18 +87,18 @@ if (NOT tessil_POPULATED)
     add_library(tsl::robin_map ALIAS robin_map)
 
     target_include_directories(robin_map INTERFACE
-                            "$<BUILD_INTERFACE:${tessil_SOURCE_DIR}/include>")
+            "$<BUILD_INTERFACE:${tessil_SOURCE_DIR}/include>")
 
     list(APPEND headers "${tessil_SOURCE_DIR}/include/tsl/robin_growth_policy.h"
-                        "${tessil_SOURCE_DIR}/include/tsl/robin_hash.h"
-                        "${tessil_SOURCE_DIR}/include/tsl/robin_map.h"
-                        "${tessil_SOURCE_DIR}/include/tsl/robin_set.h")
+            "${tessil_SOURCE_DIR}/include/tsl/robin_hash.h"
+            "${tessil_SOURCE_DIR}/include/tsl/robin_map.h"
+            "${tessil_SOURCE_DIR}/include/tsl/robin_set.h")
     target_sources(robin_map INTERFACE "$<BUILD_INTERFACE:${headers}>")
 
-    if(MSVC)
+    if (MSVC)
         target_sources(robin_map INTERFACE
-                    "$<BUILD_INTERFACE:${tessil_SOURCE_DIR}/tsl-robin-map.natvis>")
-    endif()
+                "$<BUILD_INTERFACE:${tessil_SOURCE_DIR}/tsl-robin-map.natvis>")
+    endif ()
 endif ()
 
 if (WITH_PYTHON_BINDING)
@@ -116,18 +122,22 @@ if (WITH_VIZ3D)
             colormap
             GIT_REPOSITORY https://github.com/jgreitemann/colormap)
     if (NOT colormap_POPULATED)
-        FetchContent_Populate(colormap)    
+        FetchContent_Populate(colormap)
         # Include the directories of colormap
         include_directories(${colormap_SOURCE_DIR}/include)
     endif ()
 
     if (NOT GLAD_DIR)
-        set(GLAD_DIR ${EXT_INSTALL_ROOT}/glad/lib/cmake)
-    endif()
+        if (WIN32)
+            set(GLAD_DIR ${EXT_INSTALL_ROOT}/glad/lib/cmake)
+        else ()
+            set(GLAD_DIR ${EXT_INSTALL_ROOT}/glad/lib/cmake/glad)
+        endif ()
+    endif ()
     find_package(glad REQUIRED CONFIG PATHS ${GLAD_DIR})
     if (NOT TARGET glad::glad)
         message(FATAL_ERROR "${LOG_PREFIX}Could not load target glad")
-    endif()
+    endif ()
     message(INFO "${LOG_PREFIX}Successfully Found Glad")
 
     # OpenGL
@@ -140,17 +150,21 @@ if (WITH_VIZ3D)
     # GLFW : Windowing System
     if (NOT GLFW_DIR)
         set(GLFW_DIR ${EXT_INSTALL_ROOT}/glfw/lib/cmake/glfw3)
-    endif()
+    endif ()
     find_package(glfw3 REQUIRED CONFIG PATHS ${GLFW_DIR})
-    if(NOT TARGET glfw)
-            message(FATAL_ERROR "${LOG_PREFIX}Target glfw could not be found")
-    endif()
+    if (NOT TARGET glfw)
+        message(FATAL_ERROR "${LOG_PREFIX}Target glfw could not be found")
+    endif ()
     message(INFO "${LOG_PREFIX}Successfully Found GLFW")
 
-
+    if(SSH_GIT)
+        set(IMGUI_GIT_URL  git@gitlab.com:pdell/imgui.git)
+    else()
+        set(IMGUI_GIT_URL https://gitlab.com/pdell/imgui.git)
+    endif()
     FetchContent_Declare(
             imgui
-            GIT_REPOSITORY https://gitlab.com/pdell/imgui
+            GIT_REPOSITORY ${IMGUI_GIT_URL}
             GIT_TAG docking)
 
     if (NOT imgui_POPULATED)
@@ -205,11 +219,15 @@ if (WITH_VIZ3D)
         target_compile_definitions(imgui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
     endif ()
 
-
+    if(SSH_GIT)
+        set(VIZ3D_GIT_URL  git@gitlab.com:pdell/viz3d.git)
+    else()
+        set(VIZ3D_GIT_URL https://gitlab.com/pdell/viz3d.git)
+    endif()
     # VIZ 3D (For Visualization)
     FetchContent_Declare(
             viz3d
-            GIT_REPOSITORY https://gitlab.com/pdell/viz3d.git)
+            GIT_REPOSITORY ${VIZ3D_GIT_URL})
     if (NOT viz3d_POPULATED)
         set(BUILD_TESTING OFF)
         FetchContent_Populate(viz3d)
