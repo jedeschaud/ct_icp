@@ -500,7 +500,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    int CT_ICP_old(const CTICPOptions &options,
+    bool CT_ICP_old(const CTICPOptions &options,
                    const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
                    std::vector<TrajectoryFrame> &trajectory, int index_frame) {
 
@@ -547,88 +547,94 @@ namespace ct_icp {
                 std::chrono::duration<double> _elapsed_search_neighbors = step1 - start;
                 elapsed_search_neighbors += _elapsed_search_neighbors.count() * 1000.0;
 
-                if (vector_neighbors.size() > kMinNumNeighbors) {
+                //std::cout << "vector_neighbors.size() : " << vector_neighbors.size() << std::endl;
+                //std::cout << "number_keypoints_used : " << number_keypoints_used << std::endl;
 
-                    auto step2 = std::chrono::steady_clock::now();
-                    std::chrono::duration<double> _elapsed_neighbors_selection = step2 - step1;
-                    elapsed_select_closest_neighbors += _elapsed_neighbors_selection.count() * 1000.0;
+                if (vector_neighbors.size() < kMinNumNeighbors) {
+                    continue;
+                }
 
-                    // Compute normals from neighbors
-                    double a2D; // The planarity coefficient
-                    auto normal = compute_normal(vector_neighbors, a2D);
+                auto step2 = std::chrono::steady_clock::now();
+                std::chrono::duration<double> _elapsed_neighbors_selection = step2 - step1;
+                elapsed_select_closest_neighbors += _elapsed_neighbors_selection.count() * 1000.0;
 
-                    if (normal.dot(trajectory[index_frame].begin_t - pt_keypoint) < 0) {
-                        normal = -1.0 * normal;
-                    }
+                // Compute normals from neighbors
+                double a2D; // The planarity coefficient
+                auto normal = compute_normal(vector_neighbors, a2D);
 
-                    double alpha_timestamp = keypoint.alpha_timestamp;
-                    double weight = a2D * a2D; //a2D**2 much better than a2D (a2D**3 is not working)
-                    Eigen::Vector3d closest_pt_normal = weight * normal;
+                if (normal.dot(trajectory[index_frame].begin_t - pt_keypoint) < 0) {
+                    normal = -1.0 * normal;
+                }
 
-                    Eigen::Vector3d closest_point = vector_neighbors[0];
+                double alpha_timestamp = keypoint.alpha_timestamp;
+                double weight = a2D * a2D; //a2D**2 much better than a2D (a2D**3 is not working)
+                Eigen::Vector3d closest_pt_normal = weight * normal;
 
-                    double dist_to_plane = normal[0] * (pt_keypoint[0] - closest_point[0]) +
-                                           normal[1] * (pt_keypoint[1] - closest_point[1]) +
-                                           normal[2] * (pt_keypoint[2] - closest_point[2]);
+                Eigen::Vector3d closest_point = vector_neighbors[0];
 
-                    auto step3 = std::chrono::steady_clock::now();
-                    std::chrono::duration<double> _elapsed_normals = step3 - step2;
-                    elapsed_normals += _elapsed_normals.count() * 1000.0;
+                double dist_to_plane = normal[0] * (pt_keypoint[0] - closest_point[0]) +
+                                        normal[1] * (pt_keypoint[1] - closest_point[1]) +
+                                        normal[2] * (pt_keypoint[2] - closest_point[2]);
 
-                    if (fabs(dist_to_plane) < options.max_dist_to_plane_ct_icp) {
+                auto step3 = std::chrono::steady_clock::now();
+                std::chrono::duration<double> _elapsed_normals = step3 - step2;
+                elapsed_normals += _elapsed_normals.count() * 1000.0;
 
-                        double scalar = closest_pt_normal[0] * (pt_keypoint[0] - closest_point[0]) +
-                                        closest_pt_normal[1] * (pt_keypoint[1] - closest_point[1]) +
-                                        closest_pt_normal[2] * (pt_keypoint[2] - closest_point[2]);
-                        total_scalar = total_scalar + scalar * scalar;
-                        mean_scalar = mean_scalar + fabs(scalar);
-                        number_keypoints_used++;
+               // std::cout << "dist_to_plane : " << dist_to_plane << std::endl;
+
+                if (fabs(dist_to_plane) < options.max_dist_to_plane_ct_icp) {
+
+                    double scalar = closest_pt_normal[0] * (pt_keypoint[0] - closest_point[0]) +
+                                    closest_pt_normal[1] * (pt_keypoint[1] - closest_point[1]) +
+                                    closest_pt_normal[2] * (pt_keypoint[2] - closest_point[2]);
+                    total_scalar = total_scalar + scalar * scalar;
+                    mean_scalar = mean_scalar + fabs(scalar);
+                    number_keypoints_used++;
 
 
-                        Eigen::Vector3d frame_idx_previous_origin_begin =
-                                trajectory[index_frame].begin_R * keypoint.raw_pt;
-                        Eigen::Vector3d frame_idx_previous_origin_end =
-                                trajectory[index_frame].end_R * keypoint.raw_pt;
+                    Eigen::Vector3d frame_idx_previous_origin_begin =
+                            trajectory[index_frame].begin_R * keypoint.raw_pt;
+                    Eigen::Vector3d frame_idx_previous_origin_end =
+                            trajectory[index_frame].end_R * keypoint.raw_pt;
 
-                        double cbx =
-                                (1 - alpha_timestamp) * (frame_idx_previous_origin_begin[1] * closest_pt_normal[2] -
-                                                         frame_idx_previous_origin_begin[2] * closest_pt_normal[1]);
-                        double cby =
-                                (1 - alpha_timestamp) * (frame_idx_previous_origin_begin[2] * closest_pt_normal[0] -
-                                                         frame_idx_previous_origin_begin[0] * closest_pt_normal[2]);
-                        double cbz =
-                                (1 - alpha_timestamp) * (frame_idx_previous_origin_begin[0] * closest_pt_normal[1] -
-                                                         frame_idx_previous_origin_begin[1] * closest_pt_normal[0]);
+                    double cbx =
+                            (1 - alpha_timestamp) * (frame_idx_previous_origin_begin[1] * closest_pt_normal[2] -
+                                                        frame_idx_previous_origin_begin[2] * closest_pt_normal[1]);
+                    double cby =
+                            (1 - alpha_timestamp) * (frame_idx_previous_origin_begin[2] * closest_pt_normal[0] -
+                                                        frame_idx_previous_origin_begin[0] * closest_pt_normal[2]);
+                    double cbz =
+                            (1 - alpha_timestamp) * (frame_idx_previous_origin_begin[0] * closest_pt_normal[1] -
+                                                        frame_idx_previous_origin_begin[1] * closest_pt_normal[0]);
 
-                        double nbx = (1 - alpha_timestamp) * closest_pt_normal[0];
-                        double nby = (1 - alpha_timestamp) * closest_pt_normal[1];
-                        double nbz = (1 - alpha_timestamp) * closest_pt_normal[2];
+                    double nbx = (1 - alpha_timestamp) * closest_pt_normal[0];
+                    double nby = (1 - alpha_timestamp) * closest_pt_normal[1];
+                    double nbz = (1 - alpha_timestamp) * closest_pt_normal[2];
 
-                        double cex = (alpha_timestamp) * (frame_idx_previous_origin_end[1] * closest_pt_normal[2] -
-                                                          frame_idx_previous_origin_end[2] * closest_pt_normal[1]);
-                        double cey = (alpha_timestamp) * (frame_idx_previous_origin_end[2] * closest_pt_normal[0] -
-                                                          frame_idx_previous_origin_end[0] * closest_pt_normal[2]);
-                        double cez = (alpha_timestamp) * (frame_idx_previous_origin_end[0] * closest_pt_normal[1] -
-                                                          frame_idx_previous_origin_end[1] * closest_pt_normal[0]);
+                    double cex = (alpha_timestamp) * (frame_idx_previous_origin_end[1] * closest_pt_normal[2] -
+                                                        frame_idx_previous_origin_end[2] * closest_pt_normal[1]);
+                    double cey = (alpha_timestamp) * (frame_idx_previous_origin_end[2] * closest_pt_normal[0] -
+                                                        frame_idx_previous_origin_end[0] * closest_pt_normal[2]);
+                    double cez = (alpha_timestamp) * (frame_idx_previous_origin_end[0] * closest_pt_normal[1] -
+                                                        frame_idx_previous_origin_end[1] * closest_pt_normal[0]);
 
-                        double nex = (alpha_timestamp) * closest_pt_normal[0];
-                        double ney = (alpha_timestamp) * closest_pt_normal[1];
-                        double nez = (alpha_timestamp) * closest_pt_normal[2];
+                    double nex = (alpha_timestamp) * closest_pt_normal[0];
+                    double ney = (alpha_timestamp) * closest_pt_normal[1];
+                    double nez = (alpha_timestamp) * closest_pt_normal[2];
 
-                        Eigen::VectorXd u(12);
-                        u << cbx, cby, cbz, nbx, nby, nbz, cex, cey, cez, nex, ney, nez;
-                        for (int i = 0; i < 12; i++) {
-                            for (int j = 0; j < 12; j++) {
-                                A(i, j) = A(i, j) + u[i] * u[j];
-                            }
-                            b(i) = b(i) - u[i] * scalar;
+                    Eigen::VectorXd u(12);
+                    u << cbx, cby, cbz, nbx, nby, nbz, cex, cey, cez, nex, ney, nez;
+                    for (int i = 0; i < 12; i++) {
+                        for (int j = 0; j < 12; j++) {
+                            A(i, j) = A(i, j) + u[i] * u[j];
                         }
-
-
-                        auto step4 = std::chrono::steady_clock::now();
-                        std::chrono::duration<double> _elapsed_A = step4 - step3;
-                        elapsed_search_neighbors += _elapsed_A.count() * 1000.0;
+                        b(i) = b(i) - u[i] * scalar;
                     }
+
+
+                    auto step4 = std::chrono::steady_clock::now();
+                    std::chrono::duration<double> _elapsed_A = step4 - step3;
+                    elapsed_search_neighbors += _elapsed_A.count() * 1000.0;
                 }
             }
 
@@ -638,8 +644,11 @@ namespace ct_icp {
                     std::cout << "Error : not enough keypoints selected in ct-icp !" << std::endl;
                     std::cout << "number_keypoints : " << number_keypoints_used << std::endl;
                 }
-                exit(1);
+                //exit(1);
+                return false;
             }
+
+            //std::cout << "number_keypoints_used : " << number_keypoints_used << std::endl;
 
 
             auto start = std::chrono::steady_clock::now();
@@ -751,7 +760,8 @@ namespace ct_icp {
                     std::cout << "Elapsed Solve: " << elapsed_solve << std::endl;
                     std::cout << "Elapsed Solve: " << elapsed_update << std::endl;
                 }
-                return number_keypoints_used;
+                //return number_keypoints_used;
+                return true;
             }
         }
 
@@ -765,7 +775,8 @@ namespace ct_icp {
             std::cout << "Number iterations CT-ICP : " << options.num_iters_icp << std::endl;
         }
 
-        return number_keypoints_used;
+        //return number_keypoints_used;
+        return true;
     }
 
 

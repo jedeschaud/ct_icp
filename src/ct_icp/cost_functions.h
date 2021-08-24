@@ -57,12 +57,12 @@ namespace ct_icp {
         static constexpr int NumResiduals() { return 1; }
 
         CTPointToPlaneFunctor(const Eigen::Vector3d &reference_point, const Eigen::Vector3d &raw_target,
-                              const Eigen::Vector3d &reference_normal, double alpha_timestamp, double a2D = 1.0) :
+                              const Eigen::Vector3d &reference_normal, double alpha_timestamp, double weight = 1.0) :
                 raw_keypoint_(raw_target),
                 reference_point_(reference_point),
                 reference_normal_(reference_normal),
                 alpha_timestamps_(alpha_timestamp),
-                weight_(a2D) {}
+                weight_(weight) {}
 
         template<typename T>
         bool operator()(const T *const begin_rot_params, const T *begin_trans_params,

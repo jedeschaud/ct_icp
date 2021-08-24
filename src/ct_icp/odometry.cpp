@@ -37,7 +37,7 @@ namespace ct_icp {
             sub_sample_frame(frame, kSizeVoxelInitSample);
         }
         if (kDisplay)
-            log_out << "Sampled Points " << frame.size() << " / " << const_frame.size() << std::endl;
+            log_out << "Number of points in sub-sampled frame: " << frame.size() << " / " << const_frame.size() << std::endl;
 
         RegistrationSummary summary;
         // Initial Trajectory Estimate
@@ -80,7 +80,7 @@ namespace ct_icp {
 
             Eigen::Vector3d t_diff = trajectory_[index_frame].end_t - trajectory_[index_frame].begin_t;
             if (kDisplay)
-                log_out << "Initial ego-motion distance : " << t_diff.norm() << std::endl;
+                log_out << "Initial ego-motion distance: " << t_diff.norm() << std::endl;
 
         }
 
@@ -93,7 +93,7 @@ namespace ct_icp {
 
             auto num_keypoints = (int) keypoints.size();
             if (kDisplay) {
-                log_out << "Number of keypoints sampled: " << num_keypoints << std::endl;
+                log_out << "Number of keypoints: " << num_keypoints << std::endl;
             }
             summary.sample_size = num_keypoints;
 
@@ -101,9 +101,6 @@ namespace ct_icp {
             const double kMaxDistance = options_.max_distance;
             const Eigen::Vector3d location = trajectory_[index_frame].end_t;
             RemovePointsFarFromLocation(voxel_map_, location, kMaxDistance);
-
-            if (kDisplay)
-                log_out << "Number of points in map : " << MapSize() << std::endl;
 
 
             int number_keypoints_used = 0;
@@ -149,7 +146,7 @@ namespace ct_icp {
             summary.distance_correction = (trajectory_[index_frame].begin_t -
                                            trajectory_[index_frame - 1].end_t).norm();
 
-        summary.relative_distance = (trajectory_[index_frame].begin_t - trajectory_[index_frame].end_t).norm();
+        summary.relative_distance = (trajectory_[index_frame].end_t - trajectory_[index_frame].begin_t).norm();
 
         if (summary.relative_distance > options_.distance_error_threshold) {
             summary.success = false;
@@ -160,14 +157,14 @@ namespace ct_icp {
 
         if (kDisplay) {
             if (index_frame > 0) {
-                log_out << "Distance correction [begining(t) - end(t-1)]: "
+                log_out << "Trajectory correction [begin(t) - end(t-1)]: "
                         << summary.distance_correction << std::endl;
                 log_out << "Final ego-motion distance: " << summary.relative_distance << std::endl;
             }
 
         }
 
-        if (index_frame == 1) {
+        if (index_frame == 0) {
             voxel_map_.clear();
         }
 
@@ -175,8 +172,9 @@ namespace ct_icp {
         AddPointsToMap(voxel_map_, frame, kSizeVoxelMap, kMaxNumPointsInVoxel, kMinDistancePoints);
 
         if (kDisplay) {
-            log_out << "Average Load Factor (Map):" << voxel_map_.load_factor() << std::endl;
-            log_out << "Number of Buckets (Map):" << voxel_map_.bucket_count() << std::endl;
+            log_out << "Average Load Factor (Map): " << voxel_map_.load_factor() << std::endl;
+            log_out << "Number of Buckets (Map): " << voxel_map_.bucket_count() << std::endl;
+            log_out << "Number of points (Map): " << MapSize() << std::endl;
 
         }
 
@@ -185,7 +183,7 @@ namespace ct_icp {
         if (kDisplay)
         {
             log_out << "Elapsed Time: " << elapsed_seconds.count() * 1000.0 << " (ms)" << std::endl;
-            log_out << "[OPENMP]" << omp_get_max_threads() << " / Num Procs " << omp_get_num_procs() << std::endl;
+            //log_out << "[OPENMP] Num Max Threads : " << omp_get_max_threads() << " / Num Procs " << omp_get_num_procs() << std::endl;
         }
 
         for (auto &point : frame)

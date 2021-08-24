@@ -396,6 +396,7 @@ int main(int argc, char **argv) {
             std::cout << "Max Local Error : " << seq_error.max_local_err << std::endl;
             std::cout << "Index Max Local Error : " << seq_error.index_max_local_err << std::endl;
             std::cout << "Average Duration : " << registration_elapsed_ms / frame_id << std::endl;
+            std::cout << std::endl;
 
 
 # pragma omp critical

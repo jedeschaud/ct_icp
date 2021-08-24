@@ -269,8 +269,7 @@ namespace ct_icp {
             }
 
             double r = new_point.raw_pt.norm();
-            if ((r > options.min_dist_lidar_center) && (r < options.max_dist_lidar_center) &&
-                (new_point.raw_pt[2] > KITTI_MIN_Z)) {
+            if ((r > options.min_dist_lidar_center) && (r < options.max_dist_lidar_center) && (new_point.raw_pt[2] > KITTI_MIN_Z)) {
                 frame.push_back(new_point);
             }
         }

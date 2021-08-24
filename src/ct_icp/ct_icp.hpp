@@ -46,7 +46,7 @@ namespace ct_icp {
 
         int min_number_neighbors = 20;
 
-        short voxel_neighborhood = 1; // Visits the (2 * voxel_neighborhood)^3 neighboring voxels
+        short voxel_neighborhood = 1; // Visits the (3 * voxel_neighborhood)^3 neighboring voxels
 
         int max_number_neighbors = 20;
 
@@ -60,21 +60,21 @@ namespace ct_icp {
 
         ICP_DISTANCE distance = CT_POINT_TO_PLANE;
 
-        int num_closest_neighbors = 3; // The number of closest neighbors considered as residuals
+        int num_closest_neighbors = 1; // The number of closest neighbors considered as residuals
 
         // TODO : Add Trajectory Constraints Options
-        double alpha_location_consistency = 1.e-4; // Constraints on location
+        double alpha_location_consistency = 0.001; // Constraints on location
 
-        double alpha_constant_velocity = 1.e-4; // Constraint on velocity
+        double alpha_constant_velocity = 0.001; // Constraint on velocity
 
         /* ---------------------------------------------------------------------------------------------------------- */
         /* LEAST SQUARE OPTIMIZATION PARAMETERS                                                                       */
 
         LEAST_SQUARES loss_function = CAUCHY;
 
-        int ls_max_num_iters = 4;
+        int ls_max_num_iters = 1;
 
-        int ls_num_threads = 6;
+        int ls_num_threads = 16;
 
         double ls_sigma = 0.1; // The robust parameter (for Cauchy, Huber or truncated least square)
 
@@ -106,6 +106,9 @@ namespace ct_icp {
                     const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
                     std::vector<TrajectoryFrame> &trajectory, int index_frame);
 
+    bool CT_ICP_old(const CTICPOptions& options,
+        const VoxelHashMap& voxels_map, std::vector<Point3D>& keypoints,
+        std::vector<TrajectoryFrame>& trajectory, int index_frame);
 
 } // namespace Elastic_ICP
 
