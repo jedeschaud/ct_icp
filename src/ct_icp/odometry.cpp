@@ -27,7 +27,7 @@ namespace ct_icp {
         if (kDisplay) {
             log_out << "/* ------------------------------------------------------------------------ */" << std::endl;
             log_out << "/* ------------------------------------------------------------------------ */" << std::endl;
-            log_out << "REGISTRATION OF FRAME n°" << index_frame << std::endl;
+            log_out << "REGISTRATION OF FRAME number " << index_frame << std::endl;
         }
 
         //Subsample the scan with voxels taking one random in every voxel

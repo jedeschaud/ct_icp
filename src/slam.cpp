@@ -4,6 +4,7 @@
 //#include <omp.h>
 #include <iostream>
 #include <string>
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <vector>
 #include <chrono>
@@ -12,7 +13,6 @@
 #include <yaml-cpp/yaml.h>
 #include <tclap/CmdLine.h>
 
-#define _USE_MATH_DEFINES
 
 #include "ct_icp/odometry.hpp"
 #include "ct_icp/dataset.hpp"
@@ -274,6 +274,9 @@ int main(int argc, char **argv) {
 
 
     std::map<std::string, ct_icp::seq_errors> sequence_name_to_errors;
+    bool dataset_with_gt = false;
+    double all_seq_registration_elapsed_ms = 0.0;
+    int all_seq_num_frames = 0;
 
 //#pragma omp parallel for num_threads(max_num_threads)
     for (int i = 0; i < num_sequences; ++i) {
@@ -283,7 +286,6 @@ int main(int argc, char **argv) {
 //                            std::min(sequences[i].second, options.max_frames);
         ct_icp::Odometry ct_icp_odometry(&options.odometry_options);
 
-        double total_elapsed_ms = 0.0;
         double registration_elapsed_ms = 0.0;
 
         auto iterator_ptr = get_dataset_sequence(options.dataset_options, sequence_id);
@@ -302,7 +304,7 @@ int main(int argc, char **argv) {
             std::chrono::duration<double> registration_elapsed = time_register_frame - time_read_pointcloud;
 
             registration_elapsed_ms += registration_elapsed.count() * 1000;
-            total_elapsed_ms += total_elapsed.count() * 1000;
+            all_seq_registration_elapsed_ms += registration_elapsed.count() * 1000;
 
 #ifdef CT_ICP_WITH_VIZ
             Eigen::Matrix4d camera_pose = Eigen::Matrix4d::Identity();
@@ -344,6 +346,7 @@ int main(int argc, char **argv) {
                 break;
             }
             frame_id++;
+            all_seq_num_frames++;
         }
 
         auto trajectory = ct_icp_odometry.Trajectory();
@@ -370,6 +373,8 @@ int main(int argc, char **argv) {
 
         // Evaluation
         if (has_ground_truth(options.dataset_options, sequence_id)) {
+            dataset_with_gt = true;
+
             auto ground_truth_poses = load_ground_truth(options.dataset_options, sequence_id);
 
             bool valid_trajectory = ground_truth_poses.size() == trajectory_absolute_poses.size();
@@ -402,6 +407,24 @@ int main(int argc, char **argv) {
             };
         }
     }
+
+    if (dataset_with_gt) {
+        std::cout << std::endl;
+        double all_seq_rpe_t = 0.0;
+        double all_seq_rpe_r = 0.0;
+        double num_total_errors = 0.0;
+        for (auto &pair : sequence_name_to_errors) {
+            for (int i = 0; i < (int)(pair.second.tab_errors.size()); i++) {
+                all_seq_rpe_t += pair.second.tab_errors[i].t_err;
+                all_seq_rpe_r += pair.second.tab_errors[i].r_err;
+                num_total_errors += 1;
+            }
+        }
+        std::cout << "KITTI metric translation/rotation : " << (all_seq_rpe_t / num_total_errors) * 100 << " " << (all_seq_rpe_r / num_total_errors) * 180.0 / M_PI << std::endl;
+    }
+
+    std::cout << std::endl;
+    std::cout << "Average registration time for all sequences (ms) : " << all_seq_registration_elapsed_ms / all_seq_num_frames << std::endl;
 
 #ifdef CT_ICP_WITH_VIZ
     gui_thread.join();
