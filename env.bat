@@ -1,3 +1,3 @@
-EXTERNAL_ROOT=$(pwd)/cmake-build-Release/external/install/Release
+set EXTERNAL_ROOT=%cd%/cmake-build-Release/external/install/Release
 
-set Path=%Path%;%EXTERNAL_ROOT%/Ceres/bin;%EXTERNAL_ROOT%/glog/lib
+set Path=%Path%;%EXTERNAL_ROOT%/Ceres/bin;%EXTERNAL_ROOT%/glog/bin
