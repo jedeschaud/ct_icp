@@ -198,7 +198,7 @@ PYBIND11_MODULE(pyct_icp, m) {
 
     /// DATASETS
     py::enum_<ct_icp::DATASET>(m, "CT_ICP_DATASET")
-            ADD_VALUE(ct_icp::DATASET, KITTI)
+            ADD_VALUE(ct_icp::DATASET, KITTI_raw)
             ADD_VALUE(ct_icp::DATASET, KITTI_CARLA)
             ADD_VALUE(ct_icp::DATASET, NCLT)
             .export_values();
