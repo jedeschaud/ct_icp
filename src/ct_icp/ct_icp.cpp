@@ -427,18 +427,18 @@ namespace ct_icp {
 
             auto problem = builder.GetProblem(number_keypoints_used);
 
-            if (index_frame > 0) {
+            if (index_frame > 1) {
                 if (options.distance == CT_POINT_TO_PLANE) {
                     // Add Regularisation residuals
                     problem->AddResidualBlock(new ceres::AutoDiffCostFunction<LocationConsistencyFunctor,
                                                       LocationConsistencyFunctor::NumResiduals(), 3>(
                             new LocationConsistencyFunctor(previous_estimate->end_t,
-                                                           options.alpha_location_consistency)),
+                                sqrt(number_keypoints_used*options.alpha_location_consistency))),
                                               nullptr,
                                               &begin_t.x());
                     problem->AddResidualBlock(new ceres::AutoDiffCostFunction<ConstantVelocityFunctor,
                                                       ConstantVelocityFunctor::NumResiduals(), 3, 3>(
-                            new ConstantVelocityFunctor(previous_velocity, options.alpha_constant_velocity)),
+                            new ConstantVelocityFunctor(previous_velocity, sqrt(number_keypoints_used*options.alpha_constant_velocity))),
                                               nullptr,
                                               &begin_t.x(),
                                               &end_t.x());
