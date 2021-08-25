@@ -2,6 +2,9 @@
 include(FetchContent)
 
 option(SSH_GIT "Option to clone git project using ssh (instead of HTTPS)" ON)
+if(WIN32)
+    set(SSH_GIT OFF)
+endif()
 
 set(LOG_PREFIX " [CT_ICP] -- ")
 if (NOT CMAKE_BUILD_TYPE)
