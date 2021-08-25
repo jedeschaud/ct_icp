@@ -81,9 +81,9 @@ SLAMOptions read_config(const std::string &config_path) {
 
         if (dataset_node["dataset"]) {
             auto dataset = dataset_node["dataset"].as<std::string>();
-            CHECK(dataset == "KITTI" || dataset == "KITTI_CARLA" || dataset == "NCLT");
-            if (dataset == "KITTI")
-                dataset_options.dataset = KITTI;
+            CHECK(dataset == "KITTI_raw" || dataset == "KITTI_CARLA" || dataset == "NCLT");
+            if (dataset == "KITTI_raw")
+                dataset_options.dataset = KITTI_raw;
             if (dataset == "KITTI_CARLA")
                 dataset_options.dataset = KITTI_CARLA;
             if (dataset == "NCLT")
@@ -183,8 +183,8 @@ SLAMOptions read_arguments(int argc, char **argv) {
                                                 "Path to the yaml configuration file on disk",
                                                 false, "", "string");
         TCLAP::ValueArg<std::string> dataset_arg("d", "dataset",
-                                                 "Dataset run for the execution (must be in [KITTI, KITTI-CARLA])",
-                                                 false, "KITTI", "string");
+                                                 "Dataset run for the execution (must be in [KITTI_raw, KITTI-CARLA])",
+                                                 false, "KITTI_raw", "string");
         TCLAP::ValueArg<std::string> dataset_root_arg("r", "dataset_root", "Dataset Root Path on Disk",
                                                       false, "", "string");
 
@@ -217,13 +217,13 @@ SLAMOptions read_arguments(int argc, char **argv) {
 
 
         std::string dataset = dataset_arg.getValue();
-        if (dataset != "KITTI" && dataset != "KITTI_CARLA") {
-            std::cerr << "Unrecognised dataset" << dataset << ", expected 'KITTI' or 'KITTI_CARLA'. Exiting"
+        if (dataset != "KITTI_raw" && dataset != "KITTI_CARLA") {
+            std::cerr << "Unrecognised dataset" << dataset << ", expected 'KITTI_raw' or 'KITTI_CARLA'. Exiting"
                       << std::endl;
             exit(1);
         }
-        if (dataset == "KITTI")
-            options.dataset_options.dataset = DATASET::KITTI;
+        if (dataset == "KITTI_raw")
+            options.dataset_options.dataset = DATASET::KITTI_raw;
         if (dataset == "KITTI_CARLA")
             options.dataset_options.dataset = DATASET::KITTI_CARLA;
 

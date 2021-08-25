@@ -36,8 +36,8 @@ odometry_options:
     point_to_plane_with_distortion: true
     distance: CT_POINT_TO_PLANE # Options: [CT_POINT_TO_PLANE, POINT_TO_PLANE]
     num_closest_neighbors: 1
-    alpha_location_consistency: 0.0001
-    alpha_constant_velocity: 0.0001
+    alpha_location_consistency: 0.001
+    alpha_constant_velocity: 0.001
 
     loss_function: CAUCHY # Options: [CAUCHY, STANDARD, HUBER, TOLERANT, TRUNCATED]
     ls_max_num_iters: 1 # The number of steps performed by ceres for each iteration of the ICP
