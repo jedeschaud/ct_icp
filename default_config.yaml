@@ -7,7 +7,7 @@ display_debug: true
 
 # DATASET OPTIONS ----
 dataset_options:
-  dataset: KITTI # Options: [KITTI / KITTI_CARLA]
+  dataset: KITTI_raw # Options: [KITTI_raw / KITTI_CARLA]
   root_path: ../.kitti_raw # Set to the root path of kitti's directory
   fail_if_incomplete: false
   min_dist_lidar_center: 3.0 # Suppresses points to close to the center of the sensor
