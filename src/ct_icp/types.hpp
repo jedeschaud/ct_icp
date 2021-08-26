@@ -11,6 +11,7 @@
 #include <Eigen/StdVector>
 #include <glog/logging.h>
 
+#include "utils.hpp"
 
 namespace ct_icp {
 
@@ -110,13 +111,15 @@ namespace std {
     template<>
     struct hash<ct_icp::Voxel> {
         std::size_t operator()(const ct_icp::Voxel &vox) const {
+#ifdef CT_ICP_IS_WINDOWS
             const std::hash<int32_t> hasher;
-            /*const size_t kP1 = 73856093;
-            const size_t kP2 = 19349669;
-            const size_t kP3 = 83492791;*/
-
             return ((hasher(vox.x) ^ (hasher(vox.y) << 1)) >> 1) ^ (hasher(vox.z) << 1) >> 1;
-            //return vox.x * kP1 + vox.y * kP2 + vox.z * kP3;
+#else
+            const size_t kP1 = 73856093;
+            const size_t kP2 = 19349669;
+            const size_t kP3 = 83492791;
+            return vox.x * kP1 + vox.y * kP2 + vox.z * kP3;
+#endif
         }
     };
 }

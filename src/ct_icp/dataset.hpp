@@ -7,7 +7,7 @@
 namespace ct_icp {
 
     enum DATASET {
-        KITTI = 0,
+        KITTI_raw = 0,
         KITTI_CARLA = 1,
         NCLT = 2
         // TODO KITTI-360
@@ -53,8 +53,8 @@ namespace ct_icp {
     // Returns the Pairs sequence_id, sequence_size found on disk for the provided options
     std::vector<std::pair<int, int>> get_sequences(const DatasetOptions &);
 
-    // Reads a PointCloud from the Dataset KITTI
-    std::vector<Point3D> read_kitti_pointcloud(const DatasetOptions &, const std::string &path);
+    // Reads a PointCloud from the Dataset KITTI_raw
+    std::vector<Point3D> read_kitti_raw_pointcloud(const DatasetOptions &, const std::string &path);
 
     // Reads a PointCloud from the Dataset KITTI_CARLA
     std::vector<Point3D> read_kitti_carla_pointcloud(const DatasetOptions &, const std::string &path);

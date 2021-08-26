@@ -25,8 +25,8 @@ namespace ct_icp {
             "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"
     };
 
-    const int KITTI_SEQUENCE_IDS[] = {0, 1, 2, 4, 5, 6, 7, 8, 9, 10};
-    const int NUMBER_SEQUENCES_KITTI = 10;
+    const int KITTI_raw_SEQUENCE_IDS[] = {0, 1, 2, 4, 5, 6, 7, 8, 9, 10};
+    const int NUMBER_SEQUENCES_KITTI_raw = 10;
 
     const int LENGTH_SEQUENCE_KITTI[] = {4540, 1100, 4660, 800, 270, 2760, 1100, 1100, 4070, 1590, 1200, 920, 1060,
                                          3280, 630, 1900, 1730, 490, 1800, 4980, 830, 2720};
@@ -98,7 +98,7 @@ namespace ct_icp {
             folder_path += '/';
 
         switch (options.dataset) {
-            case KITTI:
+            case KITTI_raw:
                 folder_path += sequence_name + "/frames/";
                 break;
             case KITTI_CARLA:
@@ -118,7 +118,7 @@ namespace ct_icp {
             ground_truth_path += '/';
 
         switch (options.dataset) {
-            case KITTI:
+            case KITTI_raw:
                 ground_truth_path += sequence_name + "/" + sequence_name + ".txt";
                 break;
             case KITTI_CARLA:
@@ -142,8 +142,8 @@ namespace ct_icp {
         std::vector<std::pair<int, int>> sequences;
         int num_sequences;
         switch (options.dataset) {
-            case KITTI:
-                num_sequences = NUMBER_SEQUENCES_KITTI;
+            case KITTI_raw:
+                num_sequences = NUMBER_SEQUENCES_KITTI_raw;
                 break;
             case KITTI_CARLA:
                 num_sequences = 7;
@@ -161,8 +161,8 @@ namespace ct_icp {
             std::string sequence_name;
 
             switch (options.dataset) {
-                case KITTI:
-                    sequence_id = KITTI_SEQUENCE_IDS[i];
+                case KITTI_raw:
+                    sequence_id = KITTI_raw_SEQUENCE_IDS[i];
                     sequence_size = LENGTH_SEQUENCE_KITTI[sequence_id] + 1;
                     sequence_name = KITTI_SEQUENCE_NAMES[sequence_id];
                     break;
@@ -205,8 +205,8 @@ namespace ct_icp {
 
         // Read the pointcloud
         switch (options.dataset) {
-            case KITTI:
-                return read_kitti_pointcloud(options, frame_path);
+            case KITTI_raw:
+                return read_kitti_raw_pointcloud(options, frame_path);
             case KITTI_CARLA:
                 return read_kitti_carla_pointcloud(options, frame_path);
             case NCLT:
@@ -219,7 +219,7 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     std::string sequence_name(const DatasetOptions &options, int sequence_id) {
         switch (options.dataset) {
-            case KITTI:
+            case KITTI_raw:
                 return KITTI_SEQUENCE_NAMES[sequence_id];
             case KITTI_CARLA:
                 return KITTI_CARLA_SEQUENCE_NAMES[sequence_id];
@@ -230,7 +230,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    std::vector<Point3D> read_kitti_pointcloud(const DatasetOptions &options, const std::string &path) {
+    std::vector<Point3D> read_kitti_raw_pointcloud(const DatasetOptions &options, const std::string &path) {
         std::vector<Point3D> frame;
         //read ply frame file
         PlyFile plyFileIn(path, fileOpenMode_IN);
@@ -239,7 +239,7 @@ namespace ct_icp {
         int numPointsIn = 0;
         plyFileIn.readFile(dataIn, sizeOfPointsIn, numPointsIn);
 
-        //Specific Parameters for KITTI
+        //Specific Parameters for KITTI_raw
         const double KITTI_MIN_Z = -5.0; //Bad returns under the ground
         const double KITTI_GLOBAL_VERTICAL_ANGLE_OFFSET = 0.205; //Issue in the intrinsic calibration of the KITTI Velodyne HDL64
 
@@ -429,7 +429,7 @@ namespace ct_icp {
     ArrayPoses transform_trajectory_frame(const DatasetOptions &options, const vector<TrajectoryFrame> &trajectory,
                                           int sequence_id) {
         switch (options.dataset) {
-            case KITTI:
+            case KITTI_raw:
                 return kitti_transform_trajectory_frame(trajectory, sequence_id);
             case KITTI_CARLA:
                 return kitti_carla_transform_trajectory_frame(trajectory);
@@ -444,7 +444,7 @@ namespace ct_icp {
     bool has_ground_truth(const DatasetOptions &options, int sequence_id) {
         // TODO Check existence of ground truth file
         switch (options.dataset) {
-            case KITTI:
+            case KITTI_raw:
                 return sequence_id >= 0 && sequence_id <= 10 && sequence_id != 3;
             case KITTI_CARLA:
                 return sequence_id >= 0 && sequence_id < KITTI_CARLA_NUM_SEQUENCES;
@@ -464,7 +464,7 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     ArrayPoses load_sensor_ground_truth(const DatasetOptions &options, int sequence_id) {
         auto gt = load_ground_truth(options, sequence_id);
-        if (options.dataset == KITTI) {
+        if (options.dataset == KITTI_raw) {
             Eigen::Matrix3d R_Tr = R_Tr_array_KITTI[sequence_id].transpose();
             Eigen::Vector3d T_Tr = T_Tr_array_KITTI[sequence_id];
             Eigen::Matrix4d Tr = Eigen::Matrix4d::Identity();
@@ -481,13 +481,13 @@ namespace ct_icp {
     DatasetSequence::~DatasetSequence() = default;
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    /// DirectoryIterator for KITTI and KITTI_CARLA
+    /// DirectoryIterator for KITTI_raw and KITTI_CARLA
     class DirectoryIterator : public DatasetSequence {
     public:
         explicit DirectoryIterator(const DatasetOptions &options, int sequence_id) : options_(options),
                                                                                      sequence_id_(sequence_id) {
             switch (options.dataset) {
-                case KITTI:
+                case KITTI_raw:
                     num_frames_ = LENGTH_SEQUENCE_KITTI[sequence_id] + 1;
                     break;
                 case KITTI_CARLA:
@@ -520,7 +520,7 @@ namespace ct_icp {
         std::vector<Point3D> Frame(size_t index) const override {
             int frame_id = index;
             auto pc = read_pointcloud(options_, sequence_id_, frame_id);
-            if (options_.dataset == KITTI || options_.dataset == KITTI_CARLA) {
+            if (options_.dataset == KITTI_raw || options_.dataset == KITTI_CARLA) {
                 for (auto &point : pc) {
                     point.timestamp = frame_id + point.alpha_timestamp;
                 }
@@ -650,7 +650,7 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     std::shared_ptr<DatasetSequence> get_dataset_sequence(const DatasetOptions &options, int sequence_id) {
         switch (options.dataset) {
-            case KITTI:
+            case KITTI_raw:
             case KITTI_CARLA:
                 return std::make_shared<DirectoryIterator>(options, sequence_id);
             case NCLT:

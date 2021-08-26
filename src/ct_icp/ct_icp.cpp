@@ -28,7 +28,7 @@ namespace ct_icp {
         }
         frame.resize(0);
         int step = 0; //to take one random point inside each voxel (but with identical results when lunching the SLAM a second time)
-        for (const auto &n : grid) {
+        for (const auto &n: grid) {
             if (n.second.size() > 0) {
                 //frame.push_back(n.second[step % (int)n.second.size()]);
                 frame.push_back(n.second[0]);
@@ -58,13 +58,13 @@ namespace ct_icp {
     Eigen::Vector3d compute_normal(const ArrayVector3d &points, double &out_a2D) {
         // Compute the normals
         Eigen::Vector3d barycenter(Eigen::Vector3d(0, 0, 0));
-        for (auto &point : points) {
+        for (auto &point: points) {
             barycenter += point;
         }
         barycenter /= (double) points.size();
 
         Eigen::Matrix3d covariance_Matrix(Eigen::Matrix3d::Zero());
-        for (auto &point : points) {
+        for (auto &point: points) {
             for (int k = 0; k < 3; ++k)
                 for (int l = k; l < 3; ++l)
                     covariance_Matrix(k, l) += (point(k) - barycenter(k)) *
@@ -157,8 +157,8 @@ namespace ct_icp {
                              int num_neighbors, int max_num_neighbors) {
         std::vector<std::pair<double, Eigen::Vector3d>> distance_neighbors;
         distance_neighbors.reserve(neighbors_ptr.size());
-        for (auto &it_ptr : neighbors_ptr) {
-            for (auto &it : *it_ptr) {
+        for (auto &it_ptr: neighbors_ptr) {
+            for (auto &it: *it_ptr) {
                 double sq_dist = (pt_keypoint - it).squaredNorm();
                 distance_neighbors.emplace_back(sq_dist, it);
             }
@@ -310,21 +310,21 @@ namespace ct_icp {
 
         std::unique_ptr<ceres::Problem> GetProblem(int &out_number_of_residuals) {
             out_number_of_residuals = 0;
-            for (auto &pt_to_plane_residual : vector_ct_icp_residuals_) {
+            for (auto &pt_to_plane_residual: vector_ct_icp_residuals_) {
                 if (pt_to_plane_residual != nullptr) {
                     out_number_of_residuals++;
                     problem->AddResidualBlock(pt_to_plane_residual, loss_function,
                                               begin_quat_, begin_t_, end_quat_, end_t_);
 
-                     pt_to_plane_residual = nullptr;
+                    pt_to_plane_residual = nullptr;
                 }
             }
-            for (auto &pt_to_plane_residual : vector_pt_to_pl_residuals_) {
+            for (auto &pt_to_plane_residual: vector_pt_to_pl_residuals_) {
                 if (pt_to_plane_residual != nullptr) {
                     out_number_of_residuals++;
                     problem->AddResidualBlock(pt_to_plane_residual, loss_function,
                                               end_quat_, end_t_);
-					 pt_to_plane_residual = nullptr;
+                    pt_to_plane_residual = nullptr;
                 }
             }
             return std::move(problem);
@@ -394,7 +394,7 @@ namespace ct_icp {
             // Add Point-to-plane residuals
             int num_keypoints = keypoints.size();
             int num_threads = options.ls_num_threads;
-            #pragma omp parallel for num_threads(num_threads)
+#pragma omp parallel for num_threads(num_threads)
             for (int k = 0; k < num_keypoints; ++k) {
                 auto &keypoint = keypoints[k];
                 auto &raw_point = keypoint.raw_pt;
@@ -427,18 +427,20 @@ namespace ct_icp {
 
             auto problem = builder.GetProblem(number_keypoints_used);
 
-            if (index_frame > 0) {
+            if (index_frame > 1) {
                 if (options.distance == CT_POINT_TO_PLANE) {
                     // Add Regularisation residuals
                     problem->AddResidualBlock(new ceres::AutoDiffCostFunction<LocationConsistencyFunctor,
                                                       LocationConsistencyFunctor::NumResiduals(), 3>(
-                            new LocationConsistencyFunctor(previous_estimate->end_t,
-                                                           options.alpha_location_consistency)),
+                                                      new LocationConsistencyFunctor(previous_estimate->end_t,
+                                                                                     sqrt(number_keypoints_used *
+                                                                                          options.alpha_location_consistency))),
                                               nullptr,
                                               &begin_t.x());
                     problem->AddResidualBlock(new ceres::AutoDiffCostFunction<ConstantVelocityFunctor,
                                                       ConstantVelocityFunctor::NumResiduals(), 3, 3>(
-                            new ConstantVelocityFunctor(previous_velocity, options.alpha_constant_velocity)),
+                                                      new ConstantVelocityFunctor(previous_velocity,
+                                                                                  sqrt(number_keypoints_used * options.alpha_constant_velocity))),
                                               nullptr,
                                               &begin_t.x(),
                                               &end_t.x());
@@ -477,12 +479,20 @@ namespace ct_icp {
             current_estimate.end_R = end_quat.toRotationMatrix();
 
             // Elastically distorts the frame to improve on Neighbor estimation
-            for (auto &keypoint : keypoints) {
-                double alpha_timestamp = keypoint.alpha_timestamp;
-                Eigen::Quaterniond q = begin_quat.slerp(alpha_timestamp, end_quat);
-                q.normalize();
-                Eigen::Matrix3d R = q.toRotationMatrix();
-                Eigen::Vector3d t = (1.0 - alpha_timestamp) * begin_t + alpha_timestamp * end_t;
+            Eigen::Matrix3d R;
+            Eigen::Vector3d t;
+            for (auto &keypoint: keypoints) {
+                if (options.point_to_plane_with_distortion || options.distance == CT_POINT_TO_PLANE) {
+                    double alpha_timestamp = keypoint.alpha_timestamp;
+                    Eigen::Quaterniond q = begin_quat.slerp(alpha_timestamp, end_quat);
+                    q.normalize();
+                    R = q.toRotationMatrix();
+                    t = (1.0 - alpha_timestamp) * begin_t + alpha_timestamp * end_t;
+                } else {
+                    R = end_quat.normalized().toRotationMatrix();
+                    t = end_t;
+                }
+
                 keypoint.pt = R * keypoint.raw_pt + t;
             }
 
@@ -501,8 +511,8 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     bool CT_ICP_old(const CTICPOptions &options,
-                   const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-                   std::vector<TrajectoryFrame> &trajectory, int index_frame) {
+                    const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
+                    std::vector<TrajectoryFrame> &trajectory, int index_frame) {
 
         //Optimization with Traj constraints
         const double ALPHA_C = 0.001;
@@ -535,7 +545,7 @@ namespace ct_icp {
             double total_scalar = 0;
             double mean_scalar = 0.0;
 
-            for (auto &keypoint : keypoints) {
+            for (auto &keypoint: keypoints) {
                 auto start = std::chrono::steady_clock::now();
                 auto &pt_keypoint = keypoint.pt;
 
@@ -573,14 +583,14 @@ namespace ct_icp {
                 Eigen::Vector3d closest_point = vector_neighbors[0];
 
                 double dist_to_plane = normal[0] * (pt_keypoint[0] - closest_point[0]) +
-                                        normal[1] * (pt_keypoint[1] - closest_point[1]) +
-                                        normal[2] * (pt_keypoint[2] - closest_point[2]);
+                                       normal[1] * (pt_keypoint[1] - closest_point[1]) +
+                                       normal[2] * (pt_keypoint[2] - closest_point[2]);
 
                 auto step3 = std::chrono::steady_clock::now();
                 std::chrono::duration<double> _elapsed_normals = step3 - step2;
                 elapsed_normals += _elapsed_normals.count() * 1000.0;
 
-               // std::cout << "dist_to_plane : " << dist_to_plane << std::endl;
+                // std::cout << "dist_to_plane : " << dist_to_plane << std::endl;
 
                 if (fabs(dist_to_plane) < options.max_dist_to_plane_ct_icp) {
 
@@ -599,24 +609,24 @@ namespace ct_icp {
 
                     double cbx =
                             (1 - alpha_timestamp) * (frame_idx_previous_origin_begin[1] * closest_pt_normal[2] -
-                                                        frame_idx_previous_origin_begin[2] * closest_pt_normal[1]);
+                                                     frame_idx_previous_origin_begin[2] * closest_pt_normal[1]);
                     double cby =
                             (1 - alpha_timestamp) * (frame_idx_previous_origin_begin[2] * closest_pt_normal[0] -
-                                                        frame_idx_previous_origin_begin[0] * closest_pt_normal[2]);
+                                                     frame_idx_previous_origin_begin[0] * closest_pt_normal[2]);
                     double cbz =
                             (1 - alpha_timestamp) * (frame_idx_previous_origin_begin[0] * closest_pt_normal[1] -
-                                                        frame_idx_previous_origin_begin[1] * closest_pt_normal[0]);
+                                                     frame_idx_previous_origin_begin[1] * closest_pt_normal[0]);
 
                     double nbx = (1 - alpha_timestamp) * closest_pt_normal[0];
                     double nby = (1 - alpha_timestamp) * closest_pt_normal[1];
                     double nbz = (1 - alpha_timestamp) * closest_pt_normal[2];
 
                     double cex = (alpha_timestamp) * (frame_idx_previous_origin_end[1] * closest_pt_normal[2] -
-                                                        frame_idx_previous_origin_end[2] * closest_pt_normal[1]);
+                                                      frame_idx_previous_origin_end[2] * closest_pt_normal[1]);
                     double cey = (alpha_timestamp) * (frame_idx_previous_origin_end[2] * closest_pt_normal[0] -
-                                                        frame_idx_previous_origin_end[0] * closest_pt_normal[2]);
+                                                      frame_idx_previous_origin_end[0] * closest_pt_normal[2]);
                     double cez = (alpha_timestamp) * (frame_idx_previous_origin_end[0] * closest_pt_normal[1] -
-                                                        frame_idx_previous_origin_end[1] * closest_pt_normal[0]);
+                                                      frame_idx_previous_origin_end[1] * closest_pt_normal[0]);
 
                     double nex = (alpha_timestamp) * closest_pt_normal[0];
                     double ney = (alpha_timestamp) * closest_pt_normal[1];
@@ -733,7 +743,7 @@ namespace ct_icp {
 
 
             //Update keypoints
-            for (auto &keypoint : keypoints) {
+            for (auto &keypoint: keypoints) {
                 Eigen::Quaterniond q_begin = Eigen::Quaterniond(trajectory[index_frame].begin_R);
                 Eigen::Quaterniond q_end = Eigen::Quaterniond(trajectory[index_frame].end_R);
                 Eigen::Vector3d t_begin = trajectory[index_frame].begin_t;

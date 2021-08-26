@@ -23,9 +23,11 @@ cmake --build . --target install --config Release
 
 ```
 
-##### Windows 
+##### Windows 10 sous PowerShell
 ```bash
 .\ct_icp_build.bat
+.\env.bat
+.\slam.exe -c default_config.yaml
  ```
 
 # Python binding

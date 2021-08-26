@@ -7,7 +7,7 @@ display_debug: true
 
 # DATASET OPTIONS ----
 dataset_options:
-  dataset: KITTI # Options: [KITTI / KITTI_CARLA]
+  dataset: KITTI_raw # Options: [KITTI_raw / KITTI_CARLA]
   root_path: ../.kitti_raw # Set to the root path of kitti's directory
   fail_if_incomplete: false
   min_dist_lidar_center: 3.0 # Suppresses points to close to the center of the sensor
@@ -22,6 +22,7 @@ odometry_options:
   debug_print: true
   min_distance_points: 0.1
   distance_error_threshold: 5.0 # The motion of the sensor between two frames which is considered erroneous (stops the odometry)
+  motion_compensation: CONTINUOUS # The profile of the motion compensation (NONE, CONSTANT_VELOCITY, ITERATIVE, CONTINUOUS)
 
   # CT_ICP OPTIONS ----
   ct_icp_options:
@@ -36,8 +37,8 @@ odometry_options:
     point_to_plane_with_distortion: true
     distance: CT_POINT_TO_PLANE # Options: [CT_POINT_TO_PLANE, POINT_TO_PLANE]
     num_closest_neighbors: 1
-    alpha_location_consistency: 0.0001
-    alpha_constant_velocity: 0.0001
+    alpha_location_consistency: 0.001
+    alpha_constant_velocity: 0.001
 
     loss_function: CAUCHY # Options: [CAUCHY, STANDARD, HUBER, TOLERANT, TRUNCATED]
     ls_max_num_iters: 1 # The number of steps performed by ceres for each iteration of the ICP

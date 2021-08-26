@@ -4,7 +4,9 @@
 //#include <omp.h>
 #include <iostream>
 #include <string>
+
 #define _USE_MATH_DEFINES
+
 #include <math.h>
 #include <vector>
 #include <chrono>
@@ -70,7 +72,7 @@ SLAMOptions read_config(const std::string &config_path) {
         OPTION_CLAUSE(slam_node, options, save_trajectory, bool);
         OPTION_CLAUSE(slam_node, options, suspend_on_failure, bool);
         OPTION_CLAUSE(slam_node, options, output_dir, std::string);
-		if (!options.output_dir.empty() && options.output_dir[options.output_dir.size() - 1] != '/')
+        if (!options.output_dir.empty() && options.output_dir[options.output_dir.size() - 1] != '/')
             options.output_dir += '/';
         OPTION_CLAUSE(slam_node, options, max_frames, int);
         OPTION_CLAUSE(slam_node, options, display_debug, bool);
@@ -81,9 +83,9 @@ SLAMOptions read_config(const std::string &config_path) {
 
         if (dataset_node["dataset"]) {
             auto dataset = dataset_node["dataset"].as<std::string>();
-            CHECK(dataset == "KITTI" || dataset == "KITTI_CARLA" || dataset == "NCLT");
-            if (dataset == "KITTI")
-                dataset_options.dataset = KITTI;
+            CHECK(dataset == "KITTI_raw" || dataset == "KITTI_CARLA" || dataset == "NCLT");
+            if (dataset == "KITTI_raw")
+                dataset_options.dataset = KITTI_raw;
             if (dataset == "KITTI_CARLA")
                 dataset_options.dataset = KITTI_CARLA;
             if (dataset == "NCLT")
@@ -106,6 +108,22 @@ SLAMOptions read_config(const std::string &config_path) {
             OPTION_CLAUSE(odometry_node, odometry_options, debug_print, bool);
             OPTION_CLAUSE(odometry_node, odometry_options, min_distance_points, double);
             OPTION_CLAUSE(odometry_node, odometry_options, distance_error_threshold, double);
+
+            if (odometry_node["motion_compensation"]) {
+                auto compensation = odometry_node["motion_compensation"].as<std::string>();
+                CHECK(compensation == "NONE" || compensation == "CONSTANT_VELOCITY" ||
+                      compensation == "ITERATIVE" || compensation == "CONTINUOUS");
+                if (compensation == "NONE")
+                    odometry_options.motion_compensation = ct_icp::NONE;
+                else if (compensation == "CONSTANT_VELOCITY")
+                    odometry_options.motion_compensation = ct_icp::CONSTANT_VELOCITY;
+                else if (compensation == "ITERATIVE")
+                    odometry_options.motion_compensation = ct_icp::ITERATIVE;
+                else if (compensation == "CONTINUOUS")
+                    odometry_options.motion_compensation = ct_icp::CONTINUOUS;
+                else
+                    CHECK(false) << "The `motion_compensation` " << compensation << " is not supported." << std::endl;
+            }
 
             if (odometry_node["ct_icp_options"]) {
                 auto icp_node = odometry_node["ct_icp_options"];
@@ -183,8 +201,8 @@ SLAMOptions read_arguments(int argc, char **argv) {
                                                 "Path to the yaml configuration file on disk",
                                                 false, "", "string");
         TCLAP::ValueArg<std::string> dataset_arg("d", "dataset",
-                                                 "Dataset run for the execution (must be in [KITTI, KITTI-CARLA])",
-                                                 false, "KITTI", "string");
+                                                 "Dataset run for the execution (must be in [KITTI_raw, KITTI-CARLA])",
+                                                 false, "KITTI_raw", "string");
         TCLAP::ValueArg<std::string> dataset_root_arg("r", "dataset_root", "Dataset Root Path on Disk",
                                                       false, "", "string");
 
@@ -217,13 +235,13 @@ SLAMOptions read_arguments(int argc, char **argv) {
 
 
         std::string dataset = dataset_arg.getValue();
-        if (dataset != "KITTI" && dataset != "KITTI_CARLA") {
-            std::cerr << "Unrecognised dataset" << dataset << ", expected 'KITTI' or 'KITTI_CARLA'. Exiting"
+        if (dataset != "KITTI_raw" && dataset != "KITTI_CARLA") {
+            std::cerr << "Unrecognised dataset" << dataset << ", expected 'KITTI_raw' or 'KITTI_CARLA'. Exiting"
                       << std::endl;
             exit(1);
         }
-        if (dataset == "KITTI")
-            options.dataset_options.dataset = DATASET::KITTI;
+        if (dataset == "KITTI_raw")
+            options.dataset_options.dataset = DATASET::KITTI_raw;
         if (dataset == "KITTI_CARLA")
             options.dataset_options.dataset = DATASET::KITTI_CARLA;
 
@@ -254,7 +272,7 @@ int main(int argc, char **argv) {
     // Build the Output_dir
 #if WITH_STD_FILESYSTEM
     CHECK(fs::exists(options.dataset_options.root_path))
-    << "The directory " << options.dataset_options.root_path << " does not exist";
+                    << "The directory " << options.dataset_options.root_path << " does not exist";
     LOG(INFO) << "Creating directory " << options.output_dir << std::endl;
     fs::create_directories(options.output_dir);
 #else
@@ -310,7 +328,7 @@ int main(int argc, char **argv) {
             Eigen::Matrix4d camera_pose = Eigen::Matrix4d::Identity();
             camera_pose.block<3, 3>(0, 0) = summary.frame.begin_R;
             camera_pose.block<3, 1>(0, 3) = summary.frame.begin_t;
-            camera_pose = camera_pose.inverse();
+            camera_pose = camera_pose.inverse().eval();
 
             instance.SetCameraPose(camera_pose);
             {
@@ -414,18 +432,20 @@ int main(int argc, char **argv) {
         double all_seq_rpe_t = 0.0;
         double all_seq_rpe_r = 0.0;
         double num_total_errors = 0.0;
-        for (auto &pair : sequence_name_to_errors) {
-            for (int i = 0; i < (int)(pair.second.tab_errors.size()); i++) {
+        for (auto &pair: sequence_name_to_errors) {
+            for (int i = 0; i < (int) (pair.second.tab_errors.size()); i++) {
                 all_seq_rpe_t += pair.second.tab_errors[i].t_err;
                 all_seq_rpe_r += pair.second.tab_errors[i].r_err;
                 num_total_errors += 1;
             }
         }
-        std::cout << "KITTI metric translation/rotation : " << (all_seq_rpe_t / num_total_errors) * 100 << " " << (all_seq_rpe_r / num_total_errors) * 180.0 / M_PI << std::endl;
+        std::cout << "KITTI metric translation/rotation : " << (all_seq_rpe_t / num_total_errors) * 100 << " "
+                  << (all_seq_rpe_r / num_total_errors) * 180.0 / M_PI << std::endl;
     }
 
     std::cout << std::endl;
-    std::cout << "Average registration time for all sequences (ms) : " << all_seq_registration_elapsed_ms / all_seq_num_frames << std::endl;
+    std::cout << "Average registration time for all sequences (ms) : "
+              << all_seq_registration_elapsed_ms / all_seq_num_frames << std::endl;
 
 #ifdef CT_ICP_WITH_VIZ
     gui_thread.join();
