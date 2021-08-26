@@ -22,6 +22,7 @@ odometry_options:
   debug_print: true
   min_distance_points: 0.1
   distance_error_threshold: 5.0 # The motion of the sensor between two frames which is considered erroneous (stops the odometry)
+  motion_compensation: CONTINUOUS # The profile of the motion compensation (NONE, CONSTANT_VELOCITY, ITERATIVE, CONTINUOUS)
 
   # CT_ICP OPTIONS ----
   ct_icp_options:
