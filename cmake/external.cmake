@@ -2,9 +2,9 @@
 include(FetchContent)
 
 option(SSH_GIT "Option to clone git project using ssh (instead of HTTPS)" ON)
-if(WIN32)
+if (WIN32)
     set(SSH_GIT OFF)
-endif()
+endif ()
 
 set(LOG_PREFIX " [CT_ICP] -- ")
 if (NOT CMAKE_BUILD_TYPE)
@@ -62,15 +62,24 @@ message(INFO "${LOG_PREFIX}Successfully Found Target Eigen3::Eigen")
 
 # Find Ceres
 if (NOT CERES_DIR)
-    if (WIN32)
+    if (MSVC)
         set(CERES_DIR ${EXT_INSTALL_ROOT}/Ceres/CMake)
     else ()
         set(CERES_DIR ${EXT_INSTALL_ROOT}/Ceres/lib/cmake/Ceres)
     endif ()
 endif ()
+if (NOT MSVC)
+    # CeresConfig.cmake will not load correctly the targets in Debug when Ceres_BINARY_DIR is defined
+    set("Ceres_BINARY_DIR" "")
+endif()
 find_package(Ceres REQUIRED CONFIG PATHS ${CERES_DIR} NO_DEFAULT_PATH)
 if (NOT TARGET Ceres::ceres)
-    message(FATAL_ERROR "${LOG_PREFIX}Could not find target Ceres::ceres")
+    if (TARGET ceres)
+        message(INFO " ${LOG_PREFIX} Creating ALIAS target")
+        add_library(Ceres::ceres ALIAS ceres)
+    else ()
+        message(FATAL_ERROR "${LOG_PREFIX} Could not find target Ceres::ceres")
+    endif ()
 endif ()
 message(INFO "${LOG_PREFIX}Found Target Ceres::ceres")
 
@@ -160,11 +169,11 @@ if (WITH_VIZ3D)
     endif ()
     message(INFO "${LOG_PREFIX}Successfully Found GLFW")
 
-    if(SSH_GIT)
-        set(IMGUI_GIT_URL  git@gitlab.com:pdell/imgui.git)
-    else()
+    if (SSH_GIT)
+        set(IMGUI_GIT_URL git@gitlab.com:pdell/imgui.git)
+    else ()
         set(IMGUI_GIT_URL https://gitlab.com/pdell/imgui.git)
-    endif()
+    endif ()
     FetchContent_Declare(
             imgui
             GIT_REPOSITORY ${IMGUI_GIT_URL}
@@ -222,11 +231,11 @@ if (WITH_VIZ3D)
         target_compile_definitions(imgui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
     endif ()
 
-    if(SSH_GIT)
-        set(VIZ3D_GIT_URL  git@gitlab.com:pdell/viz3d.git)
-    else()
+    if (SSH_GIT)
+        set(VIZ3D_GIT_URL git@gitlab.com:pdell/viz3d.git)
+    else ()
         set(VIZ3D_GIT_URL https://gitlab.com/pdell/viz3d.git)
-    endif()
+    endif ()
     # VIZ 3D (For Visualization)
     FetchContent_Declare(
             viz3d

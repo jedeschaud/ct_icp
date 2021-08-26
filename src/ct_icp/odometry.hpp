@@ -6,6 +6,13 @@
 
 namespace ct_icp {
 
+    enum MOTION_COMPENSATION {
+        NONE = 0,              // No compensation of the motion
+        CONSTANT_VELOCITY = 1, // Initial distortion of the point cloud based on the estimated velocity
+        ITERATIVE = 2,         // Iterative refinement after each ICP iteration
+        CONTINUOUS = 3         // Continuous estimation of the pose
+    };
+
     struct OdometryOptions {
 
         double voxel_size = 0.5;
@@ -23,6 +30,8 @@ namespace ct_icp {
         double distance_error_threshold = 5.0; // The Ego-Motion Distance considered as an error
 
         CTICPOptions ct_icp_options;
+
+        MOTION_COMPENSATION motion_compensation = CONTINUOUS;
 
     };
 
@@ -66,9 +75,30 @@ namespace ct_icp {
 
         };
 
-        explicit Odometry(const OdometryOptions *options) : options_(*options) {}
+        explicit Odometry(const OdometryOptions &options) : options_(options) {
+            // Update the motion compensation
+            switch (options_.motion_compensation) {
+                case MOTION_COMPENSATION::NONE:
+                case MOTION_COMPENSATION::CONSTANT_VELOCITY:
+                    // ElasticICP does not compensate the motion
+                    options_.ct_icp_options.point_to_plane_with_distortion = false;
+                    options_.ct_icp_options.distance = POINT_TO_PLANE;
+                    break;
+                case MOTION_COMPENSATION::ITERATIVE:
+                    // ElasticICP compensates the motion at each ICP iteration
+                    options_.ct_icp_options.point_to_plane_with_distortion = true;
+                    options_.ct_icp_options.distance = POINT_TO_PLANE;
+                    break;
+                case MOTION_COMPENSATION::CONTINUOUS:
+                    // ElasticICP compensates continuously the motion
+                    options_.ct_icp_options.point_to_plane_with_distortion = true;
+                    options_.ct_icp_options.distance = CT_POINT_TO_PLANE;
+                    break;
+            }
+        }
 
-        explicit Odometry(const OdometryOptions &options) : options_(options) {}
+        explicit Odometry(const OdometryOptions *options) : Odometry(*options) {}
+
 
         // Registers a new Frame to the Map
         RegistrationSummary RegisterFrame(const std::vector<Point3D> &frame);
@@ -87,7 +117,7 @@ namespace ct_icp {
         std::vector<TrajectoryFrame> trajectory_;
         VoxelHashMap voxel_map_;
         int registered_frames_ = 0;
-        const OdometryOptions options_;
+        OdometryOptions options_;
     };
 
 } // namespace ct_icp
