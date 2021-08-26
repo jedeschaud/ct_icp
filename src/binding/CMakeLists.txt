@@ -7,10 +7,19 @@ pybind11_add_module(pyct_icp pyct_icp/pyct_icp.cpp)
 target_link_libraries(pyct_icp PUBLIC CT_ICP)
 
 
+set(LIB_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/pyct_icp")
 SET_TARGET_PROPERTIES(pyct_icp
         PROPERTIES
         PREFIX ""
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/pyct_icp")
+        LIBRARY_OUTPUT_DIRECTORY ${LIB_OUTPUT_DIR})
+
+if ( MSVC )
+    set_target_properties( pyct_icp PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${LIB_OUTPUT_DIR} )
+    set_target_properties( pyct_icp PROPERTIES LIBRARY_OUTPUT_DIRECTORY_DEBUG ${LIB_OUTPUT_DIR})
+    set_target_properties( pyct_icp PROPERTIES LIBRARY_OUTPUT_DIRECTORY_RELEASE ${LIB_OUTPUT_DIR})
+    # etc for the other available configuration types (MinSizeRel, RelWithDebInfo)
+endif ( MSVC )
+
 
 configure_file(setup.py.in
         ${CMAKE_CURRENT_BINARY_DIR}/setup.py)
