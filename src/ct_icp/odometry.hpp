@@ -73,6 +73,8 @@ namespace ct_icp {
 
             std::vector<Point3D> corrected_points; // Sampled points expressed in the initial frame
 
+            std::vector<Point3D> all_corrected_points; // Initial points expressed in the initial frame
+
         };
 
         explicit Odometry(const OdometryOptions &options) : options_(options) {

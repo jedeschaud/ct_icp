@@ -158,6 +158,7 @@ PYBIND11_MODULE(pyct_icp, m) {
                     STRUCT_READWRITE(ct_icp::CTICPOptions, loss_function)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_max_num_iters)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_num_threads)
+                    STRUCT_READWRITE(ct_icp::CTICPOptions, size_voxel_map)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_sigma)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_tolerant_min_threshold);
 

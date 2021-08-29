@@ -334,9 +334,9 @@ int main(int argc, char **argv) {
             {
                 auto model_ptr = std::make_shared<viz::PointCloudModel>();
                 auto &model_data = model_ptr->ModelData();
-                model_data.xyz.resize(summary.corrected_points.size());
-                for (size_t i(0); i < summary.corrected_points.size(); ++i) {
-                    model_data.xyz[i] = summary.corrected_points[i].pt.cast<float>();
+                model_data.xyz.resize(summary.all_corrected_points.size());
+                for (size_t i(0); i < summary.all_corrected_points.size(); ++i) {
+                    model_data.xyz[i] = summary.all_corrected_points[i].pt.cast<float>();
                 }
                 instance.AddModel(frame_id % 100, model_ptr);
             }

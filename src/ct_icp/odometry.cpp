@@ -226,6 +226,17 @@ namespace ct_icp {
             point.index_frame = index_frame;
 
         summary.corrected_points = frame;
+        summary.all_corrected_points = const_frame;
+
+        Eigen::Quaterniond q_begin(summary.frame.begin_R);
+        Eigen::Quaterniond q_end(summary.frame.end_R);
+
+        for (auto &point3D: summary.all_corrected_points) {
+            double timestamp = point3D.alpha_timestamp;
+            Eigen::Quaterniond slerp = q_begin.slerp(timestamp, q_end).normalized();
+            point3D.pt = slerp.toRotationMatrix() * point3D.raw_pt +
+                         summary.frame.begin_t * (1.0 - timestamp) + timestamp * summary.frame.end_t;
+        }
 
         return summary;
     }
