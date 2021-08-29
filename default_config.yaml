@@ -42,7 +42,7 @@ odometry_options:
 
     loss_function: CAUCHY # Options: [CAUCHY, STANDARD, HUBER, TOLERANT, TRUNCATED]
     ls_max_num_iters: 1 # The number of steps performed by ceres for each iteration of the ICP
-    ls_num_threads:  16 # The number of threads to build and solve the least square system
+    ls_num_threads:  8 # The number of threads to build and solve the least square system
     ls_sigma: 0.1
     ls_tolerant_min_threshold: 0.05
 
