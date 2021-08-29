@@ -200,7 +200,7 @@ PYBIND11_MODULE(pyct_icp, m) {
             .def("GetLocalMap", [](const ct_icp::Odometry &self) {
                 // Convert to numpy
                 return vector_to_ndarray<Eigen::Vector3d, double,
-                        EIGEN_ALIGNED_ALLOCATOR<Eigen::Vector3d>>(self.GetLocalMap());
+                        Eigen::aligned_allocator<Eigen::Vector3d>>(self.GetLocalMap());
             });
 
 

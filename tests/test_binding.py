@@ -58,6 +58,7 @@ class TestBinding(unittest.TestCase):
     def test_odometry(self):
         self.test_installation()
         options = pct.OdometryOptions()
+        options.motion_compensation = pct.NONE
         pct.Odometry(options)
 
 

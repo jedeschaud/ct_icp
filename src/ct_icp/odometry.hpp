@@ -77,7 +77,8 @@ namespace ct_icp {
 
         };
 
-        explicit Odometry(const OdometryOptions &options) : options_(options) {
+        explicit Odometry(const OdometryOptions &options) { 
+            options_ = options;
             // Update the motion compensation
             switch (options_.motion_compensation) {
                 case MOTION_COMPENSATION::NONE:
