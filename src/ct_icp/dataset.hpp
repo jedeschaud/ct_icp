@@ -9,7 +9,8 @@ namespace ct_icp {
     enum DATASET {
         KITTI_raw = 0,
         KITTI_CARLA = 1,
-        NCLT = 2
+        KITTI = 2,
+        NCLT = 3
         // TODO KITTI-360
     };
 
@@ -58,6 +59,9 @@ namespace ct_icp {
 
     // Reads a PointCloud from the Dataset KITTI_CARLA
     std::vector<Point3D> read_kitti_carla_pointcloud(const DatasetOptions &, const std::string &path);
+
+    // Reads a PointCloud from the Dataset KITTI
+    std::vector<Point3D> read_kitti_pointcloud(const DatasetOptions&, const std::string& path);
 
     // Reads a PointCloud from the disk
     std::vector<Point3D> read_pointcloud(const DatasetOptions &, int sequence_id, int frame_id);

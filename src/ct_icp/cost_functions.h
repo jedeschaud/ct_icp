@@ -119,7 +119,7 @@ namespace ct_icp {
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     private:
         Eigen::Vector3d previous_location_;
-        double alpha_ = 1.e-4;
+        double alpha_ = 1.0;
     };
 
     // A Const Functor which enforces a Constant Velocity constraint on translation
@@ -141,7 +141,29 @@ namespace ct_icp {
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     private:
         Eigen::Vector3d previous_velocity_;
-        double alpha_ = 1.e-4;
+        double alpha_ = 1.0;
+    };
+
+
+    // A Const Functor which enforces a Constant Norm Velocity constraint on translation
+    struct ConstantNormVelocityFunctor {
+
+        static constexpr int NumResiduals() { return 1; }
+
+        ConstantNormVelocityFunctor(const Eigen::Vector3d& previous_velocity,
+            double alpha) : previous_velocity_(previous_velocity), alpha_(alpha) {}
+
+        template<typename T>
+        bool operator()(const T* const begin_t, const T* const end_t, T* residual) const {
+            residual[0] = alpha_ * (sqrt((end_t[0] - begin_t[0]) * (end_t[0] - begin_t[0]) + (end_t[1] - begin_t[1]) * (end_t[1] - begin_t[1]) + (end_t[2] - begin_t[2]) * (end_t[2] - begin_t[2]))
+                - sqrt(previous_velocity_(0, 0) * previous_velocity_(0, 0) + previous_velocity_(1, 0) * previous_velocity_(1, 0) + previous_velocity_(2, 0) * previous_velocity_(2, 0)));
+            return true;
+        }
+
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    private:
+        Eigen::Vector3d previous_velocity_;
+        double alpha_ = 1.0;
     };
 
 

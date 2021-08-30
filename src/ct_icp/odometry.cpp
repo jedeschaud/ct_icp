@@ -50,6 +50,15 @@ namespace ct_icp {
         }
 
         if (index_frame > 1) {
+            Eigen::Matrix3d R_next_begin =
+                trajectory_[index_frame - 1].begin_R * trajectory_[index_frame - 2].begin_R.inverse() *
+                trajectory_[index_frame - 1].begin_R;
+            Eigen::Vector3d t_next_begin = trajectory_[index_frame - 1].begin_t +
+                trajectory_[index_frame - 1].begin_R *
+                trajectory_[index_frame - 2].begin_R.inverse() *
+                (trajectory_[index_frame - 1].begin_t -
+                    trajectory_[index_frame - 2].begin_t);
+
             Eigen::Matrix3d R_next_end =
                     trajectory_[index_frame - 1].end_R * trajectory_[index_frame - 2].end_R.inverse() *
                     trajectory_[index_frame - 1].end_R;
@@ -59,8 +68,9 @@ namespace ct_icp {
                                          (trajectory_[index_frame - 1].end_t -
                                           trajectory_[index_frame - 2].end_t);
 
-            trajectory_[index_frame].begin_R = trajectory_[index_frame - 1].end_R;
-            trajectory_[index_frame].begin_t = trajectory_[index_frame - 1].end_t;
+
+            trajectory_[index_frame].begin_R = R_next_begin; ; //trajectory_[index_frame - 1].end_R;
+            trajectory_[index_frame].begin_t = t_next_begin; ; //trajectory_[index_frame - 1].end_t;
 
             trajectory_[index_frame].end_R = R_next_end;
             trajectory_[index_frame].end_t = t_next_end;
@@ -107,12 +117,21 @@ namespace ct_icp {
             {
                 auto start_ct_icp = std::chrono::steady_clock::now();
 
-                if (kDisplay)
-                    log_out << "Starting Elastic_ICP " << std::endl;
+                
 
+                bool success = false;
                 //CT ICP
-                bool success = Elastic_ICP(kCTICPOptions, voxel_map_,
-                                           keypoints, trajectory_, index_frame);
+                if (options_.ct_icp_options.solver == CT_ICP_SOLVER::GN) {
+                    if (kDisplay)
+                        log_out << "Starting CT-ICP with solver Gaus-Newton " << std::endl;
+                    success = CT_ICP_GN(kCTICPOptions, voxel_map_, keypoints, trajectory_, index_frame);
+                }
+                else {
+                    if (kDisplay)
+                        log_out << "Starting CT-ICP with solver CERES " << std::endl;
+                    success = CT_ICP_CERES(kCTICPOptions, voxel_map_, keypoints, trajectory_, index_frame);
+                }
+
 
                 if (!success) {
                     summary.success = false;
@@ -189,7 +208,23 @@ namespace ct_icp {
         for (auto &point : frame)
             point.index_frame = index_frame;
 
-        summary.corrected_points = frame;
+        std::vector<Point3D> frame_original(const_frame);
+        //Update frame original
+        Eigen::Quaterniond q_begin = Eigen::Quaterniond(trajectory_[index_frame].begin_R);
+        Eigen::Quaterniond q_end = Eigen::Quaterniond(trajectory_[index_frame].end_R);
+        Eigen::Vector3d t_begin = trajectory_[index_frame].begin_t;
+        Eigen::Vector3d t_end = trajectory_[index_frame].end_t;
+        for (int i = 0; i < (int)frame_original.size(); ++i) {
+            double alpha_timestamp = frame_original[i].alpha_timestamp;
+            Eigen::Quaterniond q = q_begin.slerp(alpha_timestamp, q_end);
+            q.normalize();
+            Eigen::Matrix3d R = q.toRotationMatrix();
+            Eigen::Vector3d t = (1.0 - alpha_timestamp) * t_begin + alpha_timestamp * t_end;
+            frame_original[i].pt = R * frame_original[i].raw_pt + t;
+        }
+
+        //summary.corrected_points = frame;
+        summary.corrected_points = frame_original;
 
         return summary;
     }

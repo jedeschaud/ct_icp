@@ -28,6 +28,10 @@ namespace ct_icp {
     // Samples Keypoints randomly in a voxel grid
     void grid_sampling(std::vector<Point3D> &frame, std::vector<Point3D> &keypoints, double size_voxel_subsampling);
 
+    enum CT_ICP_SOLVER {
+        GN,
+        CERES
+    };
 
     enum LEAST_SQUARES {
         STANDARD,
@@ -63,9 +67,12 @@ namespace ct_icp {
         int num_closest_neighbors = 1; // The number of closest neighbors considered as residuals
 
         // TODO : Add Trajectory Constraints Options
-        double alpha_location_consistency = 0.001; // Constraints on location
+        double beta_location_consistency = 0.001; // Constraints on location
 
-        double alpha_constant_velocity = 0.001; // Constraint on velocity
+        double beta_constant_velocity = 0.001; // Constraint on velocity
+
+        CT_ICP_SOLVER solver = GN;
+
 
         /* ---------------------------------------------------------------------------------------------------------- */
         /* LEAST SQUARE OPTIMIZATION PARAMETERS                                                                       */
@@ -102,11 +109,11 @@ namespace ct_icp {
     //      At each iteration, after refinement of the estimate of the end pose of the trajectory frame
     //
     // Note: Elastic_ICP will modify the last TrajectoryFrame of the trajectory vector
-    bool Elastic_ICP(const CTICPOptions &options,
+    bool CT_ICP_CERES(const CTICPOptions &options,
                     const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
                     std::vector<TrajectoryFrame> &trajectory, int index_frame);
 
-    bool CT_ICP_old(const CTICPOptions& options,
+    bool CT_ICP_GN(const CTICPOptions& options,
         const VoxelHashMap& voxels_map, std::vector<Point3D>& keypoints,
         std::vector<TrajectoryFrame>& trajectory, int index_frame);
 
