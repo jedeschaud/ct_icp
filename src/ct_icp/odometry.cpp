@@ -6,6 +6,44 @@
 namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
+    OdometryOptions OdometryOptions::DefaultDrivingProfile() {
+        return OdometryOptions{};
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    OdometryOptions OdometryOptions::DefaultSlowOutdoorProfile() {
+        OdometryOptions default_options;
+        default_options.voxel_size = 0.5;
+        default_options.sample_voxel_size = 0.5;
+        default_options.max_distance = 100.0;
+        default_options.max_num_points_in_voxel = 20;
+        default_options.min_distance_points = 0.1;
+        default_options.distance_error_threshold = 5.0;
+        default_options.motion_compensation = CONTINUOUS;
+        default_options.initialization = INIT_NONE;
+
+        auto &ct_icp_options = default_options.ct_icp_options;
+        ct_icp_options.size_voxel_map = 0.5;
+        ct_icp_options.num_iters_icp = 50;
+        ct_icp_options.min_number_neighbors = 20;
+        ct_icp_options.voxel_neighborhood = 1;
+        ct_icp_options.max_number_neighbors = 20;
+        ct_icp_options.max_dist_to_plane_ct_icp = 0.8;
+        ct_icp_options.norm_x_end_iteration_ct_icp = 0.001;
+        ct_icp_options.point_to_plane_with_distortion = true;
+        ct_icp_options.distance = CT_POINT_TO_PLANE;
+        ct_icp_options.num_closest_neighbors = 1;
+        ct_icp_options.beta_constant_velocity = 0.0;
+        ct_icp_options.beta_location_consistency = 0.0001;
+        ct_icp_options.loss_function = CAUCHY;
+        ct_icp_options.ls_max_num_iters = 50;
+        ct_icp_options.ls_num_threads = 8;
+        ct_icp_options.ls_sigma = 0.1;
+
+        return default_options;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
     size_t Odometry::MapSize() const {
         return ::ct_icp::MapSize(voxel_map_);
     }
@@ -69,8 +107,8 @@ namespace ct_icp {
         }
 
         //Subsample the scan with voxels taking one random in every voxel
-        if (index_frame < 50) {
-            sub_sample_frame(frame, 0.20);
+        if (index_frame < options_.init_num_frames) {
+            sub_sample_frame(frame, options_.init_sample_voxel_size);
         } else {
             sub_sample_frame(frame, kSizeVoxelInitSample);
         }
@@ -89,6 +127,15 @@ namespace ct_icp {
             trajectory_[index_frame].end_t = Eigen::Vector3d(0., 0., 0.);
         } else {
             if (options_.initialization == INIT_CONSTANT_VELOCITY) {
+                Eigen::Matrix3d R_next_begin =
+                        trajectory_[index_frame - 1].begin_R * trajectory_[index_frame - 2].begin_R.inverse() *
+                        trajectory_[index_frame - 1].begin_R;
+                Eigen::Vector3d t_next_begin = trajectory_[index_frame - 1].begin_t +
+                                               trajectory_[index_frame - 1].begin_R *
+                                               trajectory_[index_frame - 2].begin_R.inverse() *
+                                               (trajectory_[index_frame - 1].begin_t -
+                                                trajectory_[index_frame - 2].begin_t);
+
                 Eigen::Matrix3d R_next_end =
                         trajectory_[index_frame - 1].end_R * trajectory_[index_frame - 2].end_R.inverse() *
                         trajectory_[index_frame - 1].end_R;
@@ -98,9 +145,8 @@ namespace ct_icp {
                                              (trajectory_[index_frame - 1].end_t -
                                               trajectory_[index_frame - 2].end_t);
 
-                trajectory_[index_frame].begin_R = trajectory_[index_frame - 1].end_R;
-                trajectory_[index_frame].begin_t = trajectory_[index_frame - 1].end_t;
-
+                trajectory_[index_frame].begin_R = R_next_begin;; //trajectory_[index_frame - 1].end_R;
+                trajectory_[index_frame].begin_t = t_next_begin;; //trajectory_[index_frame - 1].end_t;
                 trajectory_[index_frame].end_R = R_next_end;
                 trajectory_[index_frame].end_t = t_next_end;
             } else {
@@ -156,12 +202,18 @@ namespace ct_icp {
             {
                 auto start_ct_icp = std::chrono::steady_clock::now();
 
-                if (kDisplay)
-                    log_out << "Starting Elastic_ICP " << std::endl;
-
+                bool success = false;
                 //CT ICP
-                bool success = Elastic_ICP(kCTICPOptions, voxel_map_,
-                                           keypoints, trajectory_, index_frame);
+                if (options_.ct_icp_options.solver == CT_ICP_SOLVER::GN) {
+                    if (kDisplay)
+                        log_out << "Starting CT-ICP with solver Gaus-Newton " << std::endl;
+                    success = CT_ICP_GN(kCTICPOptions, voxel_map_, keypoints, trajectory_, index_frame);
+                } else {
+                    if (kDisplay)
+                        log_out << "Starting CT-ICP with solver CERES " << std::endl;
+                    success = CT_ICP_CERES(kCTICPOptions, voxel_map_, keypoints, trajectory_, index_frame);
+                }
+
 
                 if (!success) {
                     summary.success = false;

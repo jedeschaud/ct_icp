@@ -92,11 +92,13 @@ SLAMOptions read_config(const std::string &config_path) {
 
         if (dataset_node["dataset"]) {
             auto dataset = dataset_node["dataset"].as<std::string>();
-            CHECK(dataset == "KITTI_raw" || dataset == "KITTI_CARLA" || dataset == "NCLT");
+            CHECK(dataset == "KITTI_raw" || dataset == "KITTI_CARLA" || dataset == "KITTI" || dataset == "NCLT");
             if (dataset == "KITTI_raw")
                 dataset_options.dataset = KITTI_raw;
             if (dataset == "KITTI_CARLA")
                 dataset_options.dataset = KITTI_CARLA;
+            if (dataset == "KITTI")
+                dataset_options.dataset = KITTI;
             if (dataset == "NCLT")
                 dataset_options.dataset = NCLT;
         }
@@ -160,8 +162,8 @@ SLAMOptions read_config(const std::string &config_path) {
                 OPTION_CLAUSE(icp_node, icp_options, debug_print, bool);
                 OPTION_CLAUSE(icp_node, icp_options, point_to_plane_with_distortion, bool);
                 OPTION_CLAUSE(icp_node, icp_options, num_closest_neighbors, int);
-                OPTION_CLAUSE(icp_node, icp_options, alpha_constant_velocity, double);
-                OPTION_CLAUSE(icp_node, icp_options, alpha_location_consistency, double);
+                OPTION_CLAUSE(icp_node, icp_options, beta_constant_velocity, double);
+                OPTION_CLAUSE(icp_node, icp_options, beta_location_consistency, double);
                 OPTION_CLAUSE(icp_node, icp_options, ls_max_num_iters, int);
                 OPTION_CLAUSE(icp_node, icp_options, ls_num_threads, int);
                 OPTION_CLAUSE(icp_node, icp_options, ls_sigma, double);
@@ -174,6 +176,15 @@ SLAMOptions read_config(const std::string &config_path) {
                         icp_options.distance = POINT_TO_PLANE;
                     else
                         icp_options.distance = CT_POINT_TO_PLANE;
+                }
+
+                if (icp_node["solver"]) {
+                    auto solver = icp_node["solver"].as<std::string>();
+                    CHECK(solver == "GN" || solver == "CERES");
+                    if (solver == "GN")
+                        icp_options.solver = GN;
+                    else
+                        icp_options.solver = CERES;
                 }
 
                 if (icp_node["loss_function"]) {
@@ -222,7 +233,7 @@ SLAMOptions read_arguments(int argc, char **argv) {
                                                 "Path to the yaml configuration file on disk",
                                                 false, "", "string");
         TCLAP::ValueArg<std::string> dataset_arg("d", "dataset",
-                                                 "Dataset run for the execution (must be in [KITTI_raw, KITTI-CARLA])",
+                                                 "Dataset run for the execution (must be in [KITTI_raw, KITTI-CARLA, KITTI])",
                                                  false, "KITTI_raw", "string");
         TCLAP::ValueArg<std::string> dataset_root_arg("r", "dataset_root", "Dataset Root Path on Disk",
                                                       false, "", "string");
@@ -256,8 +267,8 @@ SLAMOptions read_arguments(int argc, char **argv) {
 
 
         std::string dataset = dataset_arg.getValue();
-        if (dataset != "KITTI_raw" && dataset != "KITTI_CARLA") {
-            std::cerr << "Unrecognised dataset" << dataset << ", expected 'KITTI_raw' or 'KITTI_CARLA'. Exiting"
+        if (dataset != "KITTI_raw" && dataset != "KITTI_CARLA" && dataset != "KITTI") {
+            std::cerr << "Unrecognised dataset" << dataset << ", expected 'KITTI_raw' or 'KITTI_CARLA' or 'KITTI'. Exiting"
                       << std::endl;
             exit(1);
         }
@@ -265,6 +276,8 @@ SLAMOptions read_arguments(int argc, char **argv) {
             options.dataset_options.dataset = DATASET::KITTI_raw;
         if (dataset == "KITTI_CARLA")
             options.dataset_options.dataset = DATASET::KITTI_CARLA;
+        if (dataset == "KITTI")
+            options.dataset_options.dataset = DATASET::KITTI;
 
         options.dataset_options.root_path = dataset_root_arg.getValue();
         options.max_num_threads = max_num_threads_arg.getValue();
@@ -337,8 +350,8 @@ int main(int argc, char **argv) {
     double all_seq_registration_elapsed_ms = 0.0;
     int all_seq_num_frames = 0;
 
-//#pragma omp parallel for num_threads(max_num_threads)
-    for (int i = 0; i < num_sequences; ++i) {
+#pragma omp parallel for num_threads(max_num_threads)
+    for (int i = 0; i < num_sequences; ++i) { //num_sequences
 
         int sequence_id = sequences[i].sequence_id;
         ct_icp::Odometry ct_icp_odometry(&options.odometry_options);
@@ -381,7 +394,7 @@ int main(int argc, char **argv) {
                 for (size_t i(0); i < summary.all_corrected_points.size(); ++i) {
                     model_data.xyz[i] = summary.all_corrected_points[i].pt.cast<float>();
                 }
-                instance.AddModel(frame_id % 100, model_ptr);
+                instance.AddModel(frame_id % 500, model_ptr);
             }
 
             {

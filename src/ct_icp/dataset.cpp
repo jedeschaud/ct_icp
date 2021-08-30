@@ -25,7 +25,10 @@ namespace ct_icp {
     };
 
     const int KITTI_raw_SEQUENCE_IDS[] = {0, 1, 2, 4, 5, 6, 7, 8, 9, 10};
+    const int KITTI_SEQUENCE_IDS[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
+
     const int NUMBER_SEQUENCES_KITTI_raw = 10;
+    const int NUMBER_SEQUENCES_KITTI = 22;
 
     const int LENGTH_SEQUENCE_KITTI[] = {4540, 1100, 4660, 800, 270, 2760, 1100, 1100, 4070, 1590, 1200, 920, 1060,
                                          3280, 630, 1900, 1730, 490, 1800, 4980, 830, 2720};
@@ -103,6 +106,9 @@ namespace ct_icp {
             case KITTI_CARLA:
                 folder_path += sequence_name + "/frames/";
                 break;
+            case KITTI:
+                folder_path += sequence_name + "/frames/";
+                break;
             case NCLT:
                 throw std::runtime_error("Not Implemented!");
         };
@@ -122,6 +128,9 @@ namespace ct_icp {
                 break;
             case KITTI_CARLA:
                 ground_truth_path += sequence_name + "/poses_gt.txt";
+                break;
+            case KITTI:
+                ground_truth_path += sequence_name + "/" + sequence_name + ".txt";
                 break;
             case NCLT:
                 throw std::runtime_error("Not Implemented!");
@@ -147,6 +156,9 @@ namespace ct_icp {
             case KITTI_CARLA:
                 num_sequences = 7;
                 break;
+            case KITTI:
+                num_sequences = NUMBER_SEQUENCES_KITTI;
+                break;
             case NCLT:
                 num_sequences = 27;
                 break;
@@ -166,6 +178,11 @@ namespace ct_icp {
                     new_sequence_info.sequence_id = i;
                     new_sequence_info.sequence_size = 5000;
                     new_sequence_info.sequence_name = KITTI_CARLA_SEQUENCE_NAMES[new_sequence_info.sequence_id];
+                    break;
+                case KITTI:
+                    new_sequence_info.sequence_id = KITTI_SEQUENCE_IDS[i];
+                    new_sequence_info.sequence_size = LENGTH_SEQUENCE_KITTI[new_sequence_info.sequence_id] + 1;
+                    new_sequence_info.sequence_name = KITTI_SEQUENCE_NAMES[new_sequence_info.sequence_id];
                     break;
                 case NCLT:
                     new_sequence_info.sequence_id = i;
@@ -206,6 +223,8 @@ namespace ct_icp {
                 return read_kitti_raw_pointcloud(options, frame_path);
             case KITTI_CARLA:
                 return read_kitti_carla_pointcloud(options, frame_path);
+            case KITTI:
+                return read_kitti_pointcloud(options, frame_path);
             case NCLT:
                 throw std::runtime_error(
                         "PointClouds from the NCLT Dataset do not allow random access (reading velodyne_hits.bin for timestamps)");
@@ -220,6 +239,8 @@ namespace ct_icp {
                 return KITTI_SEQUENCE_NAMES[sequence_id];
             case KITTI_CARLA:
                 return KITTI_CARLA_SEQUENCE_NAMES[sequence_id];
+            case KITTI:
+                return KITTI_SEQUENCE_NAMES[sequence_id];
             case NCLT:
                 return NCLT_SEQUENCE_NAMES[sequence_id];
         }
@@ -275,7 +296,7 @@ namespace ct_icp {
 
         for (int i(0); i < (int) frame.size(); i++) {
             frame[i].alpha_timestamp = min(1.0, max(0.0, 1 - (frame_last_timestamp - frame[i].alpha_timestamp) /
-                                                             (frame_last_timestamp - frame_first_timestamp)));
+                                                             (frame_last_timestamp - frame_first_timestamp))); //1.0
         }
         delete[] dataIn;
 
@@ -351,9 +372,75 @@ namespace ct_icp {
         return frame;
     }
 
+
     /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses kitti_transform_trajectory_frame(const vector<TrajectoryFrame> &trajectory, int sequence_id) {
-        // For KITTI the evaluation counts the middle of the frame as the pose which is compared to the ground truth
+    std::vector<Point3D> read_kitti_pointcloud(const DatasetOptions &options, const std::string &path) {
+        std::vector<Point3D> frame;
+        //read ply frame file
+        PlyFile plyFileIn(path, fileOpenMode_IN);
+        char *dataIn = nullptr;
+        int sizeOfPointsIn = 0;
+        int numPointsIn = 0;
+        plyFileIn.readFile(dataIn, sizeOfPointsIn, numPointsIn);
+
+        //Specific Parameters for KITTI_raw
+        const double KITTI_MIN_Z = -5.0; //Bad returns under the ground
+        const double KITTI_GLOBAL_VERTICAL_ANGLE_OFFSET = 0.205; //Issue in the intrinsic calibration of the KITTI Velodyne HDL64
+
+        double frame_last_timestamp = 0.0;
+        double frame_first_timestamp = 1000000000.0;
+        frame.reserve(numPointsIn);
+        for (int i(0); i < numPointsIn; i++) {
+            unsigned long long int offset =
+                    (unsigned long long int) i * (unsigned long long int) sizeOfPointsIn;
+            Point3D new_point;
+            new_point.raw_pt[0] = *((float *) (dataIn + offset));
+            offset += sizeof(float);
+            new_point.raw_pt[1] = *((float *) (dataIn + offset));
+            offset += sizeof(float);
+            new_point.raw_pt[2] = *((float *) (dataIn + offset));
+            offset += sizeof(float);
+            new_point.pt = new_point.raw_pt;
+            new_point.alpha_timestamp = *((float *) (dataIn + offset));
+            offset += sizeof(float);
+
+            if (new_point.alpha_timestamp < frame_first_timestamp) {
+                frame_first_timestamp = new_point.alpha_timestamp;
+            }
+
+            if (new_point.alpha_timestamp > frame_last_timestamp) {
+                frame_last_timestamp = new_point.alpha_timestamp;
+            }
+
+            double r = new_point.raw_pt.norm();
+            if ((r > options.min_dist_lidar_center) && (r < options.max_dist_lidar_center) &&
+                (new_point.raw_pt[2] > KITTI_MIN_Z)) {
+                frame.push_back(new_point);
+            }
+        }
+        frame.shrink_to_fit();
+
+        for (int i(0); i < (int) frame.size(); i++) {
+            frame[i].alpha_timestamp = 1.0; // KITTI frames are already corrected by the camera, then timestamp of points is the same for all points
+        }
+        delete[] dataIn;
+
+        //Intrinsic calibration of the vertical angle of laser fibers (take the same correction for all lasers)
+        for (int i = 0; i < (int) frame.size(); i++) {
+            Eigen::Vector3d rotationVector = frame[i].pt.cross(Eigen::Vector3d(0., 0., 1.));
+            rotationVector.normalize();
+            Eigen::Matrix3d rotationScan;
+            rotationScan = Eigen::AngleAxisd(KITTI_GLOBAL_VERTICAL_ANGLE_OFFSET * M_PI / 180.0, rotationVector);
+            frame[i].raw_pt = rotationScan * frame[i].raw_pt;
+            frame[i].pt = rotationScan * frame[i].pt;
+        }
+        return frame;
+    }
+
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    ArrayPoses kitti_raw_transform_trajectory_frame(const vector<TrajectoryFrame> &trajectory, int sequence_id) {
+        // For KITTI_raw the evaluation counts the middle of the frame as the pose which is compared to the ground truth
         ArrayPoses poses;
         Eigen::Matrix3d R_Tr = R_Tr_array_KITTI[sequence_id].transpose();
         Eigen::Vector3d T_Tr = T_Tr_array_KITTI[sequence_id];
@@ -368,8 +455,8 @@ namespace ct_icp {
             Eigen::Vector3d t_end = frame.end_t;
             Eigen::Quaterniond q = q_begin.slerp(0.5, q_end);
             q.normalize();
-            center_R = q.toRotationMatrix();
-            center_t = 0.5 * t_begin + 0.5 * t_end;
+            center_R = q.toRotationMatrix(); //q_end.toRotationMatrix();  
+            center_t = 0.5 * t_begin + 0.5 * t_end; //t_end;
 
             //Transform the data into the left camera reference frame (left camera) and evaluate SLAM
             center_R = R_Tr * center_R * R_Tr.transpose();
@@ -414,6 +501,30 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
+    ArrayPoses kitti_transform_trajectory_frame(const vector<TrajectoryFrame> &trajectory, int sequence_id) {
+        // For KITTI the evaluation uses the end pose of the frame as the pose which is compared to the ground truth
+        ArrayPoses poses;
+        Eigen::Matrix3d R_Tr = R_Tr_array_KITTI[sequence_id].transpose();
+        Eigen::Vector3d T_Tr = T_Tr_array_KITTI[sequence_id];
+
+        poses.reserve(trajectory.size());
+        for (auto &frame: trajectory) {
+            Eigen::Matrix3d center_R;
+            Eigen::Vector3d center_t;
+
+            //Transform the data into the left camera reference frame (left camera) and evaluate SLAM
+            center_R = R_Tr * frame.end_R * R_Tr.transpose();
+            center_t = -center_R * T_Tr + T_Tr + R_Tr * frame.end_t;
+
+            Eigen::Matrix4d pose = Eigen::Matrix4d::Identity();
+            pose.block<3, 3>(0, 0) = center_R;
+            pose.block<3, 1>(0, 3) = center_t;
+            poses.push_back(pose);
+        }
+        return poses;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
     ArrayPoses nclt_transform_trajectory_frame(const vector<TrajectoryFrame> &trajectory) {
         ArrayPoses poses(trajectory.size());
         for (auto i(0); i < trajectory.size(); ++i) {
@@ -428,9 +539,11 @@ namespace ct_icp {
                                           int sequence_id) {
         switch (options.dataset) {
             case KITTI_raw:
-                return kitti_transform_trajectory_frame(trajectory, sequence_id);
+                return kitti_raw_transform_trajectory_frame(trajectory, sequence_id);
             case KITTI_CARLA:
                 return kitti_carla_transform_trajectory_frame(trajectory);
+            case KITTI:
+                return kitti_transform_trajectory_frame(trajectory, sequence_id);
             case NCLT:
                 return nclt_transform_trajectory_frame(trajectory);
         }
@@ -446,6 +559,8 @@ namespace ct_icp {
                 return sequence_id >= 0 && sequence_id <= 10 && sequence_id != 3;
             case KITTI_CARLA:
                 return sequence_id >= 0 && sequence_id < KITTI_CARLA_NUM_SEQUENCES;
+            case KITTI:
+                return sequence_id >= 0 && sequence_id <= 10;
             case NCLT:
                 // TODO Ground truth for NCLT
                 return false;
@@ -479,7 +594,7 @@ namespace ct_icp {
     DatasetSequence::~DatasetSequence() = default;
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    /// DirectoryIterator for KITTI_raw and KITTI_CARLA
+    /// DirectoryIterator for KITTI_raw and KITTI_CARLA and KITTI
     class DirectoryIterator : public DatasetSequence {
     public:
         explicit DirectoryIterator(const DatasetOptions &options, int sequence_id) : options_(options),
@@ -490,6 +605,9 @@ namespace ct_icp {
                     break;
                 case KITTI_CARLA:
                     num_frames_ = 5000;
+                    break;
+                case KITTI:
+                    num_frames_ = LENGTH_SEQUENCE_KITTI[sequence_id] + 1;
                     break;
                 default:
                     num_frames_ = -1;
@@ -518,7 +636,7 @@ namespace ct_icp {
         std::vector<Point3D> Frame(size_t index) const override {
             int frame_id = index;
             auto pc = read_pointcloud(options_, sequence_id_, frame_id);
-            if (options_.dataset == KITTI_raw || options_.dataset == KITTI_CARLA) {
+            if (options_.dataset == KITTI_raw || options_.dataset == KITTI_CARLA || options_.dataset == KITTI) {
                 for (auto &point: pc) {
                     point.timestamp = frame_id + point.alpha_timestamp;
                 }
@@ -650,6 +768,7 @@ namespace ct_icp {
         switch (options.dataset) {
             case KITTI_raw:
             case KITTI_CARLA:
+            case KITTI:
                 return std::make_shared<DirectoryIterator>(options, sequence_id);
             case NCLT:
                 return std::make_shared<NCLTIterator>(options, sequence_id);

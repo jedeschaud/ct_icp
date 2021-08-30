@@ -77,9 +77,7 @@ namespace ct_icp {
         Eigen::Vector3d normal(es.eigenvectors().col(0).normalized());
 
         // Compute planarity from the eigen values
-        double sigma_1 = sqrt(
-                std::abs(
-                        es.eigenvalues()[2])); //Be careful, the eigenvalues are not correct with the iterative way to compute the covariance matrix
+        double sigma_1 = sqrt(std::abs(es.eigenvalues()[2])); //Be careful, the eigenvalues are not correct with the iterative way to compute the covariance matrix
         double sigma_2 = sqrt(std::abs(es.eigenvalues()[1]));
         double sigma_3 = sqrt(std::abs(es.eigenvalues()[0]));
         out_a2D = (sigma_2 - sigma_3) / sigma_1;
@@ -351,7 +349,7 @@ namespace ct_icp {
     };
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    bool Elastic_ICP(const CTICPOptions &options,
+    bool CT_ICP_CERES(const CTICPOptions &options,
                      const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
                      std::vector<TrajectoryFrame> &trajectory, int index_frame) {
 
@@ -432,15 +430,13 @@ namespace ct_icp {
                     // Add Regularisation residuals
                     problem->AddResidualBlock(new ceres::AutoDiffCostFunction<LocationConsistencyFunctor,
                                                       LocationConsistencyFunctor::NumResiduals(), 3>(
-                                                      new LocationConsistencyFunctor(previous_estimate->end_t,
-                                                                                     sqrt(number_keypoints_used *
-                                                                                          options.alpha_location_consistency))),
+                            new LocationConsistencyFunctor(previous_estimate->end_t,
+                                sqrt(number_keypoints_used*options.beta_location_consistency))),
                                               nullptr,
                                               &begin_t.x());
                     problem->AddResidualBlock(new ceres::AutoDiffCostFunction<ConstantVelocityFunctor,
                                                       ConstantVelocityFunctor::NumResiduals(), 3, 3>(
-                                                      new ConstantVelocityFunctor(previous_velocity,
-                                                                                  sqrt(number_keypoints_used * options.alpha_constant_velocity))),
+                            new ConstantVelocityFunctor(previous_velocity, sqrt(number_keypoints_used*options.beta_constant_velocity))),
                                               nullptr,
                                               &begin_t.x(),
                                               &end_t.x());
@@ -501,7 +497,7 @@ namespace ct_icp {
                 builder.DistortFrame(begin_quat, end_quat, begin_t, end_t);
             }
 
-            if (diff_rot < options.norm_x_end_iteration_ct_icp && diff_trans < options.norm_x_end_iteration_ct_icp) {
+            if ((index_frame > 1) && (diff_rot < options.norm_x_end_iteration_ct_icp && diff_trans < options.norm_x_end_iteration_ct_icp)) {
                 break;
             }
         }
@@ -510,15 +506,15 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    bool CT_ICP_old(const CTICPOptions &options,
-                    const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-                    std::vector<TrajectoryFrame> &trajectory, int index_frame) {
+    bool CT_ICP_GN(const CTICPOptions &options,
+                   const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
+                   std::vector<TrajectoryFrame> &trajectory, int index_frame) {
 
         //Optimization with Traj constraints
-        const double ALPHA_C = 0.001;
-        const double ALPHA_E = 0.001; //no ego (0.0) is not working
+        const double ALPHA_C = options.beta_location_consistency; // 0.001;
+        const double ALPHA_E = options.beta_constant_velocity; // 0.001; //no ego (0.0) is not working
 
-        // For the first frames, visit 2 voxels
+        // For the 50 first frames, visit 2 voxels
         const short nb_voxels_visited = index_frame < 50 ? 2 : 1;
         int number_keypoints_used = 0;
         const int kMinNumNeighbors = options.min_number_neighbors;
@@ -557,8 +553,6 @@ namespace ct_icp {
                 std::chrono::duration<double> _elapsed_search_neighbors = step1 - start;
                 elapsed_search_neighbors += _elapsed_search_neighbors.count() * 1000.0;
 
-                //std::cout << "vector_neighbors.size() : " << vector_neighbors.size() << std::endl;
-                //std::cout << "number_keypoints_used : " << number_keypoints_used << std::endl;
 
                 if (vector_neighbors.size() < kMinNumNeighbors) {
                     continue;
@@ -658,9 +652,6 @@ namespace ct_icp {
                 return false;
             }
 
-            //std::cout << "number_keypoints_used : " << number_keypoints_used << std::endl;
-
-
             auto start = std::chrono::steady_clock::now();
 
 
@@ -685,7 +676,6 @@ namespace ct_icp {
 
                 Eigen::Vector3d diff_ego = trajectory[index_frame].end_t - trajectory[index_frame].begin_t -
                                            trajectory[index_frame - 1].end_t + trajectory[index_frame - 1].begin_t;
-                //Eigen::Vector3d diff_ego = trajectory[index_frame].end_t - end_ego;
                 A(9, 9) = A(9, 9) + ALPHA_E;
                 A(10, 10) = A(10, 10) + ALPHA_E;
                 A(11, 11) = A(11, 11) + ALPHA_E;
@@ -760,7 +750,7 @@ namespace ct_icp {
             elapsed_update += _elapsed_update.count() * 1000.0;
 
 
-            if (x_bundle.norm() < options.norm_x_end_iteration_ct_icp) {
+            if ((index_frame > 1) && (x_bundle.norm() < options.norm_x_end_iteration_ct_icp)) {
                 if (options.debug_print) {
                     std::cout << "Number iterations CT-ICP : " << iter << std::endl;
                     std::cout << "Elapsed Normals: " << elapsed_normals << std::endl;
@@ -770,7 +760,6 @@ namespace ct_icp {
                     std::cout << "Elapsed Solve: " << elapsed_solve << std::endl;
                     std::cout << "Elapsed Solve: " << elapsed_update << std::endl;
                 }
-                //return number_keypoints_used;
                 return true;
             }
         }
@@ -785,7 +774,6 @@ namespace ct_icp {
             std::cout << "Number iterations CT-ICP : " << options.num_iters_icp << std::endl;
         }
 
-        //return number_keypoints_used;
         return true;
     }
 

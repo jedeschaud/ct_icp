@@ -164,8 +164,8 @@ PYBIND11_MODULE(pyct_icp, m) {
                     STRUCT_READWRITE(ct_icp::CTICPOptions, point_to_plane_with_distortion)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, distance)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, num_closest_neighbors)
-                    STRUCT_READWRITE(ct_icp::CTICPOptions, alpha_location_consistency)
-                    STRUCT_READWRITE(ct_icp::CTICPOptions, alpha_constant_velocity)
+                    STRUCT_READWRITE(ct_icp::CTICPOptions, beta_location_consistency)
+                    STRUCT_READWRITE(ct_icp::CTICPOptions, beta_constant_velocity)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, loss_function)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_max_num_iters)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_num_threads)
@@ -186,6 +186,8 @@ PYBIND11_MODULE(pyct_icp, m) {
                     STRUCT_READWRITE(ct_icp::OdometryOptions, distance_error_threshold)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, ct_icp_options);
 
+    m.def("DefaultDrivingProfile", &ct_icp::OdometryOptions::DefaultDrivingProfile);
+    m.def("DefaultSlowOutdoorProfile", &ct_icp::OdometryOptions::DefaultSlowOutdoorProfile);
 
     using RegSummary = ct_icp::Odometry::RegistrationSummary;
     py::class_<PyRegistrationSummary,
