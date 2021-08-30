@@ -13,6 +13,11 @@ namespace ct_icp {
         CONTINUOUS = 3         // Continuous estimation of the pose
     };
 
+    enum INITIALIZATION {
+        INIT_NONE = 0,
+        INIT_CONSTANT_VELOCITY = 1
+    };
+
     struct OdometryOptions {
 
         double voxel_size = 0.5;
@@ -32,6 +37,8 @@ namespace ct_icp {
         CTICPOptions ct_icp_options;
 
         MOTION_COMPENSATION motion_compensation = CONTINUOUS;
+
+        INITIALIZATION initialization = INIT_CONSTANT_VELOCITY;
 
     };
 
@@ -77,7 +84,7 @@ namespace ct_icp {
 
         };
 
-        explicit Odometry(const OdometryOptions &options) { 
+        explicit Odometry(const OdometryOptions &options) {
             options_ = options;
             // Update the motion compensation
             switch (options_.motion_compensation) {

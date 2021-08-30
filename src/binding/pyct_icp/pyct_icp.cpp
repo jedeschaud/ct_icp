@@ -127,6 +127,11 @@ PYBIND11_MODULE(pyct_icp, m) {
             ADD_VALUE(ct_icp::LEAST_SQUARES, STANDARD)
             .export_values();
 
+    py::enum_<ct_icp::INITIALIZATION>(m, "INITIALIZATION")
+            ADD_VALUE(ct_icp::INITIALIZATION, INIT_NONE)
+            ADD_VALUE(ct_icp::INITIALIZATION, INIT_CONSTANT_VELOCITY)
+            .export_values();
+
     py::enum_<ct_icp::ICP_DISTANCE>(m, "ICP_DISTANCE")
             ADD_VALUE(ct_icp::ICP_DISTANCE, POINT_TO_PLANE)
             ADD_VALUE(ct_icp::ICP_DISTANCE, CT_POINT_TO_PLANE)
@@ -171,6 +176,7 @@ PYBIND11_MODULE(pyct_icp, m) {
                     STRUCT_READWRITE(ct_icp::OdometryOptions, motion_compensation)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, debug_print)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, min_distance_points)
+                    STRUCT_READWRITE(ct_icp::OdometryOptions, initialization)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, distance_error_threshold)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, ct_icp_options);
 

@@ -79,6 +79,7 @@ namespace ct_icp {
                     << std::endl;
 
         RegistrationSummary summary;
+
         // Initial Trajectory Estimate
         trajectory_.emplace_back(TrajectoryFrame());
         if (index_frame <= 1) {
@@ -86,23 +87,29 @@ namespace ct_icp {
             trajectory_[index_frame].begin_t = Eigen::Vector3d(0., 0., 0.);
             trajectory_[index_frame].end_R = Eigen::MatrixXd::Identity(3, 3);
             trajectory_[index_frame].end_t = Eigen::Vector3d(0., 0., 0.);
+        } else {
+            if (options_.initialization == INIT_CONSTANT_VELOCITY) {
+                Eigen::Matrix3d R_next_end =
+                        trajectory_[index_frame - 1].end_R * trajectory_[index_frame - 2].end_R.inverse() *
+                        trajectory_[index_frame - 1].end_R;
+                Eigen::Vector3d t_next_end = trajectory_[index_frame - 1].end_t +
+                                             trajectory_[index_frame - 1].end_R *
+                                             trajectory_[index_frame - 2].end_R.inverse() *
+                                             (trajectory_[index_frame - 1].end_t -
+                                              trajectory_[index_frame - 2].end_t);
+
+                trajectory_[index_frame].begin_R = trajectory_[index_frame - 1].end_R;
+                trajectory_[index_frame].begin_t = trajectory_[index_frame - 1].end_t;
+
+                trajectory_[index_frame].end_R = R_next_end;
+                trajectory_[index_frame].end_t = t_next_end;
+            } else {
+                trajectory_[index_frame] = trajectory_[index_frame - 1];
+            }
         }
 
+
         if (index_frame > 1) {
-            Eigen::Matrix3d R_next_end =
-                    trajectory_[index_frame - 1].end_R * trajectory_[index_frame - 2].end_R.inverse() *
-                    trajectory_[index_frame - 1].end_R;
-            Eigen::Vector3d t_next_end = trajectory_[index_frame - 1].end_t +
-                                         trajectory_[index_frame - 1].end_R *
-                                         trajectory_[index_frame - 2].end_R.inverse() *
-                                         (trajectory_[index_frame - 1].end_t -
-                                          trajectory_[index_frame - 2].end_t);
-
-            trajectory_[index_frame].begin_R = trajectory_[index_frame - 1].end_R;
-            trajectory_[index_frame].begin_t = trajectory_[index_frame - 1].end_t;
-
-            trajectory_[index_frame].end_R = R_next_end;
-            trajectory_[index_frame].end_t = t_next_end;
 
             if (options_.motion_compensation == CONSTANT_VELOCITY) {
                 // The motion compensation of Constant velocity modifies the raw points of the point cloud

@@ -125,6 +125,18 @@ SLAMOptions read_config(const std::string &config_path) {
                     CHECK(false) << "The `motion_compensation` " << compensation << " is not supported." << std::endl;
             }
 
+            if (odometry_node["initialization"]) {
+                auto initialization = odometry_node["initialization"].as<std::string>();
+                CHECK(initialization == "INIT_NONE" || initialization == "INIT_CONSTANT_VELOCITY");
+                if (initialization == "INIT_NONE")
+                    odometry_options.initialization = ct_icp::INIT_NONE;
+                else if (initialization == "INIT_CONSTANT_VELOCITY")
+                    odometry_options.initialization = ct_icp::INIT_CONSTANT_VELOCITY;
+                else
+                    CHECK(false) << "The `initialization` " << initialization << " is not supported." << std::endl;
+            }
+
+
             if (odometry_node["ct_icp_options"]) {
                 auto icp_node = odometry_node["ct_icp_options"];
                 auto &icp_options = odometry_options.ct_icp_options;
