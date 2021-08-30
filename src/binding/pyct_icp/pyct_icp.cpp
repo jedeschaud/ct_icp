@@ -144,6 +144,12 @@ PYBIND11_MODULE(pyct_icp, m) {
             ADD_VALUE(ct_icp::MOTION_COMPENSATION, CONTINUOUS)
             .export_values();
 
+    py::class_<ct_icp::SequenceInfo>(m, "SequenceInfo")
+            .def(py::init())
+                    STRUCT_READWRITE(ct_icp::SequenceInfo, sequence_size)
+                    STRUCT_READWRITE(ct_icp::SequenceInfo, sequence_name)
+                    STRUCT_READWRITE(ct_icp::SequenceInfo, sequence_id);
+
     py::class_<ct_icp::CTICPOptions,
             std::shared_ptr<ct_icp::CTICPOptions>>(m, "CTICPOptions")
             .def(py::init())

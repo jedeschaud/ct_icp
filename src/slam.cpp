@@ -49,6 +49,12 @@ namespace ct_icp {
 
         std::string output_dir = "./outputs"; // The output path (relative or absolute) to save the pointclouds
 
+        bool all_sequences = true;
+
+        std::string sequence; // The desired sequence (only applicable if `all_sequences` is false)
+
+        int start_index = 0; // The start index of the sequence (only applicable if `all_sequences` is false)
+
         int max_frames = -1; // The maximum number of frames to register (if -1 all frames in the Dataset are registered)
 
         bool display_debug = true; // Whether to display timing and debug information
@@ -72,6 +78,9 @@ SLAMOptions read_config(const std::string &config_path) {
         OPTION_CLAUSE(slam_node, options, save_trajectory, bool);
         OPTION_CLAUSE(slam_node, options, suspend_on_failure, bool);
         OPTION_CLAUSE(slam_node, options, output_dir, std::string);
+        OPTION_CLAUSE(slam_node, options, sequence, std::string);
+        OPTION_CLAUSE(slam_node, options, start_index, int);
+        OPTION_CLAUSE(slam_node, options, all_sequences, bool);
         if (!options.output_dir.empty() && options.output_dir[options.output_dir.size() - 1] != '/')
             options.output_dir += '/';
         OPTION_CLAUSE(slam_node, options, max_frames, int);
@@ -291,8 +300,28 @@ int main(int argc, char **argv) {
     LOG(INFO) << "std::filesystem not found. Make sure the output directory exists (will raise an error otherwise)" << std::endl;
 #endif
 
-
     auto sequences = ct_icp::get_sequences(options.dataset_options);
+
+    if (!options.all_sequences) {
+        // Select a specific sequence
+        int seq_idx = -1;
+        for (int idx(0); idx < sequences.size(); ++idx) {
+            auto &sequence = sequences[idx];
+            if (sequence.sequence_name == options.sequence) {
+                seq_idx = idx;
+                break;
+            }
+        }
+
+        if (seq_idx == -1) {
+            LOG(ERROR) << "Could not find the sequence " << options.sequence << ". Exiting." << std::endl;
+            return 1;
+        }
+
+        auto selected_sequence = std::move(sequences[seq_idx]);
+        sequences.resize(1);
+        sequences[0] = std::move(selected_sequence);
+    }
     int num_sequences = (int) sequences.size();
 
     int max_num_threads = std::max(options.max_num_threads, 1);
@@ -311,9 +340,7 @@ int main(int argc, char **argv) {
 //#pragma omp parallel for num_threads(max_num_threads)
     for (int i = 0; i < num_sequences; ++i) {
 
-        int sequence_id = sequences[i].first;
-//        int sequence_size = options.max_frames < 0 ? sequences[i].second :
-//                            std::min(sequences[i].second, options.max_frames);
+        int sequence_id = sequences[i].sequence_id;
         ct_icp::Odometry ct_icp_odometry(&options.odometry_options);
 
         double registration_elapsed_ms = 0.0;
@@ -322,9 +349,13 @@ int main(int argc, char **argv) {
 
         int frame_id(0);
         while (iterator_ptr->HasNext() && (options.max_frames < 0 || frame_id < options.max_frames)) {
-
             auto time_start_frame = std::chrono::steady_clock::now();
             std::vector<Point3D> frame = iterator_ptr->Next();
+            if (!options.all_sequences && frame_id < options.start_index) {
+                std::cout << "Skipping frame " << frame_id << std::endl;
+                frame_id++;
+                continue;
+            }
             auto time_read_pointcloud = std::chrono::steady_clock::now();
 
             auto summary = ct_icp_odometry.RegisterFrame(frame);

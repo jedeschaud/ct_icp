@@ -50,8 +50,18 @@ namespace ct_icp {
 
     };
 
+    struct SequenceInfo {
+
+        std::string sequence_name;
+
+        int sequence_id = -1;
+
+        int sequence_size = -1;
+
+    };
+
     // Returns the Pairs sequence_id, sequence_size found on disk for the provided options
-    std::vector<std::pair<int, int>> get_sequences(const DatasetOptions &);
+    std::vector<SequenceInfo> get_sequences(const DatasetOptions &);
 
     // Reads a PointCloud from the Dataset KITTI_raw
     std::vector<Point3D> read_kitti_raw_pointcloud(const DatasetOptions &, const std::string &path);
