@@ -6,9 +6,9 @@ setup(
     author="Pierre Dellenbach",
     author_email="pierre.dellenbach@kitware.com",
     description="Continuous Time ICP",
-    package_dir={'': '${CMAKE_CURRENT_BINARY_DIR}'},
+    package_dir={'': "@NATIVE_LIB_PATH@"},
     packages=['pyct_icp'],
-    package_data={'': ['*.so']},
+    package_data={'': [@BINDING_PACKAGE_DATA@]},
     long_description="",
     zip_safe=False,
 )

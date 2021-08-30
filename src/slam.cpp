@@ -4,7 +4,9 @@
 //#include <omp.h>
 #include <iostream>
 #include <string>
+
 #define _USE_MATH_DEFINES
+
 #include <math.h>
 #include <vector>
 #include <chrono>
@@ -70,7 +72,7 @@ SLAMOptions read_config(const std::string &config_path) {
         OPTION_CLAUSE(slam_node, options, save_trajectory, bool);
         OPTION_CLAUSE(slam_node, options, suspend_on_failure, bool);
         OPTION_CLAUSE(slam_node, options, output_dir, std::string);
-		if (!options.output_dir.empty() && options.output_dir[options.output_dir.size() - 1] != '/')
+        if (!options.output_dir.empty() && options.output_dir[options.output_dir.size() - 1] != '/')
             options.output_dir += '/';
         OPTION_CLAUSE(slam_node, options, max_frames, int);
         OPTION_CLAUSE(slam_node, options, display_debug, bool);
@@ -108,6 +110,34 @@ SLAMOptions read_config(const std::string &config_path) {
             OPTION_CLAUSE(odometry_node, odometry_options, debug_print, bool);
             OPTION_CLAUSE(odometry_node, odometry_options, min_distance_points, double);
             OPTION_CLAUSE(odometry_node, odometry_options, distance_error_threshold, double);
+
+            if (odometry_node["motion_compensation"]) {
+                auto compensation = odometry_node["motion_compensation"].as<std::string>();
+                CHECK(compensation == "NONE" || compensation == "CONSTANT_VELOCITY" ||
+                      compensation == "ITERATIVE" || compensation == "CONTINUOUS");
+                if (compensation == "NONE")
+                    odometry_options.motion_compensation = ct_icp::NONE;
+                else if (compensation == "CONSTANT_VELOCITY")
+                    odometry_options.motion_compensation = ct_icp::CONSTANT_VELOCITY;
+                else if (compensation == "ITERATIVE")
+                    odometry_options.motion_compensation = ct_icp::ITERATIVE;
+                else if (compensation == "CONTINUOUS")
+                    odometry_options.motion_compensation = ct_icp::CONTINUOUS;
+                else
+                    CHECK(false) << "The `motion_compensation` " << compensation << " is not supported." << std::endl;
+            }
+
+            if (odometry_node["initialization"]) {
+                auto initialization = odometry_node["initialization"].as<std::string>();
+                CHECK(initialization == "INIT_NONE" || initialization == "INIT_CONSTANT_VELOCITY");
+                if (initialization == "INIT_NONE")
+                    odometry_options.initialization = ct_icp::INIT_NONE;
+                else if (initialization == "INIT_CONSTANT_VELOCITY")
+                    odometry_options.initialization = ct_icp::INIT_CONSTANT_VELOCITY;
+                else
+                    CHECK(false) << "The `initialization` " << initialization << " is not supported." << std::endl;
+            }
+
 
             if (odometry_node["ct_icp_options"]) {
                 auto icp_node = odometry_node["ct_icp_options"];
@@ -267,7 +297,7 @@ int main(int argc, char **argv) {
     // Build the Output_dir
 #if WITH_STD_FILESYSTEM
     CHECK(fs::exists(options.dataset_options.root_path))
-    << "The directory " << options.dataset_options.root_path << " does not exist";
+                    << "The directory " << options.dataset_options.root_path << " does not exist";
     LOG(INFO) << "Creating directory " << options.output_dir << std::endl;
     fs::create_directories(options.output_dir);
 #else
@@ -323,15 +353,15 @@ int main(int argc, char **argv) {
             Eigen::Matrix4d camera_pose = Eigen::Matrix4d::Identity();
             camera_pose.block<3, 3>(0, 0) = summary.frame.begin_R;
             camera_pose.block<3, 1>(0, 3) = summary.frame.begin_t;
-            camera_pose = camera_pose.inverse();
+            camera_pose = camera_pose.inverse().eval();
 
             instance.SetCameraPose(camera_pose);
             {
                 auto model_ptr = std::make_shared<viz::PointCloudModel>();
                 auto &model_data = model_ptr->ModelData();
-                model_data.xyz.resize(summary.corrected_points.size());
-                for (size_t i(0); i < summary.corrected_points.size(); ++i) {
-                    model_data.xyz[i] = summary.corrected_points[i].pt.cast<float>();
+                model_data.xyz.resize(summary.all_corrected_points.size());
+                for (size_t i(0); i < summary.all_corrected_points.size(); ++i) {
+                    model_data.xyz[i] = summary.all_corrected_points[i].pt.cast<float>();
                 }
                 instance.AddModel(frame_id % 500, model_ptr);
             }
@@ -427,18 +457,20 @@ int main(int argc, char **argv) {
         double all_seq_rpe_t = 0.0;
         double all_seq_rpe_r = 0.0;
         double num_total_errors = 0.0;
-        for (auto &pair : sequence_name_to_errors) {
-            for (int i = 0; i < (int)(pair.second.tab_errors.size()); i++) {
+        for (auto &pair: sequence_name_to_errors) {
+            for (int i = 0; i < (int) (pair.second.tab_errors.size()); i++) {
                 all_seq_rpe_t += pair.second.tab_errors[i].t_err;
                 all_seq_rpe_r += pair.second.tab_errors[i].r_err;
                 num_total_errors += 1;
             }
         }
-        std::cout << "KITTI metric translation/rotation : " << (all_seq_rpe_t / num_total_errors) * 100 << " " << (all_seq_rpe_r / num_total_errors) * 180.0 / M_PI << std::endl;
+        std::cout << "KITTI metric translation/rotation : " << (all_seq_rpe_t / num_total_errors) * 100 << " "
+                  << (all_seq_rpe_r / num_total_errors) * 180.0 / M_PI << std::endl;
     }
 
     std::cout << std::endl;
-    std::cout << "Average registration time for all sequences (ms) : " << all_seq_registration_elapsed_ms / all_seq_num_frames << std::endl;
+    std::cout << "Average registration time for all sequences (ms) : "
+              << all_seq_registration_elapsed_ms / all_seq_num_frames << std::endl;
 
 #ifdef CT_ICP_WITH_VIZ
     gui_thread.join();

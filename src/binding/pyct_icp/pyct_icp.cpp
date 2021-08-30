@@ -127,11 +127,22 @@ PYBIND11_MODULE(pyct_icp, m) {
             ADD_VALUE(ct_icp::LEAST_SQUARES, STANDARD)
             .export_values();
 
+    py::enum_<ct_icp::INITIALIZATION>(m, "INITIALIZATION")
+            ADD_VALUE(ct_icp::INITIALIZATION, INIT_NONE)
+            ADD_VALUE(ct_icp::INITIALIZATION, INIT_CONSTANT_VELOCITY)
+            .export_values();
+
     py::enum_<ct_icp::ICP_DISTANCE>(m, "ICP_DISTANCE")
             ADD_VALUE(ct_icp::ICP_DISTANCE, POINT_TO_PLANE)
             ADD_VALUE(ct_icp::ICP_DISTANCE, CT_POINT_TO_PLANE)
             .export_values();
 
+    py::enum_<ct_icp::MOTION_COMPENSATION>(m, "MOTION_COMPENSATION")
+            ADD_VALUE(ct_icp::MOTION_COMPENSATION, NONE)
+            ADD_VALUE(ct_icp::MOTION_COMPENSATION, CONSTANT_VELOCITY)
+            ADD_VALUE(ct_icp::MOTION_COMPENSATION, ITERATIVE)
+            ADD_VALUE(ct_icp::MOTION_COMPENSATION, CONTINUOUS)
+            .export_values();
 
     py::class_<ct_icp::CTICPOptions,
             std::shared_ptr<ct_icp::CTICPOptions>>(m, "CTICPOptions")
@@ -152,6 +163,7 @@ PYBIND11_MODULE(pyct_icp, m) {
                     STRUCT_READWRITE(ct_icp::CTICPOptions, loss_function)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_max_num_iters)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_num_threads)
+                    STRUCT_READWRITE(ct_icp::CTICPOptions, size_voxel_map)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_sigma)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_tolerant_min_threshold);
 
@@ -161,8 +173,10 @@ PYBIND11_MODULE(pyct_icp, m) {
                     STRUCT_READWRITE(ct_icp::OdometryOptions, sample_voxel_size)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, max_distance)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, max_num_points_in_voxel)
+                    STRUCT_READWRITE(ct_icp::OdometryOptions, motion_compensation)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, debug_print)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, min_distance_points)
+                    STRUCT_READWRITE(ct_icp::OdometryOptions, initialization)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, distance_error_threshold)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, ct_icp_options);
 
@@ -192,13 +206,13 @@ PYBIND11_MODULE(pyct_icp, m) {
             .def("GetLocalMap", [](const ct_icp::Odometry &self) {
                 // Convert to numpy
                 return vector_to_ndarray<Eigen::Vector3d, double,
-                        EIGEN_ALIGNED_ALLOCATOR<Eigen::Vector3d>>(self.GetLocalMap());
+                        Eigen::aligned_allocator<Eigen::Vector3d>>(self.GetLocalMap());
             });
 
 
     /// DATASETS
     py::enum_<ct_icp::DATASET>(m, "CT_ICP_DATASET")
-            ADD_VALUE(ct_icp::DATASET, KITTI)
+            ADD_VALUE(ct_icp::DATASET, KITTI_raw)
             ADD_VALUE(ct_icp::DATASET, KITTI_CARLA)
             ADD_VALUE(ct_icp::DATASET, NCLT)
             .export_values();

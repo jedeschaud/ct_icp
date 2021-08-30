@@ -11,6 +11,44 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
+    void DistortFrame(std::vector<Point3D> &points, Eigen::Quaterniond &begin_quat, Eigen::Quaterniond &end_quat,
+                      Eigen::Vector3d &begin_t, Eigen::Vector3d &end_t) {
+        Eigen::Quaterniond end_quat_I = end_quat.inverse(); // Rotation of the inverse pose
+        Eigen::Vector3d end_t_I = -1.0 * (end_quat_I * end_t); // Translation of the inverse pose
+        for (auto &point: points) {
+            double alpha_timestamp = point.alpha_timestamp;
+            Eigen::Quaterniond q_alpha = begin_quat.slerp(alpha_timestamp, end_quat);
+            q_alpha.normalize();
+            Eigen::Matrix3d R = q_alpha.toRotationMatrix();
+            Eigen::Vector3d t = (1.0 - alpha_timestamp) * begin_t + alpha_timestamp * end_t;
+
+            // Distort Raw Keypoints
+            point.raw_pt = end_quat_I * (q_alpha * point.raw_pt + t) + end_t_I;
+        }
+    }
+
+    inline void TransformPoint(MOTION_COMPENSATION compensation, Point3D &point3D,
+                               Eigen::Quaterniond &q_begin, Eigen::Quaterniond &q_end,
+                               Eigen::Vector3d &t_begin, Eigen::Vector3d &t_end) {
+        Eigen::Vector3d t;
+        Eigen::Matrix3d R;
+        double alpha_timestamp = point3D.alpha_timestamp;
+        switch (compensation) {
+            case MOTION_COMPENSATION::NONE:
+            case MOTION_COMPENSATION::CONSTANT_VELOCITY:
+                R = q_end.toRotationMatrix();
+                t = t_end;
+                break;
+            case MOTION_COMPENSATION::CONTINUOUS:
+            case MOTION_COMPENSATION::ITERATIVE:
+                R = q_begin.slerp(alpha_timestamp, q_end).normalized().toRotationMatrix();
+                t = (1.0 - alpha_timestamp) * t_begin + alpha_timestamp * t_end;
+                break;
+        }
+        point3D.pt = R * point3D.raw_pt + t;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
     Odometry::RegistrationSummary Odometry::RegisterFrame(const std::vector<Point3D> &const_frame) {
         auto start = std::chrono::steady_clock::now();
 
@@ -37,9 +75,11 @@ namespace ct_icp {
             sub_sample_frame(frame, kSizeVoxelInitSample);
         }
         if (kDisplay)
-            log_out << "Number of points in sub-sampled frame: " << frame.size() << " / " << const_frame.size() << std::endl;
+            log_out << "Number of points in sub-sampled frame: " << frame.size() << " / " << const_frame.size()
+                    << std::endl;
 
         RegistrationSummary summary;
+
         // Initial Trajectory Estimate
         trajectory_.emplace_back(TrajectoryFrame());
         if (index_frame <= 1) {
@@ -47,8 +87,28 @@ namespace ct_icp {
             trajectory_[index_frame].begin_t = Eigen::Vector3d(0., 0., 0.);
             trajectory_[index_frame].end_R = Eigen::MatrixXd::Identity(3, 3);
             trajectory_[index_frame].end_t = Eigen::Vector3d(0., 0., 0.);
+        } else {
+            if (options_.initialization == INIT_CONSTANT_VELOCITY) {
+                Eigen::Matrix3d R_next_end =
+                        trajectory_[index_frame - 1].end_R * trajectory_[index_frame - 2].end_R.inverse() *
+                        trajectory_[index_frame - 1].end_R;
+                Eigen::Vector3d t_next_end = trajectory_[index_frame - 1].end_t +
+                                             trajectory_[index_frame - 1].end_R *
+                                             trajectory_[index_frame - 2].end_R.inverse() *
+                                             (trajectory_[index_frame - 1].end_t -
+                                              trajectory_[index_frame - 2].end_t);
+
+                trajectory_[index_frame].begin_R = trajectory_[index_frame - 1].end_R;
+                trajectory_[index_frame].begin_t = trajectory_[index_frame - 1].end_t;
+
+                trajectory_[index_frame].end_R = R_next_end;
+                trajectory_[index_frame].end_t = t_next_end;
+            } else {
+                trajectory_[index_frame] = trajectory_[index_frame - 1];
+            }
         }
 
+<<<<<<< HEAD
         if (index_frame > 1) {
             Eigen::Matrix3d R_next_begin =
                 trajectory_[index_frame - 1].begin_R * trajectory_[index_frame - 2].begin_R.inverse() *
@@ -71,21 +131,25 @@ namespace ct_icp {
 
             trajectory_[index_frame].begin_R = R_next_begin; ; //trajectory_[index_frame - 1].end_R;
             trajectory_[index_frame].begin_t = t_next_begin; ; //trajectory_[index_frame - 1].end_t;
+=======
 
-            trajectory_[index_frame].end_R = R_next_end;
-            trajectory_[index_frame].end_t = t_next_end;
+        if (index_frame > 1) {
+>>>>>>> f72a26fa5a413b1a2c83c6e97c8451f4751cb613
+
+            if (options_.motion_compensation == CONSTANT_VELOCITY) {
+                // The motion compensation of Constant velocity modifies the raw points of the point cloud
+                auto &tr_frame = trajectory_[index_frame];
+                Eigen::Quaterniond begin_quat(tr_frame.begin_R);
+                Eigen::Quaterniond end_quat(tr_frame.end_R);
+                DistortFrame(frame, begin_quat, end_quat, tr_frame.begin_t, tr_frame.end_t);
+            }
 
             auto q_begin = Eigen::Quaterniond(trajectory_[index_frame].begin_R);
             auto q_end = Eigen::Quaterniond(trajectory_[index_frame].end_R);
             Eigen::Vector3d t_begin = trajectory_[index_frame].begin_t;
             Eigen::Vector3d t_end = trajectory_[index_frame].end_t;
-            for (auto &point3D : frame) {
-                double alpha_timestamp = point3D.alpha_timestamp;
-                Eigen::Quaterniond q = q_begin.slerp(alpha_timestamp, q_end);
-                q.normalize();
-                Eigen::Matrix3d R = q.toRotationMatrix();
-                Eigen::Vector3d t = (1.0 - alpha_timestamp) * t_begin + alpha_timestamp * t_end;
-                point3D.pt = R * point3D.raw_pt + t;
+            for (auto &point3D: frame) {
+                TransformPoint(options_.motion_compensation, point3D, q_begin, q_end, t_begin, t_end);
             }
 
             Eigen::Vector3d t_diff = trajectory_[index_frame].end_t - trajectory_[index_frame].begin_t;
@@ -143,13 +207,8 @@ namespace ct_icp {
                 Eigen::Quaterniond q_end = Eigen::Quaterniond(trajectory_[index_frame].end_R);
                 Eigen::Vector3d t_begin = trajectory_[index_frame].begin_t;
                 Eigen::Vector3d t_end = trajectory_[index_frame].end_t;
-                for (int i = 0; i < (int) frame.size(); ++i) {
-                    double alpha_timestamp = frame[i].alpha_timestamp;
-                    Eigen::Quaterniond q = q_begin.slerp(alpha_timestamp, q_end);
-                    q.normalize();
-                    Eigen::Matrix3d R = q.toRotationMatrix();
-                    Eigen::Vector3d t = (1.0 - alpha_timestamp) * t_begin + alpha_timestamp * t_end;
-                    frame[i].pt = R * frame[i].raw_pt + t;
+                for (auto &point: frame) {
+                    TransformPoint(options_.motion_compensation, point, q_begin, q_end, t_begin, t_end);
                 }
                 auto end_ct_icp = std::chrono::steady_clock::now();
                 std::chrono::duration<double> elapsed_icp = (end_ct_icp - start);
@@ -199,15 +258,15 @@ namespace ct_icp {
 
         auto end = std::chrono::steady_clock::now();
         std::chrono::duration<double> elapsed_seconds = end - start;
-        if (kDisplay)
-        {
+        if (kDisplay) {
             log_out << "Elapsed Time: " << elapsed_seconds.count() * 1000.0 << " (ms)" << std::endl;
             //log_out << "[OPENMP] Num Max Threads : " << omp_get_max_threads() << " / Num Procs " << omp_get_num_procs() << std::endl;
         }
 
-        for (auto &point : frame)
+        for (auto &point: frame)
             point.index_frame = index_frame;
 
+<<<<<<< HEAD
         std::vector<Point3D> frame_original(const_frame);
         //Update frame original
         Eigen::Quaterniond q_begin = Eigen::Quaterniond(trajectory_[index_frame].begin_R);
@@ -225,6 +284,20 @@ namespace ct_icp {
 
         //summary.corrected_points = frame;
         summary.corrected_points = frame_original;
+=======
+        summary.corrected_points = frame;
+        summary.all_corrected_points = const_frame;
+
+        Eigen::Quaterniond q_begin(summary.frame.begin_R);
+        Eigen::Quaterniond q_end(summary.frame.end_R);
+
+        for (auto &point3D: summary.all_corrected_points) {
+            double timestamp = point3D.alpha_timestamp;
+            Eigen::Quaterniond slerp = q_begin.slerp(timestamp, q_end).normalized();
+            point3D.pt = slerp.toRotationMatrix() * point3D.raw_pt +
+                         summary.frame.begin_t * (1.0 - timestamp) + timestamp * summary.frame.end_t;
+        }
+>>>>>>> f72a26fa5a413b1a2c83c6e97c8451f4751cb613
 
         return summary;
     }
@@ -244,7 +317,7 @@ namespace ct_icp {
     ArrayVector3d MapAsPointcloud(const VoxelHashMap &map) {
         ArrayVector3d points;
         points.reserve(MapSize(map));
-        for (auto &voxel : map) {
+        for (auto &voxel: map) {
             for (int i(0); i < voxel.second.NumPoints(); ++i)
                 points.push_back(voxel.second.points[i]);
         }
@@ -254,7 +327,7 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     size_t MapSize(const VoxelHashMap &map) {
         size_t map_size(0);
-        for (auto &itr_voxel_map : map) {
+        for (auto &itr_voxel_map: map) {
             map_size += (itr_voxel_map.second).NumPoints();
         }
         return map_size;
@@ -263,13 +336,13 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     void RemovePointsFarFromLocation(VoxelHashMap &map, const Eigen::Vector3d &location, double distance) {
         std::vector<Voxel> voxels_to_erase;
-        for (auto &pair : map) {
+        for (auto &pair: map) {
             Eigen::Vector3d pt = pair.second.points[0];
             if ((pt - location).squaredNorm() > (distance * distance)) {
                 voxels_to_erase.push_back(pair.first);
             }
         }
-        for (auto &vox : voxels_to_erase)
+        for (auto &vox: voxels_to_erase)
             map.erase(vox);
 
     }
@@ -310,7 +383,7 @@ namespace ct_icp {
     void AddPointsToMap(VoxelHashMap &map, const vector<Point3D> &points, double voxel_size,
                         int max_num_points_in_voxel, double min_distance_points) {
         //Update Voxel Map
-        for (const auto &point : points) {
+        for (const auto &point: points) {
             AddPointToMap(map, point.pt, voxel_size, max_num_points_in_voxel, min_distance_points);
         }
     }
