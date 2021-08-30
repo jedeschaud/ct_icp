@@ -6,6 +6,7 @@
 #include <types.hpp>
 #include <iostream>
 
+#include "ct_icp.hpp"
 #include "odometry.hpp"
 #include "dataset.hpp"
 
@@ -144,11 +145,17 @@ PYBIND11_MODULE(pyct_icp, m) {
             ADD_VALUE(ct_icp::MOTION_COMPENSATION, CONTINUOUS)
             .export_values();
 
+    py::enum_<ct_icp::CT_ICP_SOLVER>(m, "CT_ICP_SOLVER")
+            ADD_VALUE(ct_icp::CT_ICP_SOLVER, CERES)
+            ADD_VALUE(ct_icp::CT_ICP_SOLVER, GN)
+            .export_values();
+
     py::class_<ct_icp::SequenceInfo>(m, "SequenceInfo")
             .def(py::init())
                     STRUCT_READWRITE(ct_icp::SequenceInfo, sequence_size)
                     STRUCT_READWRITE(ct_icp::SequenceInfo, sequence_name)
                     STRUCT_READWRITE(ct_icp::SequenceInfo, sequence_id);
+
 
     py::class_<ct_icp::CTICPOptions,
             std::shared_ptr<ct_icp::CTICPOptions>>(m, "CTICPOptions")
@@ -171,6 +178,7 @@ PYBIND11_MODULE(pyct_icp, m) {
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_num_threads)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, size_voxel_map)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_sigma)
+                    STRUCT_READWRITE(ct_icp::CTICPOptions, solver)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_tolerant_min_threshold);
 
     py::class_<ct_icp::OdometryOptions>(m, "OdometryOptions")
