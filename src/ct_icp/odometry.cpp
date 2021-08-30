@@ -89,6 +89,15 @@ namespace ct_icp {
             trajectory_[index_frame].end_t = Eigen::Vector3d(0., 0., 0.);
         } else {
             if (options_.initialization == INIT_CONSTANT_VELOCITY) {
+                Eigen::Matrix3d R_next_begin =
+                    trajectory_[index_frame - 1].begin_R * trajectory_[index_frame - 2].begin_R.inverse() *
+                    trajectory_[index_frame - 1].begin_R;
+                Eigen::Vector3d t_next_begin = trajectory_[index_frame - 1].begin_t +
+                    trajectory_[index_frame - 1].begin_R *
+                    trajectory_[index_frame - 2].begin_R.inverse() *
+                    (trajectory_[index_frame - 1].begin_t -
+                        trajectory_[index_frame - 2].begin_t);
+
                 Eigen::Matrix3d R_next_end =
                         trajectory_[index_frame - 1].end_R * trajectory_[index_frame - 2].end_R.inverse() *
                         trajectory_[index_frame - 1].end_R;
@@ -98,43 +107,17 @@ namespace ct_icp {
                                              (trajectory_[index_frame - 1].end_t -
                                               trajectory_[index_frame - 2].end_t);
 
-                trajectory_[index_frame].begin_R = trajectory_[index_frame - 1].end_R;
-                trajectory_[index_frame].begin_t = trajectory_[index_frame - 1].end_t;
-
+                trajectory_[index_frame].begin_R = R_next_begin; ; //trajectory_[index_frame - 1].end_R;
+                trajectory_[index_frame].begin_t = t_next_begin; ; //trajectory_[index_frame - 1].end_t;
                 trajectory_[index_frame].end_R = R_next_end;
                 trajectory_[index_frame].end_t = t_next_end;
             } else {
                 trajectory_[index_frame] = trajectory_[index_frame - 1];
             }
-        }
+        }     
 
-<<<<<<< HEAD
-        if (index_frame > 1) {
-            Eigen::Matrix3d R_next_begin =
-                trajectory_[index_frame - 1].begin_R * trajectory_[index_frame - 2].begin_R.inverse() *
-                trajectory_[index_frame - 1].begin_R;
-            Eigen::Vector3d t_next_begin = trajectory_[index_frame - 1].begin_t +
-                trajectory_[index_frame - 1].begin_R *
-                trajectory_[index_frame - 2].begin_R.inverse() *
-                (trajectory_[index_frame - 1].begin_t -
-                    trajectory_[index_frame - 2].begin_t);
-
-            Eigen::Matrix3d R_next_end =
-                    trajectory_[index_frame - 1].end_R * trajectory_[index_frame - 2].end_R.inverse() *
-                    trajectory_[index_frame - 1].end_R;
-            Eigen::Vector3d t_next_end = trajectory_[index_frame - 1].end_t +
-                                         trajectory_[index_frame - 1].end_R *
-                                         trajectory_[index_frame - 2].end_R.inverse() *
-                                         (trajectory_[index_frame - 1].end_t -
-                                          trajectory_[index_frame - 2].end_t);
-
-
-            trajectory_[index_frame].begin_R = R_next_begin; ; //trajectory_[index_frame - 1].end_R;
-            trajectory_[index_frame].begin_t = t_next_begin; ; //trajectory_[index_frame - 1].end_t;
-=======
 
         if (index_frame > 1) {
->>>>>>> f72a26fa5a413b1a2c83c6e97c8451f4751cb613
 
             if (options_.motion_compensation == CONSTANT_VELOCITY) {
                 // The motion compensation of Constant velocity modifies the raw points of the point cloud
@@ -266,25 +249,6 @@ namespace ct_icp {
         for (auto &point: frame)
             point.index_frame = index_frame;
 
-<<<<<<< HEAD
-        std::vector<Point3D> frame_original(const_frame);
-        //Update frame original
-        Eigen::Quaterniond q_begin = Eigen::Quaterniond(trajectory_[index_frame].begin_R);
-        Eigen::Quaterniond q_end = Eigen::Quaterniond(trajectory_[index_frame].end_R);
-        Eigen::Vector3d t_begin = trajectory_[index_frame].begin_t;
-        Eigen::Vector3d t_end = trajectory_[index_frame].end_t;
-        for (int i = 0; i < (int)frame_original.size(); ++i) {
-            double alpha_timestamp = frame_original[i].alpha_timestamp;
-            Eigen::Quaterniond q = q_begin.slerp(alpha_timestamp, q_end);
-            q.normalize();
-            Eigen::Matrix3d R = q.toRotationMatrix();
-            Eigen::Vector3d t = (1.0 - alpha_timestamp) * t_begin + alpha_timestamp * t_end;
-            frame_original[i].pt = R * frame_original[i].raw_pt + t;
-        }
-
-        //summary.corrected_points = frame;
-        summary.corrected_points = frame_original;
-=======
         summary.corrected_points = frame;
         summary.all_corrected_points = const_frame;
 
@@ -297,7 +261,6 @@ namespace ct_icp {
             point3D.pt = slerp.toRotationMatrix() * point3D.raw_pt +
                          summary.frame.begin_t * (1.0 - timestamp) + timestamp * summary.frame.end_t;
         }
->>>>>>> f72a26fa5a413b1a2c83c6e97c8451f4751cb613
 
         return summary;
     }
