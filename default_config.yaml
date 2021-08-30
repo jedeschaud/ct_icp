@@ -26,7 +26,7 @@ odometry_options:
 
   # CT_ICP OPTIONS ----
   ct_icp_options:
-    size_voxel_map: 1.5 # The voxel size of in the voxel map
+    size_voxel_map: 1.0 # The voxel size of in the voxel map
     num_iters_icp: 5 # The number of iterations of the ICP
     min_number_neighbors: 20 # The minimum number of neighbor points to define a valid neighborhood
     voxel_neighborhood: 1
