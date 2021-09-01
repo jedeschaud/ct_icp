@@ -320,6 +320,8 @@ int main(int argc, char **argv) {
     bool dataset_with_gt = false;
     double all_seq_registration_elapsed_ms = 0.0;
     int all_seq_num_frames = 0;
+    double average_rpe_on_seq = 0.0;
+    int nb_seq_with_gt = 0;
 
 #pragma omp parallel for num_threads(max_num_threads)
     for (int i = 0; i < num_sequences; ++i) { //num_sequences
@@ -417,6 +419,7 @@ int main(int argc, char **argv) {
         // Evaluation
         if (has_ground_truth(options.dataset_options, sequence_id)) {
             dataset_with_gt = true;
+            nb_seq_with_gt++;
 
             auto ground_truth_poses = load_ground_truth(options.dataset_options, sequence_id);
 
@@ -441,6 +444,7 @@ int main(int argc, char **argv) {
             std::cout << "Average Duration : " << registration_elapsed_ms / frame_id << std::endl;
             std::cout << std::endl;
 
+            average_rpe_on_seq += seq_error.mean_rpe;
 
 # pragma omp critical
             {
@@ -466,6 +470,7 @@ int main(int argc, char **argv) {
         }
         std::cout << "KITTI metric translation/rotation : " << (all_seq_rpe_t / num_total_errors) * 100 << " "
                   << (all_seq_rpe_r / num_total_errors) * 180.0 / M_PI << std::endl;
+        std::cout << "Average RPE on seq : " << average_rpe_on_seq / nb_seq_with_gt;
     }
 
     std::cout << std::endl;
