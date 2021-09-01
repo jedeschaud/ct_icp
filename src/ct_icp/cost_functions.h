@@ -105,21 +105,21 @@ namespace ct_icp {
         static constexpr int NumResiduals() { return 3; }
 
         LocationConsistencyFunctor(const Eigen::Vector3d &previous_location,
-                                   double alpha) : alpha_(alpha),
+                                   double beta) : beta_(beta),
                                                    previous_location_(previous_location) {}
 
         template<typename T>
         bool operator()(const T *const location_params, T *residual) const {
-            residual[0] = alpha_ * (location_params[0] - previous_location_(0, 0));
-            residual[1] = alpha_ * (location_params[1] - previous_location_(1, 0));
-            residual[2] = alpha_ * (location_params[2] - previous_location_(2, 0));
+            residual[0] = beta_ * (location_params[0] - previous_location_(0, 0));
+            residual[1] = beta_ * (location_params[1] - previous_location_(1, 0));
+            residual[2] = beta_ * (location_params[2] - previous_location_(2, 0));
             return true;
         }
 
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     private:
         Eigen::Vector3d previous_location_;
-        double alpha_ = 1.0;
+        double beta_ = 1.0;
     };
 
     // A Const Functor which enforces a Constant Velocity constraint on translation
@@ -128,20 +128,20 @@ namespace ct_icp {
         static constexpr int NumResiduals() { return 3; }
 
         ConstantVelocityFunctor(const Eigen::Vector3d &previous_velocity,
-                                double alpha) : previous_velocity_(previous_velocity), alpha_(alpha) {}
+                                double beta) : previous_velocity_(previous_velocity), beta_(beta) {}
 
         template<typename T>
         bool operator()(const T *const begin_t, const T *const end_t, T *residual) const {
-            residual[0] = alpha_ * (end_t[0] - begin_t[0] - previous_velocity_(0, 0));
-            residual[1] = alpha_ * (end_t[1] - begin_t[1] - previous_velocity_(1, 0));
-            residual[2] = alpha_ * (end_t[2] - begin_t[2] - previous_velocity_(2, 0));
+            residual[0] = beta_ * (end_t[0] - begin_t[0] - previous_velocity_(0, 0));
+            residual[1] = beta_ * (end_t[1] - begin_t[1] - previous_velocity_(1, 0));
+            residual[2] = beta_ * (end_t[2] - begin_t[2] - previous_velocity_(2, 0));
             return true;
         }
 
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     private:
         Eigen::Vector3d previous_velocity_;
-        double alpha_ = 1.0;
+        double beta_ = 1.0;
     };
 
 
@@ -151,11 +151,11 @@ namespace ct_icp {
         static constexpr int NumResiduals() { return 1; }
 
         ConstantNormVelocityFunctor(const Eigen::Vector3d& previous_velocity,
-            double alpha) : previous_velocity_(previous_velocity), alpha_(alpha) {}
+            double beta) : previous_velocity_(previous_velocity), beta_(beta) {}
 
         template<typename T>
         bool operator()(const T* const begin_t, const T* const end_t, T* residual) const {
-            residual[0] = alpha_ * (sqrt((end_t[0] - begin_t[0]) * (end_t[0] - begin_t[0]) + (end_t[1] - begin_t[1]) * (end_t[1] - begin_t[1]) + (end_t[2] - begin_t[2]) * (end_t[2] - begin_t[2]))
+            residual[0] = beta_ * (sqrt((end_t[0] - begin_t[0]) * (end_t[0] - begin_t[0]) + (end_t[1] - begin_t[1]) * (end_t[1] - begin_t[1]) + (end_t[2] - begin_t[2]) * (end_t[2] - begin_t[2]))
                 - sqrt(previous_velocity_(0, 0) * previous_velocity_(0, 0) + previous_velocity_(1, 0) * previous_velocity_(1, 0) + previous_velocity_(2, 0) * previous_velocity_(2, 0)));
             return true;
         }
@@ -163,7 +163,7 @@ namespace ct_icp {
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     private:
         Eigen::Vector3d previous_velocity_;
-        double alpha_ = 1.0;
+        double beta_ = 1.0;
     };
 
 
