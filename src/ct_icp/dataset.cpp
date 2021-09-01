@@ -199,9 +199,9 @@ namespace ct_icp {
             if (!fs::exists(sequence_path)) {
                 add_sequence = false;
                 LOG(INFO) << "Could not find sequence directory at " << sequence_path.string()
-                          << "... Skipping sequence " << sequence_name;
+                          << "... Skipping sequence " << new_sequence_info.sequence_name;
             } else {
-                LOG(INFO) << "Found Sequence " << sequence_name << std::endl;
+                LOG(INFO) << "Found Sequence " << new_sequence_info.sequence_name << std::endl;
             }
 #endif
 
