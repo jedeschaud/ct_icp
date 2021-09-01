@@ -6,6 +6,7 @@
 #include <types.hpp>
 #include <iostream>
 
+#include "ct_icp.hpp"
 #include "odometry.hpp"
 #include "dataset.hpp"
 
@@ -144,6 +145,18 @@ PYBIND11_MODULE(pyct_icp, m) {
             ADD_VALUE(ct_icp::MOTION_COMPENSATION, CONTINUOUS)
             .export_values();
 
+    py::enum_<ct_icp::CT_ICP_SOLVER>(m, "CT_ICP_SOLVER")
+            ADD_VALUE(ct_icp::CT_ICP_SOLVER, CERES)
+            ADD_VALUE(ct_icp::CT_ICP_SOLVER, GN)
+            .export_values();
+
+    py::class_<ct_icp::SequenceInfo>(m, "SequenceInfo")
+            .def(py::init())
+                    STRUCT_READWRITE(ct_icp::SequenceInfo, sequence_size)
+                    STRUCT_READWRITE(ct_icp::SequenceInfo, sequence_name)
+                    STRUCT_READWRITE(ct_icp::SequenceInfo, sequence_id);
+
+
     py::class_<ct_icp::CTICPOptions,
             std::shared_ptr<ct_icp::CTICPOptions>>(m, "CTICPOptions")
             .def(py::init())
@@ -158,13 +171,14 @@ PYBIND11_MODULE(pyct_icp, m) {
                     STRUCT_READWRITE(ct_icp::CTICPOptions, point_to_plane_with_distortion)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, distance)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, num_closest_neighbors)
-                    STRUCT_READWRITE(ct_icp::CTICPOptions, alpha_location_consistency)
-                    STRUCT_READWRITE(ct_icp::CTICPOptions, alpha_constant_velocity)
+                    STRUCT_READWRITE(ct_icp::CTICPOptions, beta_location_consistency)
+                    STRUCT_READWRITE(ct_icp::CTICPOptions, beta_constant_velocity)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, loss_function)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_max_num_iters)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_num_threads)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, size_voxel_map)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_sigma)
+                    STRUCT_READWRITE(ct_icp::CTICPOptions, solver)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_tolerant_min_threshold);
 
     py::class_<ct_icp::OdometryOptions>(m, "OdometryOptions")
@@ -180,6 +194,8 @@ PYBIND11_MODULE(pyct_icp, m) {
                     STRUCT_READWRITE(ct_icp::OdometryOptions, distance_error_threshold)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, ct_icp_options);
 
+    m.def("DefaultDrivingProfile", &ct_icp::OdometryOptions::DefaultDrivingProfile);
+    m.def("DefaultSlowOutdoorProfile", &ct_icp::OdometryOptions::DefaultSlowOutdoorProfile);
 
     using RegSummary = ct_icp::Odometry::RegistrationSummary;
     py::class_<PyRegistrationSummary,

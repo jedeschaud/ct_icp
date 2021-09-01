@@ -20,6 +20,11 @@ namespace ct_icp {
 
     struct OdometryOptions {
 
+        /* Parameters for initialization of the map */
+        double init_sample_voxel_size = 0.2;
+
+        int init_num_frames = 50; // The number of frames defining the initialization of the map
+
         double voxel_size = 0.5;
 
         double sample_voxel_size = 1.0;
@@ -39,6 +44,20 @@ namespace ct_icp {
         MOTION_COMPENSATION motion_compensation = CONTINUOUS;
 
         INITIALIZATION initialization = INIT_CONSTANT_VELOCITY;
+
+        ////////////////////////
+        /// DEFAULT PROFILES ///
+        ////////////////////////
+
+        // Returns the default parameters for driving scenarios
+        // e.g. Used for the dataset KITTI
+        static OdometryOptions DefaultDrivingProfile();
+
+        // Returns the default parameters for abrupt profiles
+        // e.g. Used for the dataset NCLT
+        static OdometryOptions DefaultSlowOutdoorProfile();
+
+        // TODO: INDOOR
 
     };
 

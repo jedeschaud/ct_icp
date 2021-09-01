@@ -89,7 +89,7 @@ namespace ct_icp {
 
     };
 
-    // Elastic_ICP : Registers keypoints into the voxel_map taking into account the motion of the
+    // CT_ICP_CERES : Registers keypoints into the voxel_map taking into account the motion of the
     //               Sensor during the acquisition of the LiDAR Frame
     //
     // Refines the estimate of `trajectory[index_frame]` by registering the points of vector `keypoints`
@@ -108,14 +108,14 @@ namespace ct_icp {
     //      If `options.point_to_plane_with_distortion` is true, then at each step, the keypoints are distorted
     //      At each iteration, after refinement of the estimate of the end pose of the trajectory frame
     //
-    // Note: Elastic_ICP will modify the last TrajectoryFrame of the trajectory vector
+    // Note: CT_ICP_CERES will modify the last TrajectoryFrame of the trajectory vector
     bool CT_ICP_CERES(const CTICPOptions &options,
-                    const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-                    std::vector<TrajectoryFrame> &trajectory, int index_frame);
+                      const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
+                      std::vector<TrajectoryFrame> &trajectory, int index_frame);
 
-    bool CT_ICP_GN(const CTICPOptions& options,
-        const VoxelHashMap& voxels_map, std::vector<Point3D>& keypoints,
-        std::vector<TrajectoryFrame>& trajectory, int index_frame);
+    bool CT_ICP_GN(const CTICPOptions &options,
+                   const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
+                   std::vector<TrajectoryFrame> &trajectory, int index_frame);
 
 } // namespace Elastic_ICP
 
