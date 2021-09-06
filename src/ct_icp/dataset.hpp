@@ -10,8 +10,8 @@ namespace ct_icp {
         KITTI_raw = 0,
         KITTI_CARLA = 1,
         KITTI = 2,
-        NCLT = 3
-        // TODO KITTI-360
+        KITTI_360 = 3,
+        NCLT = 4
     };
 
     class DatasetSequence {

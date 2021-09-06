@@ -21,13 +21,15 @@ namespace ct_icp {
     struct OdometryOptions {
 
         /* Parameters for initialization of the map */
-        double init_sample_voxel_size = 0.2;
+        double init_voxel_size = 0.2;
 
-        int init_num_frames = 50; // The number of frames defining the initialization of the map
+        double init_sample_voxel_size = 1.0;
+
+        int init_num_frames = 20; // The number of frames defining the initialization of the map
 
         double voxel_size = 0.5;
 
-        double sample_voxel_size = 1.0;
+        double sample_voxel_size = 1.5;
 
         double max_distance = 100.0; // The threshold on the voxel size to remove points from the map
 

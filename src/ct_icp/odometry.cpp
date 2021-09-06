@@ -108,7 +108,7 @@ namespace ct_icp {
 
         //Subsample the scan with voxels taking one random in every voxel
         if (index_frame < options_.init_num_frames) {
-            sub_sample_frame(frame, options_.init_sample_voxel_size);
+            sub_sample_frame(frame, options_.init_voxel_size);
         } else {
             sub_sample_frame(frame, kSizeVoxelInitSample);
         }
@@ -125,7 +125,28 @@ namespace ct_icp {
             trajectory_[index_frame].begin_t = Eigen::Vector3d(0., 0., 0.);
             trajectory_[index_frame].end_R = Eigen::MatrixXd::Identity(3, 3);
             trajectory_[index_frame].end_t = Eigen::Vector3d(0., 0., 0.);
-        } else {
+        }
+        else if (index_frame == 2) {
+            if (options_.initialization == INIT_CONSTANT_VELOCITY) {
+                Eigen::Matrix3d R_next_end =
+                    trajectory_[index_frame - 1].end_R * trajectory_[index_frame - 2].end_R.inverse() *
+                    trajectory_[index_frame - 1].end_R;
+                Eigen::Vector3d t_next_end = trajectory_[index_frame - 1].end_t +
+                    trajectory_[index_frame - 1].end_R *
+                    trajectory_[index_frame - 2].end_R.inverse() *
+                    (trajectory_[index_frame - 1].end_t -
+                        trajectory_[index_frame - 2].end_t);
+
+                trajectory_[index_frame].begin_R = trajectory_[index_frame - 1].end_R;
+                trajectory_[index_frame].begin_t = trajectory_[index_frame - 1].end_t;
+                trajectory_[index_frame].end_R = R_next_end;
+                trajectory_[index_frame].end_t = t_next_end;
+            }
+            else {
+                trajectory_[index_frame] = trajectory_[index_frame - 1];
+            }
+        }
+        else {
             if (options_.initialization == INIT_CONSTANT_VELOCITY) {
                 Eigen::Matrix3d R_next_begin =
                         trajectory_[index_frame - 1].begin_R * trajectory_[index_frame - 2].begin_R.inverse() *
@@ -151,6 +172,13 @@ namespace ct_icp {
                 trajectory_[index_frame].end_t = t_next_end;
             } else {
                 trajectory_[index_frame] = trajectory_[index_frame - 1];
+            }
+        }
+
+        // No elastic ICP for first frame because no initialization of ego-motion
+        if (index_frame == 1) {
+            for (auto &point3D: frame) {
+                point3D.alpha_timestamp = 1.0;
             }
         }
 
@@ -184,7 +212,12 @@ namespace ct_icp {
 
             // Use new sub_sample frame as keypoints
             std::vector<Point3D> keypoints;
-            grid_sampling(frame, keypoints, options_.sample_voxel_size);
+            if (index_frame < options_.init_num_frames) {
+                grid_sampling(frame, keypoints, options_.init_sample_voxel_size);
+            }
+            else {
+                grid_sampling(frame, keypoints, options_.sample_voxel_size);
+            }
 
             auto num_keypoints = (int) keypoints.size();
             if (kDisplay) {

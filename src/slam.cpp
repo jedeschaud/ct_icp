@@ -92,13 +92,15 @@ SLAMOptions read_config(const std::string &config_path) {
 
         if (dataset_node["dataset"]) {
             auto dataset = dataset_node["dataset"].as<std::string>();
-            CHECK(dataset == "KITTI_raw" || dataset == "KITTI_CARLA" || dataset == "KITTI" || dataset == "NCLT");
+            CHECK(dataset == "KITTI_raw" || dataset == "KITTI_CARLA" || dataset == "KITTI" || dataset == "KITTI-360" || dataset == "NCLT");
             if (dataset == "KITTI_raw")
                 dataset_options.dataset = KITTI_raw;
             if (dataset == "KITTI_CARLA")
                 dataset_options.dataset = KITTI_CARLA;
             if (dataset == "KITTI")
                 dataset_options.dataset = KITTI;
+            if (dataset == "KITTI-360")
+                dataset_options.dataset = KITTI_360;
             if (dataset == "NCLT")
                 dataset_options.dataset = NCLT;
         }
@@ -233,7 +235,7 @@ SLAMOptions read_arguments(int argc, char **argv) {
                                                 "Path to the yaml configuration file on disk",
                                                 false, "", "string");
         TCLAP::ValueArg<std::string> dataset_arg("d", "dataset",
-                                                 "Dataset run for the execution (must be in [KITTI_raw, KITTI-CARLA, KITTI])",
+                                                 "Dataset run for the execution (must be in [KITTI_raw, KITTI-CARLA, KITTI, KITTI-360])",
                                                  false, "KITTI_raw", "string");
         TCLAP::ValueArg<std::string> dataset_root_arg("r", "dataset_root", "Dataset Root Path on Disk",
                                                       false, "", "string");
@@ -267,8 +269,8 @@ SLAMOptions read_arguments(int argc, char **argv) {
 
 
         std::string dataset = dataset_arg.getValue();
-        if (dataset != "KITTI_raw" && dataset != "KITTI_CARLA" && dataset != "KITTI") {
-            std::cerr << "Unrecognised dataset" << dataset << ", expected 'KITTI_raw' or 'KITTI_CARLA' or 'KITTI'. Exiting"
+        if (dataset != "KITTI_raw" && dataset != "KITTI_CARLA" && dataset != "KITTI" && dataset != "KITTI-360") {
+            std::cerr << "Unrecognised dataset" << dataset << ", expected 'KITTI_raw' or 'KITTI_CARLA' or 'KITTI' or 'KITTI-360'. Exiting"
                       << std::endl;
             exit(1);
         }
@@ -278,6 +280,8 @@ SLAMOptions read_arguments(int argc, char **argv) {
             options.dataset_options.dataset = DATASET::KITTI_CARLA;
         if (dataset == "KITTI")
             options.dataset_options.dataset = DATASET::KITTI;
+        if (dataset == "KITTI-360")
+            options.dataset_options.dataset = DATASET::KITTI_360;
 
         options.dataset_options.root_path = dataset_root_arg.getValue();
         options.max_num_threads = max_num_threads_arg.getValue();
@@ -427,6 +431,7 @@ int main(int argc, char **argv) {
 
         auto trajectory = ct_icp_odometry.Trajectory();
         auto trajectory_absolute_poses = transform_trajectory_frame(options.dataset_options, trajectory, sequence_id);
+        //auto trajectory_absolute_poses = LoadPoses(options.output_dir + sequence_name(options.dataset_options, sequence_id) + "_poses.txt");
 
         // Save Trajectory And Compute metrics for trajectory with ground truths
 

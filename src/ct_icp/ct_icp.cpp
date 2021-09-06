@@ -353,7 +353,7 @@ namespace ct_icp {
                      const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
                      std::vector<TrajectoryFrame> &trajectory, int index_frame) {
 
-        const short nb_voxels_visited = index_frame < 50 ? 2 : options.voxel_neighborhood;
+        const short nb_voxels_visited = index_frame < options.init_num_frames ? 2 : options.voxel_neighborhood;
         const int kMinNumNeighbors = options.min_number_neighbors;
 
 
@@ -383,7 +383,8 @@ namespace ct_icp {
             builder.DistortFrame(begin_quat, end_quat, begin_t, end_t);
         }
 
-        for (int iter(0); iter < options.num_iters_icp; iter++) {
+        int num_iter_icp = index_frame < options.init_num_frames ? 15 : options.num_iters_icp;
+        for (int iter(0); iter < num_iter_icp; iter++) {
 
 
             builder.InitProblem(keypoints.size() * options.num_closest_neighbors);
@@ -511,11 +512,11 @@ namespace ct_icp {
                    std::vector<TrajectoryFrame> &trajectory, int index_frame) {
 
         //Optimization with Traj constraints
-        const double ALPHA_C = options.beta_location_consistency; // 0.001;
-        const double ALPHA_E = options.beta_constant_velocity; // 0.001; //no ego (0.0) is not working
+        double ALPHA_C = options.beta_location_consistency; // 0.001;
+        double ALPHA_E = options.beta_constant_velocity; // 0.001; //no ego (0.0) is not working
 
         // For the 50 first frames, visit 2 voxels
-        const short nb_voxels_visited = index_frame < 50 ? 2 : 1;
+        const short nb_voxels_visited = index_frame < options.init_num_frames ? 2 : 1;
         int number_keypoints_used = 0;
         const int kMinNumNeighbors = options.min_number_neighbors;
 
@@ -532,8 +533,8 @@ namespace ct_icp {
         double elapsed_solve = 0.0;
         double elapsed_update = 0.0;
 
-
-        for (int iter(0); iter < options.num_iters_icp; iter++) {
+        int num_iter_icp = index_frame < options.init_num_frames ? 15 : options.num_iters_icp;
+        for (int iter(0); iter < num_iter_icp; iter++) {
             A = Eigen::MatrixXd::Zero(12, 12);
             b = Eigen::VectorXd::Zero(12);
 

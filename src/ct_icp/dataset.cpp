@@ -35,26 +35,22 @@ namespace ct_icp {
 
     // Calibration Sequence 00, 01, 02, 13, 14, 15, 16, 17, 18, 19, 20, 21
     const double R_Tr_data_A_KITTI[] = {4.276802385584e-04, -9.999672484946e-01, -8.084491683471e-03,
-                                        -7.210626507497e-03,
-                                        8.081198471645e-03, -9.999413164504e-01, 9.999738645903e-01, 4.859485810390e-04,
-                                        -7.206933692422e-03};
+                                        -7.210626507497e-03, 8.081198471645e-03, -9.999413164504e-01, 
+                                        9.999738645903e-01, 4.859485810390e-04, -7.206933692422e-03};
     Eigen::Matrix3d R_Tr_A_KITTI(R_Tr_data_A_KITTI);
     Eigen::Vector3d T_Tr_A_KITTI = Eigen::Vector3d(-1.198459927713e-02, -5.403984729748e-02, -2.921968648686e-01);
 
     // Calibration Sequence 03
     const double R_Tr_data_B_KITTI[] = {2.347736981471e-04, -9.999441545438e-01, -1.056347781105e-02,
-                                        1.044940741659e-02,
-                                        1.056535364138e-02, -9.998895741176e-01, 9.999453885620e-01, 1.243653783865e-04,
-                                        1.045130299567e-02};
+                                        1.044940741659e-02, 1.056535364138e-02, -9.998895741176e-01,
+                                        9.999453885620e-01, 1.243653783865e-04, 1.045130299567e-02};
     const Eigen::Matrix3d R_Tr_B_KITTI(R_Tr_data_B_KITTI);
     const Eigen::Vector3d T_Tr_B_KITTI = Eigen::Vector3d(-2.796816941295e-03, -7.510879138296e-02, -2.721327964059e-01);
 
     // Calibration Sequence 04, 05, 06, 07, 08, 09, 10, 11, 12
     const double R_Tr_data_C_KITTI[] = {-1.857739385241e-03, -9.999659513510e-01, -8.039975204516e-03,
-                                        -6.481465826011e-03,
-                                        8.051860151134e-03, -9.999466081774e-01, 9.999773098287e-01,
-                                        -1.805528627661e-03,
-                                        -6.496203536139e-03};
+                                        -6.481465826011e-03, 8.051860151134e-03, -9.999466081774e-01, 
+                                        9.999773098287e-01, -1.805528627661e-03, -6.496203536139e-03};
     const Eigen::Matrix3d R_Tr_C_KITTI(R_Tr_data_C_KITTI);
     const Eigen::Vector3d T_Tr_C_KITTI = Eigen::Vector3d(-4.784029760483e-03, -7.337429464231e-02, -3.339968064433e-01);
 
@@ -69,6 +65,22 @@ namespace ct_icp {
                                                 T_Tr_A_KITTI, T_Tr_A_KITTI, T_Tr_A_KITTI, T_Tr_A_KITTI, T_Tr_A_KITTI,
                                                 T_Tr_A_KITTI, T_Tr_A_KITTI};
 
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// HARD CODED VALUES FOR KITTI-360
+    const char* KITTI_360_SEQUENCE_NAMES[] = {
+            "00", "02", "03", "04", "05", "06", "07", "09", "10"
+    };
+    const int KITTI_360_SEQUENCE_IDS[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8};
+    const int NUMBER_SEQUENCES_KITTI_360 = 9;
+    const int LENGTH_SEQUENCE_KITTI_360[] = { 11500, 19230, 1029, 11399, 6722, 9697, 3160, 13954, 3742 };
+
+    // Calibration
+    const double R_Tr_data_KITTI_360[] = { 0.04307104361, -0.999004371, -0.01162548558,
+                                           -0.08829286498, 0.007784614041, -0.9960641394,
+                                            0.995162929, 0.04392796942, -0.08786966659 };
+    const Eigen::Matrix3d R_Tr_KITTI_360(R_Tr_data_KITTI_360);
+    Eigen::Vector3d T_Tr_KITTI_360 = Eigen::Vector3d(0.26234696, -0.10763414, -0.82920525);
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// HARD CODED VALUES FOR KITTI-CARLA
@@ -109,6 +121,9 @@ namespace ct_icp {
             case KITTI:
                 folder_path += sequence_name + "/frames/";
                 break;
+            case KITTI_360:
+                folder_path += sequence_name + "/frames/";
+                break;
             case NCLT:
                 throw std::runtime_error("Not Implemented!");
         };
@@ -132,6 +147,9 @@ namespace ct_icp {
             case KITTI:
                 ground_truth_path += sequence_name + "/" + sequence_name + ".txt";
                 break;
+            case KITTI_360:
+                ground_truth_path += sequence_name + "/" + sequence_name + ".txt";
+                break;
             case NCLT:
                 throw std::runtime_error("Not Implemented!");
         }
@@ -141,6 +159,12 @@ namespace ct_icp {
     inline std::string frame_file_name(int frame_id) {
         std::stringstream ss;
         ss << std::setw(4) << std::setfill('0') << frame_id;
+        return "frame_" + ss.str() + ".ply";
+    }
+
+    inline std::string frame_file_name_kitti_360(int frame_id) {
+        std::stringstream ss;
+        ss << std::setw(5) << std::setfill('0') << frame_id;
         return "frame_" + ss.str() + ".ply";
     }
 
@@ -158,6 +182,9 @@ namespace ct_icp {
                 break;
             case KITTI:
                 num_sequences = NUMBER_SEQUENCES_KITTI;
+                break;
+            case KITTI_360:
+                num_sequences = NUMBER_SEQUENCES_KITTI_360;
                 break;
             case NCLT:
                 num_sequences = 27;
@@ -183,6 +210,11 @@ namespace ct_icp {
                     new_sequence_info.sequence_id = KITTI_SEQUENCE_IDS[i];
                     new_sequence_info.sequence_size = LENGTH_SEQUENCE_KITTI[new_sequence_info.sequence_id] + 1;
                     new_sequence_info.sequence_name = KITTI_SEQUENCE_NAMES[new_sequence_info.sequence_id];
+                    break;
+                case KITTI_360:
+                    new_sequence_info.sequence_id = KITTI_360_SEQUENCE_IDS[i];
+                    new_sequence_info.sequence_size = LENGTH_SEQUENCE_KITTI_360[new_sequence_info.sequence_id] + 1;
+                    new_sequence_info.sequence_name = KITTI_360_SEQUENCE_NAMES[new_sequence_info.sequence_id];
                     break;
                 case NCLT:
                     new_sequence_info.sequence_id = i;
@@ -225,6 +257,9 @@ namespace ct_icp {
                 return read_kitti_carla_pointcloud(options, frame_path);
             case KITTI:
                 return read_kitti_pointcloud(options, frame_path);
+            case KITTI_360:
+                frame_path = frames_dir_path + frame_file_name_kitti_360(frame_id);
+                return read_kitti_raw_pointcloud(options, frame_path);
             case NCLT:
                 throw std::runtime_error(
                         "PointClouds from the NCLT Dataset do not allow random access (reading velodyne_hits.bin for timestamps)");
@@ -241,6 +276,8 @@ namespace ct_icp {
                 return KITTI_CARLA_SEQUENCE_NAMES[sequence_id];
             case KITTI:
                 return KITTI_SEQUENCE_NAMES[sequence_id];
+            case KITTI_360:
+                return KITTI_360_SEQUENCE_NAMES[sequence_id];
             case NCLT:
                 return NCLT_SEQUENCE_NAMES[sequence_id];
         }
@@ -455,8 +492,41 @@ namespace ct_icp {
             Eigen::Vector3d t_end = frame.end_t;
             Eigen::Quaterniond q = q_begin.slerp(0.5, q_end);
             q.normalize();
-            center_R = q.toRotationMatrix(); //q_end.toRotationMatrix();  
-            center_t = 0.5 * t_begin + 0.5 * t_end; //t_end;
+            center_R = q.toRotationMatrix();
+            center_t = 0.5 * t_begin + 0.5 * t_end;
+
+            //Transform the data into the left camera reference frame (left camera) and evaluate SLAM
+            center_R = R_Tr * center_R * R_Tr.transpose();
+            center_t = -center_R * T_Tr + T_Tr + R_Tr * center_t;
+
+            Eigen::Matrix4d pose = Eigen::Matrix4d::Identity();
+            pose.block<3, 3>(0, 0) = center_R;
+            pose.block<3, 1>(0, 3) = center_t;
+            poses.push_back(pose);
+        }
+        return poses;
+    }
+
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    ArrayPoses kitti_360_transform_trajectory_frame(const vector<TrajectoryFrame>& trajectory, int sequence_id) {
+        // For KITTI_raw the evaluation counts the middle of the frame as the pose which is compared to the ground truth
+        ArrayPoses poses;
+        Eigen::Matrix3d R_Tr = R_Tr_KITTI_360.transpose(); //denoting the rigid transformation from the first camera (image_00) to the Velodyne.
+        Eigen::Vector3d T_Tr = T_Tr_KITTI_360; //denoting the rigid transformation from the first camera (image_00) to the Velodyne.
+
+        poses.reserve(trajectory.size());
+        for (auto& frame : trajectory) {
+            Eigen::Matrix3d center_R;
+            Eigen::Vector3d center_t;
+            Eigen::Quaterniond q_begin = Eigen::Quaterniond(frame.begin_R);
+            Eigen::Quaterniond q_end = Eigen::Quaterniond(frame.end_R);
+            Eigen::Vector3d t_begin = frame.begin_t;
+            Eigen::Vector3d t_end = frame.end_t;
+            Eigen::Quaterniond q = q_begin.slerp(0.5, q_end);
+            q.normalize();
+            center_R = q.toRotationMatrix();
+            center_t = 0.5 * t_begin + 0.5 * t_end;
 
             //Transform the data into the left camera reference frame (left camera) and evaluate SLAM
             center_R = R_Tr * center_R * R_Tr.transpose();
@@ -544,6 +614,8 @@ namespace ct_icp {
                 return kitti_carla_transform_trajectory_frame(trajectory);
             case KITTI:
                 return kitti_transform_trajectory_frame(trajectory, sequence_id);
+            case KITTI_360:
+                return kitti_360_transform_trajectory_frame(trajectory, sequence_id);
             case NCLT:
                 return nclt_transform_trajectory_frame(trajectory);
         }
@@ -560,6 +632,8 @@ namespace ct_icp {
             case KITTI_CARLA:
                 return sequence_id >= 0 && sequence_id < KITTI_CARLA_NUM_SEQUENCES;
             case KITTI:
+                return sequence_id >= 0 && sequence_id <= 10;
+            case KITTI_360:
                 return sequence_id >= 0 && sequence_id <= 10;
             case NCLT:
                 // TODO Ground truth for NCLT
@@ -608,6 +682,9 @@ namespace ct_icp {
                     break;
                 case KITTI:
                     num_frames_ = LENGTH_SEQUENCE_KITTI[sequence_id] + 1;
+                    break;
+                case KITTI_360:
+                    num_frames_ = LENGTH_SEQUENCE_KITTI_360[sequence_id] + 1;
                     break;
                 default:
                     num_frames_ = -1;
@@ -769,6 +846,7 @@ namespace ct_icp {
             case KITTI_raw:
             case KITTI_CARLA:
             case KITTI:
+            case KITTI_360:
                 return std::make_shared<DirectoryIterator>(options, sequence_id);
             case NCLT:
                 return std::make_shared<NCLTIterator>(options, sequence_id);

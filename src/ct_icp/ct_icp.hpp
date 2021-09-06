@@ -44,6 +44,8 @@ namespace ct_icp {
     // Options for the Elastic_ICP
     struct CTICPOptions {
 
+        int init_num_frames = 20; // The number of frames defining the initialization of the map
+
         double size_voxel_map = 1.0; //Max Voxel : -32767 to 32767 then 32km map for SIZE_VOXEL_MAP = 1m
 
         int num_iters_icp = 5; // The Maximum number of ICP iterations performed
