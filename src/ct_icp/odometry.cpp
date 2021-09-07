@@ -89,46 +89,39 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    Odometry::RegistrationSummary Odometry::RegisterFrame(const std::vector<Point3D> &const_frame) {
-        auto start = std::chrono::steady_clock::now();
+    Odometry::RegistrationSummary Odometry::RegisterFrameWithEstimate(const std::vector<Point3D> &frame,
+                                                                      const TrajectoryFrame &initial_estimate) {
+        auto frame_index = InitializeMotion(&initial_estimate);
+        return DoRegister(frame, frame_index);
+    }
 
-        auto &log_out = std::cout;
-        const bool kDisplay = options_.debug_print;
-        const CTICPOptions &kCTICPOptions = options_.ct_icp_options;
-        const double kSizeVoxelInitSample = options_.voxel_size;
-        const double kSizeVoxelMap = options_.ct_icp_options.size_voxel_map;
-        const double kMinDistancePoints = options_.min_distance_points;
-        std::vector<Point3D> frame(const_frame);
+    /* -------------------------------------------------------------------------------------------------------------- */
+    Odometry::RegistrationSummary Odometry::RegisterFrame(const std::vector<Point3D> &frame) {
+        auto frame_index = InitializeMotion();
+        return DoRegister(frame, frame_index);
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    int Odometry::InitializeMotion(const TrajectoryFrame *initial_estimate) {
         int index_frame = registered_frames_++;
-        const int kMaxNumPointsInVoxel = options_.max_num_points_in_voxel;
-
-        if (kDisplay) {
-            log_out << "/* ------------------------------------------------------------------------ */" << std::endl;
-            log_out << "/* ------------------------------------------------------------------------ */" << std::endl;
-            log_out << "REGISTRATION OF FRAME number " << index_frame << std::endl;
+        if (initial_estimate != nullptr) {
+            // Insert previous estimate
+            trajectory_.emplace_back(*initial_estimate);
+            return index_frame;
         }
-
-        //Subsample the scan with voxels taking one random in every voxel
-        if (index_frame < options_.init_num_frames) {
-            sub_sample_frame(frame, options_.init_voxel_size);
-        } else {
-            sub_sample_frame(frame, kSizeVoxelInitSample);
-        }
-        if (kDisplay)
-            log_out << "Number of points in sub-sampled frame: " << frame.size() << " / " << const_frame.size()
-                    << std::endl;
-
-        RegistrationSummary summary;
 
         // Initial Trajectory Estimate
         trajectory_.emplace_back(TrajectoryFrame());
+
         if (index_frame <= 1) {
+            // Initialize first pose at Identity
             trajectory_[index_frame].begin_R = Eigen::MatrixXd::Identity(3, 3);
             trajectory_[index_frame].begin_t = Eigen::Vector3d(0., 0., 0.);
             trajectory_[index_frame].end_R = Eigen::MatrixXd::Identity(3, 3);
             trajectory_[index_frame].end_t = Eigen::Vector3d(0., 0., 0.);
         } else if (index_frame == 2) {
             if (options_.initialization == INIT_CONSTANT_VELOCITY) {
+                // Different regimen for the second frame due to the bootstrapped elasticity
                 Eigen::Matrix3d R_next_end =
                         trajectory_[index_frame - 1].end_R * trajectory_[index_frame - 2].end_R.inverse() *
                         trajectory_[index_frame - 1].end_R;
@@ -181,6 +174,39 @@ namespace ct_icp {
                 trajectory_[index_frame] = trajectory_[index_frame - 1];
             }
         }
+        return index_frame;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    Odometry::RegistrationSummary Odometry::DoRegister(const std::vector<Point3D> &const_frame,
+                                                       int index_frame) {
+        auto start = std::chrono::steady_clock::now();
+        auto &log_out = std::cout;
+        const bool kDisplay = options_.debug_print;
+        const CTICPOptions &kCTICPOptions = options_.ct_icp_options;
+        const double kSizeVoxelInitSample = options_.voxel_size;
+        const double kSizeVoxelMap = options_.ct_icp_options.size_voxel_map;
+        const double kMinDistancePoints = options_.min_distance_points;
+        std::vector<Point3D> frame(const_frame);
+        const int kMaxNumPointsInVoxel = options_.max_num_points_in_voxel;
+
+        if (kDisplay) {
+            log_out << "/* ------------------------------------------------------------------------ */" << std::endl;
+            log_out << "/* ------------------------------------------------------------------------ */" << std::endl;
+            log_out << "REGISTRATION OF FRAME number " << index_frame << std::endl;
+        }
+
+        //Subsample the scan with voxels taking one random in every voxel
+        if (index_frame < options_.init_num_frames) {
+            sub_sample_frame(frame, options_.init_voxel_size);
+        } else {
+            sub_sample_frame(frame, kSizeVoxelInitSample);
+        }
+        if (kDisplay)
+            log_out << "Number of points in sub-sampled frame: " << frame.size() << " / " << const_frame.size()
+                    << std::endl;
+
+        RegistrationSummary summary;
 
         // No elastic ICP for first frame because no initialization of ego-motion
         if (index_frame == 1) {
@@ -189,9 +215,7 @@ namespace ct_icp {
             }
         }
 
-
         if (index_frame > 1) {
-
             if (options_.motion_compensation == CONSTANT_VELOCITY) {
                 // The motion compensation of Constant velocity modifies the raw points of the point cloud
                 auto &tr_frame = trajectory_[index_frame];
@@ -211,7 +235,6 @@ namespace ct_icp {
             Eigen::Vector3d t_diff = trajectory_[index_frame].end_t - trajectory_[index_frame].begin_t;
             if (kDisplay)
                 log_out << "Initial ego-motion distance: " << t_diff.norm() << std::endl;
-
         }
 
         // Register the new frame against the Map

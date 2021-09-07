@@ -124,6 +124,9 @@ SLAMOptions read_config(const std::string &config_path) {
             OPTION_CLAUSE(odometry_node, odometry_options, debug_print, bool);
             OPTION_CLAUSE(odometry_node, odometry_options, min_distance_points, double);
             OPTION_CLAUSE(odometry_node, odometry_options, distance_error_threshold, double);
+            OPTION_CLAUSE(odometry_node, odometry_options, init_num_frames, int);
+            OPTION_CLAUSE(odometry_node, odometry_options, init_voxel_size, double);
+            OPTION_CLAUSE(odometry_node, odometry_options, init_sample_voxel_size, double);
 
             if (odometry_node["motion_compensation"]) {
                 auto compensation = odometry_node["motion_compensation"].as<std::string>();
@@ -273,7 +276,8 @@ SLAMOptions read_arguments(int argc, char **argv) {
 
         std::string dataset = dataset_arg.getValue();
         if (dataset != "KITTI_raw" && dataset != "KITTI_CARLA" && dataset != "KITTI" && dataset != "KITTI-360") {
-            std::cerr << "Unrecognised dataset" << dataset << ", expected 'KITTI_raw' or 'KITTI_CARLA' or 'KITTI' or 'KITTI-360'. Exiting"
+            std::cerr << "Unrecognised dataset" << dataset
+                      << ", expected 'KITTI_raw' or 'KITTI_CARLA' or 'KITTI' or 'KITTI-360'. Exiting"
                       << std::endl;
             exit(1);
         }
