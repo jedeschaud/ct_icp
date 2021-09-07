@@ -14,7 +14,7 @@ namespace ct_icp {
     OdometryOptions OdometryOptions::DefaultSlowOutdoorProfile() {
         OdometryOptions default_options;
         default_options.voxel_size = 0.5;
-        default_options.sample_voxel_size = 0.5;
+        default_options.sample_voxel_size = 1.0;
         default_options.max_distance = 100.0;
         default_options.max_num_points_in_voxel = 20;
         default_options.min_distance_points = 0.1;
@@ -28,7 +28,7 @@ namespace ct_icp {
         ct_icp_options.min_number_neighbors = 20;
         ct_icp_options.voxel_neighborhood = 1;
         ct_icp_options.max_number_neighbors = 20;
-        ct_icp_options.max_dist_to_plane_ct_icp = 0.8;
+        ct_icp_options.max_dist_to_plane_ct_icp = 0.5;
         ct_icp_options.norm_x_end_iteration_ct_icp = 0.001;
         ct_icp_options.point_to_plane_with_distortion = true;
         ct_icp_options.distance = CT_POINT_TO_PLANE;
@@ -36,9 +36,11 @@ namespace ct_icp {
         ct_icp_options.beta_constant_velocity = 0.0;
         ct_icp_options.beta_location_consistency = 0.0001;
         ct_icp_options.loss_function = CAUCHY;
+        ct_icp_options.solver = CERES;
         ct_icp_options.ls_max_num_iters = 50;
         ct_icp_options.ls_num_threads = 8;
         ct_icp_options.ls_sigma = 0.1;
+        ct_icp_options.ls_tolerant_min_threshold = 0.05;
 
         return default_options;
     }
