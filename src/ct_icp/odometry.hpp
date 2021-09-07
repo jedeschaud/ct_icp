@@ -107,6 +107,7 @@ namespace ct_icp {
 
         explicit Odometry(const OdometryOptions &options) {
             options_ = options;
+            options_.ct_icp_options.init_num_frames = options_.init_num_frames;
             // Update the motion compensation
             switch (options_.motion_compensation) {
                 case MOTION_COMPENSATION::NONE:
@@ -130,9 +131,14 @@ namespace ct_icp {
 
         explicit Odometry(const OdometryOptions *options) : Odometry(*options) {}
 
+        TrajectoryFrame LastInsertedPose() const;
 
         // Registers a new Frame to the Map
         RegistrationSummary RegisterFrame(const std::vector<Point3D> &frame);
+
+        // Registers a new Frame to the Map with an initial estimate
+        RegistrationSummary RegisterFrameWithEstimate(const std::vector<Point3D> &frame,
+                                                      const TrajectoryFrame &initial_estimate);
 
         // Returns the currently registered trajectory
         std::vector<TrajectoryFrame> Trajectory() const;
@@ -149,6 +155,13 @@ namespace ct_icp {
         VoxelHashMap voxel_map_;
         int registered_frames_ = 0;
         OdometryOptions options_;
+
+        // Register a frame after the motion was initialized
+        RegistrationSummary DoRegister(const std::vector<Point3D> &frame, int frame_index);
+
+        // Insert a New Trajectory Frame, and initializes the motion for this new frame
+        int InitializeMotion(const TrajectoryFrame *initial_estimate = nullptr);
+
     };
 
 } // namespace ct_icp
