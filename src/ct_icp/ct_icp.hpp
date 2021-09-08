@@ -26,7 +26,8 @@ namespace ct_icp {
     void sub_sample_frame(std::vector<Point3D> &frame, double size_voxel);
 
     // Samples Keypoints randomly in a voxel grid
-    void grid_sampling(const std::vector<Point3D> &frame, std::vector<Point3D> &keypoints, double size_voxel_subsampling);
+    void
+    grid_sampling(const std::vector<Point3D> &frame, std::vector<Point3D> &keypoints, double size_voxel_subsampling);
 
     enum CT_ICP_SOLVER {
         GN,
@@ -72,6 +73,10 @@ namespace ct_icp {
         double beta_location_consistency = 0.001; // Constraints on location
 
         double beta_constant_velocity = 0.001; // Constraint on velocity
+
+        double beta_small_velocity = 0.0; // Constraint on the relative motion
+
+        double beta_orientation_consistency = 0.0; // Constraint on the orientation consistency
 
         CT_ICP_SOLVER solver = GN;
 

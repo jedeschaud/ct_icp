@@ -106,7 +106,7 @@ namespace ct_icp {
 
         LocationConsistencyFunctor(const Eigen::Vector3d &previous_location,
                                    double beta) : beta_(beta),
-                                                   previous_location_(previous_location) {}
+                                                  previous_location_(previous_location) {}
 
         template<typename T>
         bool operator()(const T *const location_params, T *residual) const {
@@ -120,6 +120,29 @@ namespace ct_icp {
     private:
         Eigen::Vector3d previous_location_;
         double beta_ = 1.0;
+    };
+
+    // A Functor which enforces frame orientation consistency between two poses
+    struct OrientationConsistencyFunctor {
+
+        static constexpr int NumResiduals() { return 1; }
+
+        OrientationConsistencyFunctor(const Eigen::Quaterniond &previous_orientation,
+                                      double beta) : beta_(beta), previous_orientation_(previous_orientation) {}
+
+        template<typename T>
+        bool operator()(const T *const orientation_params, T *residual) const {
+            Eigen::Quaternion<T> quat(orientation_params);
+            T scalar_quat = quat.dot(previous_orientation_.template cast<T>());
+            residual[0] = T(beta_) * (T(1.0) - scalar_quat * scalar_quat);
+            return true;
+        }
+
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    private:
+        Eigen::Quaterniond previous_orientation_;
+        double beta_;
+
     };
 
     // A Const Functor which enforces a Constant Velocity constraint on translation
@@ -144,19 +167,41 @@ namespace ct_icp {
         double beta_ = 1.0;
     };
 
+    // A Const Functor which enforces a Small Velocity constraint
+    struct SmallVelocityFunctor {
+
+        static constexpr int NumResiduals() { return 3; }
+
+        SmallVelocityFunctor(double beta) : beta_(beta) {};
+
+        template<typename T>
+        bool operator()(const T *const begin_t, const T *const end_t, T *residual) const {
+            residual[0] = beta_ * (begin_t[0] - end_t[0]);
+            residual[1] = beta_ * (begin_t[1] - end_t[1]);
+            residual[2] = beta_ * (begin_t[2] - end_t[2]);
+            return true;
+        }
+
+        double beta_;
+    };
+
 
     // A Const Functor which enforces a Constant Norm Velocity constraint on translation
     struct ConstantNormVelocityFunctor {
 
         static constexpr int NumResiduals() { return 1; }
 
-        ConstantNormVelocityFunctor(const Eigen::Vector3d& previous_velocity,
-            double beta) : previous_velocity_(previous_velocity), beta_(beta) {}
+        ConstantNormVelocityFunctor(const Eigen::Vector3d &previous_velocity,
+                                    double beta) : previous_velocity_(previous_velocity), beta_(beta) {}
 
         template<typename T>
-        bool operator()(const T* const begin_t, const T* const end_t, T* residual) const {
-            residual[0] = beta_ * (sqrt((end_t[0] - begin_t[0]) * (end_t[0] - begin_t[0]) + (end_t[1] - begin_t[1]) * (end_t[1] - begin_t[1]) + (end_t[2] - begin_t[2]) * (end_t[2] - begin_t[2]))
-                - sqrt(previous_velocity_(0, 0) * previous_velocity_(0, 0) + previous_velocity_(1, 0) * previous_velocity_(1, 0) + previous_velocity_(2, 0) * previous_velocity_(2, 0)));
+        bool operator()(const T *const begin_t, const T *const end_t, T *residual) const {
+            residual[0] = beta_ * (sqrt((end_t[0] - begin_t[0]) * (end_t[0] - begin_t[0]) +
+                                        (end_t[1] - begin_t[1]) * (end_t[1] - begin_t[1]) +
+                                        (end_t[2] - begin_t[2]) * (end_t[2] - begin_t[2]))
+                                   - sqrt(previous_velocity_(0, 0) * previous_velocity_(0, 0) +
+                                          previous_velocity_(1, 0) * previous_velocity_(1, 0) +
+                                          previous_velocity_(2, 0) * previous_velocity_(2, 0)));
             return true;
         }
 
