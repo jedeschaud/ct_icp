@@ -14,17 +14,20 @@ namespace ct_icp {
     OdometryOptions OdometryOptions::DefaultSlowOutdoorProfile() {
         OdometryOptions default_options;
         default_options.voxel_size = 0.5;
-        default_options.sample_voxel_size = 1.0;
+        default_options.sample_voxel_size = 1.5;
         default_options.max_distance = 100.0;
         default_options.max_num_points_in_voxel = 20;
         default_options.min_distance_points = 0.1;
         default_options.distance_error_threshold = 5.0;
         default_options.motion_compensation = CONTINUOUS;
         default_options.initialization = INIT_NONE;
+        default_options.robust_registration = true;
+        default_options.robust_full_voxel_threshold = 0.7;
+        default_options.robust_num_attempts = 6;
 
         auto &ct_icp_options = default_options.ct_icp_options;
-        ct_icp_options.size_voxel_map = 0.5;
-        ct_icp_options.num_iters_icp = 50;
+        ct_icp_options.size_voxel_map = 1.0;
+        ct_icp_options.num_iters_icp = 30;
         ct_icp_options.min_number_neighbors = 20;
         ct_icp_options.voxel_neighborhood = 1;
         ct_icp_options.max_number_neighbors = 20;
@@ -37,7 +40,7 @@ namespace ct_icp {
         ct_icp_options.beta_location_consistency = 0.0001;
         ct_icp_options.loss_function = CAUCHY;
         ct_icp_options.solver = CERES;
-        ct_icp_options.ls_max_num_iters = 50;
+        ct_icp_options.ls_max_num_iters = 5;
         ct_icp_options.ls_num_threads = 8;
         ct_icp_options.ls_sigma = 0.1;
         ct_icp_options.ls_tolerant_min_threshold = 0.05;
@@ -178,35 +181,14 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    Odometry::RegistrationSummary Odometry::DoRegister(const std::vector<Point3D> &const_frame,
-                                                       int index_frame) {
-        auto start = std::chrono::steady_clock::now();
-        auto &log_out = std::cout;
-        const bool kDisplay = options_.debug_print;
-        const CTICPOptions &kCTICPOptions = options_.ct_icp_options;
-        const double kSizeVoxelInitSample = options_.voxel_size;
-        const double kSizeVoxelMap = options_.ct_icp_options.size_voxel_map;
-        const double kMinDistancePoints = options_.min_distance_points;
+    std::vector<Point3D> Odometry::InitializeFrame(const std::vector<Point3D> &const_frame,
+                                                   int index_frame) {
+
+        /// PREPROCESS THE INITIAL FRAME
+        double sample_size = index_frame < options_.init_num_frames ? options_.init_voxel_size : options_.voxel_size;
         std::vector<Point3D> frame(const_frame);
-        const int kMaxNumPointsInVoxel = options_.max_num_points_in_voxel;
-
-        if (kDisplay) {
-            log_out << "/* ------------------------------------------------------------------------ */" << std::endl;
-            log_out << "/* ------------------------------------------------------------------------ */" << std::endl;
-            log_out << "REGISTRATION OF FRAME number " << index_frame << std::endl;
-        }
-
         //Subsample the scan with voxels taking one random in every voxel
-        if (index_frame < options_.init_num_frames) {
-            sub_sample_frame(frame, options_.init_voxel_size);
-        } else {
-            sub_sample_frame(frame, kSizeVoxelInitSample);
-        }
-        if (kDisplay)
-            log_out << "Number of points in sub-sampled frame: " << frame.size() << " / " << const_frame.size()
-                    << std::endl;
-
-        RegistrationSummary summary;
+        sub_sample_frame(frame, sample_size);
 
         // No elastic ICP for first frame because no initialization of ego-motion
         if (index_frame == 1) {
@@ -231,95 +213,103 @@ namespace ct_icp {
             for (auto &point3D: frame) {
                 TransformPoint(options_.motion_compensation, point3D, q_begin, q_end, t_begin, t_end);
             }
+        }
 
+        for (auto &point: frame)
+            point.index_frame = index_frame;
+
+        return frame;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    Odometry::RegistrationSummary Odometry::DoRegister(const std::vector<Point3D> &const_frame,
+                                                       int index_frame) {
+        auto start = std::chrono::steady_clock::now();
+        auto &log_out = std::cout;
+        const bool kDisplay = options_.debug_print;
+        CTICPOptions ct_icp_options = options_.ct_icp_options; // Make a copy of the options
+        const double kSizeVoxelInitSample = options_.voxel_size;
+
+        const double kSizeVoxelMap = options_.ct_icp_options.size_voxel_map;
+        const double kMinDistancePoints = options_.min_distance_points;
+        const int kMaxNumPointsInVoxel = options_.max_num_points_in_voxel;
+
+        if (kDisplay) {
+            log_out << "/* ------------------------------------------------------------------------ */" << std::endl;
+            log_out << "/* ------------------------------------------------------------------------ */" << std::endl;
+            log_out << "REGISTRATION OF FRAME number " << index_frame <<
+                    " with " << (options_.ct_icp_options.solver == CERES ? "CERES" : "GN") << " solver" << std::endl;
+        }
+
+        auto frame = InitializeFrame(const_frame, index_frame);
+        if (kDisplay)
+            log_out << "Number of points in sub-sampled frame: " << frame.size() << " / " << const_frame.size()
+                    << std::endl;
+        if (index_frame > 0) {
             Eigen::Vector3d t_diff = trajectory_[index_frame].end_t - trajectory_[index_frame].begin_t;
             if (kDisplay)
                 log_out << "Initial ego-motion distance: " << t_diff.norm() << std::endl;
         }
 
-        // Register the new frame against the Map
+        auto initial_estimate = trajectory_.back();
+        RegistrationSummary summary;
         if (index_frame > 0) {
-
-            // Use new sub_sample frame as keypoints
-            std::vector<Point3D> keypoints;
-            if (index_frame < options_.init_num_frames) {
-                grid_sampling(frame, keypoints, options_.init_sample_voxel_size);
-            } else {
-                grid_sampling(frame, keypoints, options_.sample_voxel_size);
-            }
-
-            auto num_keypoints = (int) keypoints.size();
-            if (kDisplay) {
-                log_out << "Number of keypoints: " << num_keypoints << std::endl;
-            }
-            summary.sample_size = num_keypoints;
-
-            // Remove voxels too far from actual position of the vehicule
-            const double kMaxDistance = options_.max_distance;
-            const Eigen::Vector3d location = trajectory_[index_frame].end_t;
-            RemovePointsFarFromLocation(voxel_map_, location, kMaxDistance);
-
-
-            int number_keypoints_used = 0;
-            {
+            bool success = false;
+            int num_attempt = 1;
+            double sample_voxel_size = index_frame < options_.init_num_frames ?
+                                       options_.init_sample_voxel_size : options_.sample_voxel_size;
+            double min_voxel_size = std::min(options_.init_voxel_size, options_.voxel_size);
+            do {
                 auto start_ct_icp = std::chrono::steady_clock::now();
-
-                bool success = false;
-                //CT ICP
-                if (options_.ct_icp_options.solver == CT_ICP_SOLVER::GN) {
-                    if (kDisplay)
-                        log_out << "Starting CT-ICP with solver Gaus-Newton " << std::endl;
-                    success = CT_ICP_GN(kCTICPOptions, voxel_map_, keypoints, trajectory_, index_frame);
-                } else {
-                    if (kDisplay)
-                        log_out << "Starting CT-ICP with solver CERES " << std::endl;
-                    success = CT_ICP_CERES(kCTICPOptions, voxel_map_, keypoints, trajectory_, index_frame);
-                }
-
-
-                if (!success) {
-                    summary.success = false;
-                    return summary;
-                }
-
-                //Update frame
-                Eigen::Quaterniond q_begin = Eigen::Quaterniond(trajectory_[index_frame].begin_R);
-                Eigen::Quaterniond q_end = Eigen::Quaterniond(trajectory_[index_frame].end_R);
-                Eigen::Vector3d t_begin = trajectory_[index_frame].begin_t;
-                Eigen::Vector3d t_end = trajectory_[index_frame].end_t;
-                for (auto &point: frame) {
-                    TransformPoint(options_.motion_compensation, point, q_begin, q_end, t_begin, t_end);
-                }
+                TryRegister(frame, index_frame, ct_icp_options, summary, sample_voxel_size);
                 auto end_ct_icp = std::chrono::steady_clock::now();
                 std::chrono::duration<double> elapsed_icp = (end_ct_icp - start);
                 if (kDisplay)
                     log_out << "Elapsed Elastic_ICP: " << (elapsed_icp.count()) * 1000.0 << std::endl;
-            }
-            summary.number_keypoints = number_keypoints_used;
+
+                success = AssessRegistration(frame, summary, kDisplay ? &log_out : nullptr);
+                if (options_.robust_fail_early)
+                    summary.success = success;
+                if (!success) {
+                    // Either fail or
+                    if (kDisplay)
+                        log_out << "Registration Attempt n°" << num_attempt << " failed with message: "
+                                << summary.error_message << std::endl;
+                    if (options_.robust_registration && num_attempt < options_.robust_num_attempts) {
+                        // Handle the failure cases
+                        trajectory_.back() = initial_estimate;
+                        ct_icp_options.voxel_neighborhood = std::min(++ct_icp_options.voxel_neighborhood,
+                                                                     options_.robust_max_voxel_neighborhood);
+                        ct_icp_options.ls_max_num_iters += 10;
+                        ct_icp_options.num_iters_icp = int(ct_icp_options.num_iters_icp * 1.5);
+                        ct_icp_options.ls_sigma *= 1.2;
+
+                        sample_voxel_size = std::max(sample_voxel_size / 1.5, min_voxel_size);
+
+                        num_attempt++;
+                    } else {
+                        success = true;
+                    }
+                }
+            } while (!success);
+            summary.number_of_attempts = num_attempt;
+
+            if (!summary.success)
+                return summary;
         }
 
-        summary.frame = trajectory_[index_frame];
         // Compute Modification of trajectory
         if (index_frame > 0)
             summary.distance_correction = (trajectory_[index_frame].begin_t -
                                            trajectory_[index_frame - 1].end_t).norm();
 
         summary.relative_distance = (trajectory_[index_frame].end_t - trajectory_[index_frame].begin_t).norm();
-
-        if (summary.relative_distance > options_.distance_error_threshold) {
-            summary.success = false;
-            if (kDisplay)
-                log_out << "Error in ego-motion distance !" << std::endl;
-            return summary;
-        }
-
         if (kDisplay) {
             if (index_frame > 0) {
                 log_out << "Trajectory correction [begin(t) - end(t-1)]: "
                         << summary.distance_correction << std::endl;
                 log_out << "Final ego-motion distance: " << summary.relative_distance << std::endl;
             }
-
         }
 
         if (index_frame == 0) {
@@ -329,22 +319,24 @@ namespace ct_icp {
         //Update Voxel Map+
         AddPointsToMap(voxel_map_, frame, kSizeVoxelMap, kMaxNumPointsInVoxel, kMinDistancePoints);
 
+        // Remove voxels too far from actual position of the vehicule
+        const double kMaxDistance = options_.max_distance;
+        const Eigen::Vector3d location = trajectory_[index_frame].end_t;
+        RemovePointsFarFromLocation(voxel_map_, location, kMaxDistance);
+
+
         if (kDisplay) {
             log_out << "Average Load Factor (Map): " << voxel_map_.load_factor() << std::endl;
             log_out << "Number of Buckets (Map): " << voxel_map_.bucket_count() << std::endl;
             log_out << "Number of points (Map): " << MapSize() << std::endl;
-
         }
 
         auto end = std::chrono::steady_clock::now();
         std::chrono::duration<double> elapsed_seconds = end - start;
         if (kDisplay) {
             log_out << "Elapsed Time: " << elapsed_seconds.count() * 1000.0 << " (ms)" << std::endl;
-            //log_out << "[OPENMP] Num Max Threads : " << omp_get_max_threads() << " / Num Procs " << omp_get_num_procs() << std::endl;
         }
 
-        for (auto &point: frame)
-            point.index_frame = index_frame;
 
         summary.corrected_points = frame;
         summary.all_corrected_points = const_frame;
@@ -364,6 +356,84 @@ namespace ct_icp {
 
 
     /* -------------------------------------------------------------------------------------------------------------- */
+    Odometry::RegistrationSummary Odometry::TryRegister(vector<Point3D> &frame, int index_frame,
+                                                        const CTICPOptions &options,
+                                                        RegistrationSummary &summary,
+                                                        double sample_voxel_size) {
+        // Use new sub_sample frame as keypoints
+        std::vector<Point3D> keypoints;
+        grid_sampling(frame, keypoints, sample_voxel_size);
+
+        auto num_keypoints = (int) keypoints.size();
+        summary.sample_size = num_keypoints;
+
+        int number_keypoints_used = 0;
+        {
+
+            bool success = false;
+            //CT ICP
+            if (options_.ct_icp_options.solver == CT_ICP_SOLVER::GN) {
+                success = CT_ICP_GN(options, voxel_map_, keypoints, trajectory_, index_frame);
+            } else {
+                success = CT_ICP_CERES(options, voxel_map_, keypoints, trajectory_, index_frame);
+            }
+
+            if (!success) {
+                summary.success = false;
+                return summary;
+            }
+
+            //Update frame
+            Eigen::Quaterniond q_begin = Eigen::Quaterniond(trajectory_[index_frame].begin_R);
+            Eigen::Quaterniond q_end = Eigen::Quaterniond(trajectory_[index_frame].end_R);
+            Eigen::Vector3d t_begin = trajectory_[index_frame].begin_t;
+            Eigen::Vector3d t_end = trajectory_[index_frame].end_t;
+            for (auto &point: frame) {
+                // Modifies the world point of the frame based on the raw_pt
+                TransformPoint(options_.motion_compensation, point, q_begin, q_end, t_begin, t_end);
+            }
+        }
+        summary.number_keypoints = number_keypoints_used;
+        summary.frame = trajectory_[index_frame];
+        return summary;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    bool Odometry::AssessRegistration(const vector<Point3D> &points,
+                                      RegistrationSummary &summary, std::ostream *log_stream) const {
+
+        bool success = summary.success;
+        if (registered_frames_ > options_.init_num_frames) {
+            if (options_.robust_registration) {
+                const double kSizeVoxelMap = options_.ct_icp_options.size_voxel_map;
+
+                Voxel voxel;
+                double ratio_voxel_occupied = 0;
+                for (auto &point: points) {
+                    voxel = Voxel::Coordinates(point.pt, kSizeVoxelMap);
+                    if (voxel_map_.find(voxel) != voxel_map_.end())
+                        ratio_voxel_occupied += voxel_map_.at(voxel).IsFull() ? 1 : 0;
+                }
+
+                ratio_voxel_occupied /= points.size();
+                if (ratio_voxel_occupied < options_.robust_full_voxel_threshold) {
+                    success = false;
+                    summary.error_message = "[Odometry::AssessRegistration] Ratio of new occupied voxels " +
+                                            std::to_string(ratio_voxel_occupied) + "below threshold.";
+                }
+            }
+        }
+
+        if (summary.relative_distance > options_.distance_error_threshold) {
+            if (log_stream != nullptr)
+                *log_stream << "Error in ego-motion distance !" << std::endl;
+            return false;
+        }
+
+        return success;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
     std::vector<TrajectoryFrame> Odometry::Trajectory() const {
         return trajectory_;
     }
@@ -372,6 +442,7 @@ namespace ct_icp {
     ArrayVector3d Odometry::GetLocalMap() const {
         return MapAsPointcloud(voxel_map_);
     }
+
 
     /* -------------------------------------------------------------------------------------------------------------- */
     ArrayVector3d MapAsPointcloud(const VoxelHashMap &map) {

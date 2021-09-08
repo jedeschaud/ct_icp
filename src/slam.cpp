@@ -122,6 +122,12 @@ SLAMOptions read_config(const std::string &config_path) {
             OPTION_CLAUSE(odometry_node, odometry_options, max_num_points_in_voxel, double);
             OPTION_CLAUSE(odometry_node, odometry_options, max_num_points_in_voxel, int);
             OPTION_CLAUSE(odometry_node, odometry_options, debug_print, bool);
+            OPTION_CLAUSE(odometry_node, odometry_options, robust_registration, bool);
+            OPTION_CLAUSE(odometry_node, odometry_options, robust_full_voxel_threshold, double);
+            OPTION_CLAUSE(odometry_node, odometry_options, robust_fail_early, bool);
+            OPTION_CLAUSE(odometry_node, odometry_options, robust_num_attempts, int);
+            OPTION_CLAUSE(odometry_node, odometry_options, robust_max_voxel_neighborhood, int);
+
             OPTION_CLAUSE(odometry_node, odometry_options, min_distance_points, double);
             OPTION_CLAUSE(odometry_node, odometry_options, distance_error_threshold, double);
             OPTION_CLAUSE(odometry_node, odometry_options, init_num_frames, int);
@@ -375,6 +381,7 @@ int main(int argc, char **argv) {
 
         auto iterator_ptr = get_dataset_sequence(options.dataset_options, sequence_id);
 
+        double avg_number_of_attempts = 0.0;
         int frame_id(0);
         while (iterator_ptr->HasNext() && (options.max_frames < 0 || frame_id < options.max_frames)) {
             auto time_start_frame = std::chrono::steady_clock::now();
@@ -387,6 +394,7 @@ int main(int argc, char **argv) {
             auto time_read_pointcloud = std::chrono::steady_clock::now();
 
             auto summary = ct_icp_odometry.RegisterFrame(frame);
+            avg_number_of_attempts += summary.number_of_attempts;
             auto time_register_frame = std::chrono::steady_clock::now();
 
             std::chrono::duration<double> total_elapsed = time_register_frame - time_start_frame;
@@ -438,10 +446,11 @@ int main(int argc, char **argv) {
             all_seq_num_frames++;
         }
 
+        avg_number_of_attempts /= frame_id;
+
         auto trajectory = ct_icp_odometry.Trajectory();
         auto trajectory_absolute_poses = transform_trajectory_frame(options.dataset_options, trajectory, sequence_id);
         //auto trajectory_absolute_poses = LoadPoses(options.output_dir + sequence_name(options.dataset_options, sequence_id) + "_poses.txt");
-
         // Save Trajectory And Compute metrics for trajectory with ground truths
 
         std::string _sequence_name = sequence_name(options.dataset_options, sequence_id);
@@ -474,12 +483,14 @@ int main(int argc, char **argv) {
 
             ct_icp::seq_errors seq_error = ct_icp::eval(ground_truth_poses, trajectory_absolute_poses);
             seq_error.average_elapsed_ms = registration_elapsed_ms / frame_id;
+            seq_error.mean_num_attempts = avg_number_of_attempts;
 
             std::cout << "[RESULTS] Sequence " << _sequence_name << std::endl;
             if (!valid_trajectory) {
                 std::cout << "Invalid Trajectory, Failed after " << ground_truth_poses.size() << std::endl;
                 std::cout << "Num Poses : " << seq_error.mean_rpe << std::endl;
             }
+            std::cout << "Average Number of Attempts : " << avg_number_of_attempts << std::endl;
             std::cout << "Mean RPE : " << seq_error.mean_rpe << std::endl;
             std::cout << "Mean APE : " << seq_error.mean_ape << std::endl;
             std::cout << "Max APE : " << seq_error.max_ape << std::endl;

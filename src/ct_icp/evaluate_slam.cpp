@@ -96,7 +96,7 @@ namespace ct_icp {
     void SaveMetrics(const std::map<std::string, seq_errors> &metrics, const std::string &destination, bool success) {
         YAML::Emitter out;
         out << YAML::BeginMap;
-        for (auto &pair : metrics) {
+        for (auto &pair: metrics) {
             out << YAML::Key << pair.first;
             out << YAML::BeginMap;
 
@@ -108,6 +108,7 @@ namespace ct_icp {
             out << YAML::Key << "INDEX_MAX_LOCAL_ERROR" << YAML::Value << pair.second.index_max_local_err;
             out << YAML::Key << "Success" << YAML::Value << success;
             out << YAML::Key << "Average(ms)" << YAML::Value << pair.second.average_elapsed_ms;
+            out << YAML::Key << "AVG_NUM_ATTEMPTS" << YAML::Value << pair.second.mean_num_attempts;
 
             out << YAML::EndMap;
         }
