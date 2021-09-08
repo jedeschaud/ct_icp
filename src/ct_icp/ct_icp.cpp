@@ -448,21 +448,20 @@ namespace ct_icp {
                                               &begin_t.x(),
                                               &end_t.x());
 
-                    ceres::LossFunction *loss_function = new ceres::HuberLoss(0.01);
-
                     // SMALL VELOCITY
                     problem->AddResidualBlock(new ceres::AutoDiffCostFunction<SmallVelocityFunctor,
                                                       SmallVelocityFunctor::NumResiduals(), 3, 3>(
-                                                      new SmallVelocityFunctor(options.beta_small_velocity)),
-                                              loss_function,
+                                                      new SmallVelocityFunctor(sqrt(number_keypoints_used * options.beta_small_velocity))),
+                                              nullptr,
                                               &begin_t.x(), &end_t.x());
 
                     // ORIENTATION CONSISTENCY
                     problem->AddResidualBlock(new ceres::AutoDiffCostFunction<OrientationConsistencyFunctor,
                                                       OrientationConsistencyFunctor::NumResiduals(), 4>(
                                                       new OrientationConsistencyFunctor(previous_orientation,
-                                                                                        options.beta_orientation_consistency)),
-                                              loss_function,
+                                                                                        sqrt(number_keypoints_used *
+                                                                                             options.beta_orientation_consistency))),
+                                              nullptr,
                                               &begin_quat.x());
                 }
             }
