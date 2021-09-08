@@ -178,6 +178,8 @@ SLAMOptions read_config(const std::string &config_path) {
                 OPTION_CLAUSE(icp_node, icp_options, num_closest_neighbors, int);
                 OPTION_CLAUSE(icp_node, icp_options, beta_constant_velocity, double);
                 OPTION_CLAUSE(icp_node, icp_options, beta_location_consistency, double);
+                OPTION_CLAUSE(icp_node, icp_options, beta_small_velocity, double);
+                OPTION_CLAUSE(icp_node, icp_options, beta_orientation_consistency, double);
                 OPTION_CLAUSE(icp_node, icp_options, ls_max_num_iters, int);
                 OPTION_CLAUSE(icp_node, icp_options, ls_num_threads, int);
                 OPTION_CLAUSE(icp_node, icp_options, ls_sigma, double);

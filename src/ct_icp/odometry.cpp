@@ -269,6 +269,17 @@ namespace ct_icp {
                 if (kDisplay)
                     log_out << "Elapsed Elastic_ICP: " << (elapsed_icp.count()) * 1000.0 << std::endl;
 
+                // Compute Modification of trajectory
+                if (index_frame > 0) {
+                    summary.distance_correction = (trajectory_[index_frame].begin_t -
+                                                   trajectory_[index_frame - 1].end_t).norm();
+
+                    Eigen::Matrix3d delta_R = (trajectory_[index_frame].end_R *
+                                               trajectory_[index_frame].begin_R.inverse());
+                    summary.relative_orientation = (delta_R - Eigen::Matrix3d::Identity()).norm();
+                }
+                summary.relative_distance = (trajectory_[index_frame].end_t - trajectory_[index_frame].begin_t).norm();
+
                 success = AssessRegistration(frame, summary, kDisplay ? &log_out : nullptr);
                 if (options_.robust_fail_early)
                     summary.success = success;
@@ -284,8 +295,6 @@ namespace ct_icp {
                                                                      options_.robust_max_voxel_neighborhood);
                         ct_icp_options.ls_max_num_iters += 10;
                         ct_icp_options.num_iters_icp = int(ct_icp_options.num_iters_icp * 1.5);
-                        ct_icp_options.ls_sigma *= 1.2;
-
                         sample_voxel_size = std::max(sample_voxel_size / 1.5, min_voxel_size);
 
                         num_attempt++;
@@ -300,17 +309,6 @@ namespace ct_icp {
                 return summary;
         }
 
-        // Compute Modification of trajectory
-        if (index_frame > 0) {
-            summary.distance_correction = (trajectory_[index_frame].begin_t -
-                                           trajectory_[index_frame - 1].end_t).norm();
-
-            Eigen::Matrix3d delta_R = (trajectory_[index_frame].end_R *
-                                       trajectory_[index_frame].begin_R.inverse());
-            summary.relative_orientation = (delta_R - Eigen::Matrix3d::Identity()).norm();
-        }
-
-        summary.relative_distance = (trajectory_[index_frame].end_t - trajectory_[index_frame].begin_t).norm();
         if (kDisplay) {
             if (index_frame > 0) {
                 log_out << "Trajectory correction [begin(t) - end(t-1)]: "
@@ -415,6 +413,7 @@ namespace ct_icp {
             return false;
         }
 
+        // Only do neighbor assessment if enough motion
         bool do_neighbor_assessment = summary.distance_correction > 0.1;
         do_neighbor_assessment |= summary.relative_distance > options_.robust_neighborhood_min_dist;
         do_neighbor_assessment |= summary.relative_orientation > options_.robust_neighborhood_min_orientation;
@@ -426,11 +425,17 @@ namespace ct_icp {
                 double ratio_voxel_occupied = 0;
                 for (auto &point: points) {
                     voxel = Voxel::Coordinates(point.pt, kSizeVoxelMap);
-                    if (voxel_map_.find(voxel) != voxel_map_.end())
-                        ratio_voxel_occupied += voxel_map_.at(voxel).NumPoints() / options_.max_num_points_in_voxel;
+                    if (voxel_map_.find(voxel) != voxel_map_.end() &&
+                        voxel_map_.at(voxel).NumPoints() > (options_.max_num_points_in_voxel / 2)) {
+                        // Only count voxels which have at least
+                        ratio_voxel_occupied += 1;
+                    }
                 }
 
                 ratio_voxel_occupied /= points.size();
+                if (*log_stream)
+                    *log_stream << "[Quality Assessment] Ratio of voxel half occupied: " <<
+                                ratio_voxel_occupied << std::endl;
                 if (ratio_voxel_occupied < options_.robust_full_voxel_threshold) {
                     success = false;
                     summary.error_message = "[Odometry::AssessRegistration] Ratio of new occupied voxels " +

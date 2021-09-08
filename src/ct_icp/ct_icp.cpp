@@ -38,7 +38,8 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    void grid_sampling(const std::vector<Point3D> &frame, std::vector<Point3D> &keypoints, double size_voxel_subsampling) {
+    void
+    grid_sampling(const std::vector<Point3D> &frame, std::vector<Point3D> &keypoints, double size_voxel_subsampling) {
         // TODO Replace std::list by a vector ?
         keypoints.resize(0);
         std::vector<Point3D> frame_sub;
@@ -77,7 +78,8 @@ namespace ct_icp {
         Eigen::Vector3d normal(es.eigenvectors().col(0).normalized());
 
         // Compute planarity from the eigen values
-        double sigma_1 = sqrt(std::abs(es.eigenvalues()[2])); //Be careful, the eigenvalues are not correct with the iterative way to compute the covariance matrix
+        double sigma_1 = sqrt(std::abs(
+                es.eigenvalues()[2])); //Be careful, the eigenvalues are not correct with the iterative way to compute the covariance matrix
         double sigma_2 = sqrt(std::abs(es.eigenvalues()[1]));
         double sigma_3 = sqrt(std::abs(es.eigenvalues()[0]));
         out_a2D = (sigma_2 - sigma_3) / sigma_1;
@@ -350,8 +352,8 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     bool CT_ICP_CERES(const CTICPOptions &options,
-                     const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-                     std::vector<TrajectoryFrame> &trajectory, int index_frame) {
+                      const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
+                      std::vector<TrajectoryFrame> &trajectory, int index_frame) {
 
         const short nb_voxels_visited = index_frame < options.init_num_frames ? 2 : options.voxel_neighborhood;
         const int kMinNumNeighbors = options.min_number_neighbors;
@@ -364,11 +366,13 @@ namespace ct_icp {
 
         TrajectoryFrame *previous_estimate = nullptr;
         Eigen::Vector3d previous_velocity = Eigen::Vector3d::Zero();
+        Eigen::Quaterniond previous_orientation = Eigen::Quaterniond::Identity();
         if (index_frame > 0) {
             previous_estimate = &trajectory[index_frame - 1];
             previous_velocity = previous_estimate->end_t - previous_estimate->begin_t;
-        }
 
+            previous_orientation = Eigen::Quaterniond(previous_estimate->end_R);
+        }
 
         TrajectoryFrame &current_estimate = trajectory[index_frame];
         Eigen::Quaterniond begin_quat = Eigen::Quaterniond(current_estimate.begin_R);
@@ -431,16 +435,35 @@ namespace ct_icp {
                     // Add Regularisation residuals
                     problem->AddResidualBlock(new ceres::AutoDiffCostFunction<LocationConsistencyFunctor,
                                                       LocationConsistencyFunctor::NumResiduals(), 3>(
-                            new LocationConsistencyFunctor(previous_estimate->end_t,
-                                sqrt(number_keypoints_used*options.beta_location_consistency))),
+                                                      new LocationConsistencyFunctor(previous_estimate->end_t,
+                                                                                     sqrt(number_keypoints_used *
+                                                                                          options.beta_location_consistency))),
                                               nullptr,
                                               &begin_t.x());
                     problem->AddResidualBlock(new ceres::AutoDiffCostFunction<ConstantVelocityFunctor,
                                                       ConstantVelocityFunctor::NumResiduals(), 3, 3>(
-                            new ConstantVelocityFunctor(previous_velocity, sqrt(number_keypoints_used*options.beta_constant_velocity))),
+                                                      new ConstantVelocityFunctor(previous_velocity,
+                                                                                  sqrt(number_keypoints_used * options.beta_constant_velocity))),
                                               nullptr,
                                               &begin_t.x(),
                                               &end_t.x());
+
+                    ceres::LossFunction *loss_function = new ceres::HuberLoss(0.01);
+
+                    // SMALL VELOCITY
+                    problem->AddResidualBlock(new ceres::AutoDiffCostFunction<SmallVelocityFunctor,
+                                                      SmallVelocityFunctor::NumResiduals(), 3, 3>(
+                                                      new SmallVelocityFunctor(options.beta_small_velocity)),
+                                              loss_function,
+                                              &begin_t.x(), &end_t.x());
+
+                    // ORIENTATION CONSISTENCY
+                    problem->AddResidualBlock(new ceres::AutoDiffCostFunction<OrientationConsistencyFunctor,
+                                                      OrientationConsistencyFunctor::NumResiduals(), 4>(
+                                                      new OrientationConsistencyFunctor(previous_orientation,
+                                                                                        options.beta_orientation_consistency)),
+                                              loss_function,
+                                              &begin_quat.x());
                 }
             }
             if (number_keypoints_used < 100) {
@@ -498,7 +521,8 @@ namespace ct_icp {
                 builder.DistortFrame(begin_quat, end_quat, begin_t, end_t);
             }
 
-            if ((index_frame > 1) && (diff_rot < options.norm_x_end_iteration_ct_icp && diff_trans < options.norm_x_end_iteration_ct_icp)) {
+            if ((index_frame > 1) &&
+                (diff_rot < options.norm_x_end_iteration_ct_icp && diff_trans < options.norm_x_end_iteration_ct_icp)) {
                 break;
             }
         }
