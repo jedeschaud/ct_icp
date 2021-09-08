@@ -253,6 +253,7 @@ namespace ct_icp {
 
         auto initial_estimate = trajectory_.back();
         RegistrationSummary summary;
+        summary.frame = initial_estimate;
         if (index_frame > 0) {
             bool success = false;
             int num_attempt = 1;

@@ -212,8 +212,8 @@ PYBIND11_MODULE(pyct_icp, m) {
             .def_readonly("relative_distance", &RegSummary::relative_distance)
             .def_readonly("success", &RegSummary::success)
             .def_readonly("frame", &RegSummary::frame)
-            .def_readonly("frame", &RegSummary::error_message)
-            .def_readonly("frame", &RegSummary::number_of_attempts)
+            .def_readonly("error_message", &RegSummary::error_message)
+            .def_readonly("number_of_attempts", &RegSummary::number_of_attempts)
             .def_readonly("points", &PyRegistrationSummary::lidar_points);
 
 
