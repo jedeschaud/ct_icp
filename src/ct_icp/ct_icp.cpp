@@ -11,7 +11,11 @@
 
 #ifdef CT_ICP_WITH_VIZ
 
+#include "utils.hpp"
+
 #include <viz3d/engine.hpp>
+#include <colormap/colormap.hpp>
+#include <colormap/color.hpp>
 
 #endif
 namespace ct_icp {
@@ -110,7 +114,8 @@ namespace ct_icp {
                      const Eigen::Vector3d &point,
                      int nb_voxels_visited,
                      double size_voxel_map,
-                     int max_num_neighbors) {
+                     int max_num_neighbors,
+                     int threshold_voxel_capacity = 1) {
 
         short kx = static_cast<short>(point[0] / size_voxel_map);
         short ky = static_cast<short>(point[1] / size_voxel_map);
@@ -124,6 +129,8 @@ namespace ct_icp {
                     auto search = map.find(Voxel(kxx, kyy, kzz));
                     if (search != map.end()) {
                         const auto &voxel_block = search.value();
+                        if (voxel_block.NumPoints() < threshold_voxel_capacity)
+                            continue;
                         for (int i(0); i < voxel_block.NumPoints(); ++i) {
                             auto &neighbor = voxel_block.points[i];
                             double distance = (neighbor - point).norm();
@@ -357,6 +364,7 @@ namespace ct_icp {
 
         const short nb_voxels_visited = index_frame < options.init_num_frames ? 2 : options.voxel_neighborhood;
         const int kMinNumNeighbors = options.min_number_neighbors;
+        const int kThresholdCapacity = index_frame < options.init_num_frames ? 1 : options.threshold_voxel_occupancy;
 
 
         ceres::Solver::Options ceres_options;
@@ -404,7 +412,7 @@ namespace ct_icp {
                 // Neighborhood search
                 auto vector_neighbors = search_neighbors(voxels_map, keypoint.pt,
                                                          nb_voxels_visited, options.size_voxel_map,
-                                                         options.max_number_neighbors);
+                                                         options.max_number_neighbors, kThresholdCapacity);
                 if (vector_neighbors.size() < kMinNumNeighbors)
                     continue;
 
@@ -514,6 +522,34 @@ namespace ct_icp {
 
                 keypoint.pt = R * keypoint.raw_pt + t;
             }
+
+#if CT_ICP_WITH_VIZ
+            if (options.debug_viz) {
+                auto palette = colormap::palettes.at("jet").rescale(0, 1);
+                auto &instance = viz::ExplorationEngine::Instance();
+                auto model_ptr = std::make_shared<viz::PointCloudModel>();
+                auto &model_data = model_ptr->ModelData();
+                model_data.xyz.resize(keypoints.size());
+                model_data.point_size = 4;
+                model_data.default_color = Eigen::Vector3f(1, 0, 0);
+                model_data.rgb.resize(keypoints.size());
+                std::vector<double> scalars(keypoints.size());
+
+                for (size_t i(0); i < keypoints.size(); ++i) {
+                    model_data.xyz[i] = keypoints[i].pt.cast<float>();
+                    scalars[i] = keypoints[i].alpha_timestamp;
+                    colormap::rgb value = palette(keypoints[i].alpha_timestamp);
+
+                    std::uint8_t *rgb_color_ptr = reinterpret_cast<std::uint8_t *>(&value);
+                    model_data.rgb[i].x() = (float) rgb_color_ptr[0] / 255.0f;
+                    model_data.rgb[i].y() = (float) rgb_color_ptr[1] / 255.0f;
+                    model_data.rgb[i].z() = (float) rgb_color_ptr[2] / 255.0f;
+
+                }
+
+                instance.AddModel(-2, model_ptr);
+            }
+#endif
 
 
             if (options.point_to_plane_with_distortion) {
