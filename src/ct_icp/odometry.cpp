@@ -3,6 +3,12 @@
 #include "odometry.hpp"
 #include "Utilities/PersoTimer.h"
 
+#ifdef CT_ICP_WITH_VIZ
+
+#include <viz3d/engine.hpp>
+
+#endif
+
 namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -11,37 +17,44 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    OdometryOptions OdometryOptions::DefaultSlowOutdoorProfile() {
+    OdometryOptions OdometryOptions::DefaultRobustOutdoorLowInertia() {
         OdometryOptions default_options;
         default_options.voxel_size = 0.5;
-        default_options.sample_voxel_size = 1.5;
+        default_options.sample_voxel_size = 1.0;
         default_options.max_distance = 100.0;
         default_options.init_num_frames = 100;
-        default_options.max_num_points_in_voxel = 20;
+        default_options.max_num_points_in_voxel = 30;
         default_options.min_distance_points = 0.1;
         default_options.distance_error_threshold = 5.0;
         default_options.motion_compensation = CONTINUOUS;
         default_options.initialization = INIT_NONE;
         default_options.robust_registration = true;
+        default_options.debug_viz = false;
+
         default_options.robust_full_voxel_threshold = 0.7;
-        default_options.robust_num_attempts = 6;
+        default_options.robust_num_attempts = 10;
+        default_options.robust_max_voxel_neighborhood = 5;
 
         auto &ct_icp_options = default_options.ct_icp_options;
         ct_icp_options.size_voxel_map = 1.0;
-        ct_icp_options.num_iters_icp = 30;
+        ct_icp_options.num_iters_icp = 20;
+        ct_icp_options.threshold_voxel_occupancy = 10;
         ct_icp_options.min_number_neighbors = 20;
         ct_icp_options.voxel_neighborhood = 1;
+
+        ct_icp_options.init_num_frames = 100;
         ct_icp_options.max_number_neighbors = 20;
         ct_icp_options.max_dist_to_plane_ct_icp = 0.5;
-        ct_icp_options.norm_x_end_iteration_ct_icp = 0.001;
+        ct_icp_options.norm_x_end_iteration_ct_icp = 0.0001;
         ct_icp_options.point_to_plane_with_distortion = true;
         ct_icp_options.distance = CT_POINT_TO_PLANE;
         ct_icp_options.num_closest_neighbors = 1;
         ct_icp_options.beta_constant_velocity = 0.0;
-        ct_icp_options.beta_location_consistency = 0.0001;
+        ct_icp_options.beta_location_consistency = 0.001;
+        ct_icp_options.beta_small_velocity = 0.01;
         ct_icp_options.loss_function = CAUCHY;
         ct_icp_options.solver = CERES;
-        ct_icp_options.ls_max_num_iters = 5;
+        ct_icp_options.ls_max_num_iters = 20;
         ct_icp_options.ls_num_threads = 8;
         ct_icp_options.ls_sigma = 0.1;
         ct_icp_options.ls_tolerant_min_threshold = 0.05;
@@ -140,7 +153,10 @@ namespace ct_icp {
                 trajectory_[index_frame].end_R = R_next_end;
                 trajectory_[index_frame].end_t = t_next_end;
             } else {
+                // Important ! Start with a rigid frame and let the ICP distort it !
                 trajectory_[index_frame] = trajectory_[index_frame - 1];
+                trajectory_[index_frame].end_t = trajectory_[index_frame].begin_t;
+                trajectory_[index_frame].end_R = trajectory_[index_frame].begin_R;
             }
         } else {
             if (options_.initialization == INIT_CONSTANT_VELOCITY) {
@@ -176,6 +192,10 @@ namespace ct_icp {
                 trajectory_[index_frame].end_t = t_next_end;
             } else {
                 trajectory_[index_frame] = trajectory_[index_frame - 1];
+                // Important ! Start with a rigid frame and let the ICP distort it !
+                trajectory_[index_frame] = trajectory_[index_frame - 1];
+                trajectory_[index_frame].end_t = trajectory_[index_frame].begin_t;
+                trajectory_[index_frame].end_R = trajectory_[index_frame].begin_R;
             }
         }
         return index_frame;
@@ -188,6 +208,9 @@ namespace ct_icp {
         /// PREPROCESS THE INITIAL FRAME
         double sample_size = index_frame < options_.init_num_frames ? options_.init_voxel_size : options_.voxel_size;
         std::vector<Point3D> frame(const_frame);
+
+        std::mt19937_64 g;
+        std::shuffle(frame.begin(), frame.end(), g);
         //Subsample the scan with voxels taking one random in every voxel
         sub_sample_frame(frame, sample_size);
 
@@ -226,7 +249,7 @@ namespace ct_icp {
     Odometry::RegistrationSummary Odometry::DoRegister(const std::vector<Point3D> &const_frame,
                                                        int index_frame) {
         auto start = std::chrono::steady_clock::now();
-        auto &log_out = std::cout;
+        auto &log_out = LOG(INFO);
         const bool kDisplay = options_.debug_print;
         CTICPOptions ct_icp_options = options_.ct_icp_options; // Make a copy of the options
         const double kSizeVoxelInitSample = options_.voxel_size;
@@ -252,7 +275,7 @@ namespace ct_icp {
                 log_out << "Initial ego-motion distance: " << t_diff.norm() << std::endl;
         }
 
-        auto initial_estimate = trajectory_.back();
+        const auto initial_estimate = trajectory_.back();
         RegistrationSummary summary;
         summary.frame = initial_estimate;
         if (index_frame > 0) {
@@ -280,7 +303,7 @@ namespace ct_icp {
                 }
                 summary.relative_distance = (trajectory_[index_frame].end_t - trajectory_[index_frame].begin_t).norm();
 
-                success = AssessRegistration(frame, summary, kDisplay ? &log_out : nullptr);
+                success = AssessRegistration(summary.keypoints, summary, kDisplay ? &log_out : nullptr);
                 if (options_.robust_fail_early)
                     summary.success = success;
                 if (!success) {
@@ -291,10 +314,15 @@ namespace ct_icp {
                     if (options_.robust_registration && num_attempt < options_.robust_num_attempts) {
                         // Handle the failure cases
                         trajectory_.back() = initial_estimate;
+                        ct_icp_options.threshold_voxel_occupancy = std::min(
+                                ct_icp_options.threshold_voxel_occupancy + 5,
+                                options_.max_num_points_in_voxel);
                         ct_icp_options.voxel_neighborhood = std::min(++ct_icp_options.voxel_neighborhood,
                                                                      options_.robust_max_voxel_neighborhood);
-                        ct_icp_options.ls_max_num_iters += 10;
-                        ct_icp_options.num_iters_icp = int(ct_icp_options.num_iters_icp * 1.5);
+                        ct_icp_options.ls_max_num_iters += 30;
+                        ct_icp_options.num_iters_icp = min(ct_icp_options.num_iters_icp + 20, 50);
+                        ct_icp_options.norm_x_end_iteration_ct_icp = max(
+                                ct_icp_options.norm_x_end_iteration_ct_icp / 10, 1.e-5);
                         sample_voxel_size = std::max(sample_voxel_size / 1.5, min_voxel_size);
 
                         num_attempt++;
@@ -321,8 +349,55 @@ namespace ct_icp {
             voxel_map_.clear();
         }
 
+        int min_num_points = 0;
+        if (options_.robust_registration) {
+            if (summary.number_of_attempts >= options_.robust_num_attempts) {
+                // Considered a failure: Had to use all attempts
+                // We must be careful before adding points to the Map as this strategy can
+                // Pollute the map with bad points
+                if (registered_frames_ >= options_.init_num_frames &&
+                    robust_num_consecutive_failures_ < options_.robust_num_failures_before_new_init) {
+                    min_num_points = std::min(options_.robust_thresh_voxel_size_before_add,
+                                              options_.max_num_points_in_voxel - 1);
+
+                    if (kDisplay) {
+                        log_out << "Consecutive Failure n°" << robust_num_consecutive_failures_ << std::endl;
+                        log_out << "Only adding points in voxels containing at least " << min_num_points << " points";
+                    }
+                } else {
+                    if (kDisplay) {
+                        log_out << "Consecutive Failure n°" << robust_num_consecutive_failures_ << std::endl;
+                        log_out << "Too many consecutive failures. Attempting to add points again in the map" <<
+                                "(Will probably fail)" << std::endl;
+                    }
+                }
+                robust_num_consecutive_failures_++;
+
+            } else {
+                robust_num_consecutive_failures_ = 0;
+            }
+        }
+
         //Update Voxel Map+
-        AddPointsToMap(voxel_map_, frame, kSizeVoxelMap, kMaxNumPointsInVoxel, kMinDistancePoints);
+        AddPointsToMap(voxel_map_, frame, kSizeVoxelMap,
+                       kMaxNumPointsInVoxel, kMinDistancePoints, min_num_points);
+
+#ifdef CT_ICP_WITH_VIZ
+        if (options_.debug_viz) {
+
+            auto &instance = viz::ExplorationEngine::Instance();
+            auto model_ptr = std::make_shared<viz::PointCloudModel>();
+            auto &model_data = model_ptr->ModelData();
+            model_data.xyz.reserve(MapSize());
+            for (auto &voxel: voxel_map_) {
+                for (int i(0); i < voxel.second.NumPoints(); ++i)
+                    model_data.xyz.push_back(voxel.second.points[i].cast<float>());
+            }
+            model_data.point_size = 1;
+            instance.AddModel(-3, model_ptr);
+        }
+#endif
+
 
         // Remove voxels too far from actual position of the vehicule
         const double kMaxDistance = options_.max_distance;
@@ -398,6 +473,7 @@ namespace ct_icp {
                 TransformPoint(options_.motion_compensation, point, q_begin, q_end, t_begin, t_end);
             }
         }
+        summary.keypoints = keypoints;
         summary.number_keypoints = number_keypoints_used;
         summary.frame = trajectory_[index_frame];
         return summary;
@@ -426,7 +502,7 @@ namespace ct_icp {
                 for (auto &point: points) {
                     voxel = Voxel::Coordinates(point.pt, kSizeVoxelMap);
                     if (voxel_map_.find(voxel) != voxel_map_.end() &&
-                        voxel_map_.at(voxel).NumPoints() > (options_.max_num_points_in_voxel / 2)) {
+                        voxel_map_.at(voxel).NumPoints() > (2 * options_.max_num_points_in_voxel / 3)) {
                         // Only count voxels which have at least
                         ratio_voxel_occupied += 1;
                     }
@@ -500,7 +576,7 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     inline void AddPointToMap(VoxelHashMap &map, const Eigen::Vector3d &point, double voxel_size,
-                              int max_num_points_in_voxel, double min_distance_points) {
+                              int max_num_points_in_voxel, double min_distance_points, int min_num_points = 0) {
         short kx = static_cast<short>(point[0] / voxel_size);
         short ky = static_cast<short>(point[1] / voxel_size);
         short kz = static_cast<short>(point[2] / voxel_size);
@@ -519,23 +595,29 @@ namespace ct_icp {
                     }
                 }
                 if (sq_dist_min_to_points > (min_distance_points * min_distance_points)) {
-                    voxel_block.AddPoint(point);
+                    if (min_num_points <= 0 || voxel_block.NumPoints() >= min_num_points) {
+                        voxel_block.AddPoint(point);
+                    }
                 }
             }
         } else {
-            VoxelBlock block(max_num_points_in_voxel);
-            block.AddPoint(point);
-            map[Voxel(kx, ky, kz)] = std::move(block);
+            if (min_num_points <= 0) {
+                // Do not add points (avoids polluting the map)
+                VoxelBlock block(max_num_points_in_voxel);
+                block.AddPoint(point);
+                map[Voxel(kx, ky, kz)] = std::move(block);
+            }
+
         }
 
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
     void AddPointsToMap(VoxelHashMap &map, const vector<Point3D> &points, double voxel_size,
-                        int max_num_points_in_voxel, double min_distance_points) {
+                        int max_num_points_in_voxel, double min_distance_points, int min_num_points) {
         //Update Voxel Map
         for (const auto &point: points) {
-            AddPointToMap(map, point.pt, voxel_size, max_num_points_in_voxel, min_distance_points);
+            AddPointToMap(map, point.pt, voxel_size, max_num_points_in_voxel, min_distance_points, min_num_points);
         }
     }
 

@@ -25,6 +25,25 @@
 #ifdef CT_ICP_WITH_VIZ
 
 #include <viz3d/engine.hpp>
+#include <imgui.h>
+
+
+struct ControlSlamWindow : viz::ExplorationEngine::GUIWindow {
+
+    explicit ControlSlamWindow(std::string &&winname) :
+            viz::ExplorationEngine::GUIWindow(std::move(winname), &open) {}
+
+    void DrawContent() override {
+        ImGui::Checkbox("Pause the SLAM", &pause_button);
+    };
+
+    [[nodiscard]] bool ContinueSLAM() const {
+        return !pause_button;
+    }
+
+    bool pause_button = false;
+    bool open = true;
+};
 
 #endif
 
@@ -33,6 +52,7 @@ using namespace ct_icp;
 
 
 namespace ct_icp {
+
 
     // Parameters to run the SLAM
     struct SLAMOptions {
@@ -58,6 +78,8 @@ namespace ct_icp {
         int max_frames = -1; // The maximum number of frames to register (if -1 all frames in the Dataset are registered)
 
         bool display_debug = true; // Whether to display timing and debug information
+
+        bool display_aggregated_frames = false; // Whether to show CT_ICP's debug information or the aggregated frames
     };
 
 }
@@ -81,6 +103,8 @@ SLAMOptions read_config(const std::string &config_path) {
         OPTION_CLAUSE(slam_node, options, sequence, std::string);
         OPTION_CLAUSE(slam_node, options, start_index, int);
         OPTION_CLAUSE(slam_node, options, all_sequences, bool);
+        OPTION_CLAUSE(slam_node, options, display_aggregated_frames, bool);
+
         if (!options.output_dir.empty() && options.output_dir[options.output_dir.size() - 1] != '/')
             options.output_dir += '/';
         OPTION_CLAUSE(slam_node, options, max_frames, int);
@@ -110,6 +134,7 @@ SLAMOptions read_config(const std::string &config_path) {
         OPTION_CLAUSE(dataset_node, dataset_options, root_path, std::string);
         OPTION_CLAUSE(dataset_node, dataset_options, fail_if_incomplete, bool);
         OPTION_CLAUSE(dataset_node, dataset_options, min_dist_lidar_center, float);
+        OPTION_CLAUSE(dataset_node, dataset_options, nclt_num_aggregated_pc, int);
         OPTION_CLAUSE(dataset_node, dataset_options, max_dist_lidar_center, float);
 
         if (slam_node["odometry_options"]) {
@@ -122,17 +147,20 @@ SLAMOptions read_config(const std::string &config_path) {
             OPTION_CLAUSE(odometry_node, odometry_options, max_num_points_in_voxel, double);
             OPTION_CLAUSE(odometry_node, odometry_options, max_num_points_in_voxel, int);
             OPTION_CLAUSE(odometry_node, odometry_options, debug_print, bool);
-            OPTION_CLAUSE(odometry_node, odometry_options, robust_registration, bool);
-            OPTION_CLAUSE(odometry_node, odometry_options, robust_full_voxel_threshold, double);
-            OPTION_CLAUSE(odometry_node, odometry_options, robust_fail_early, bool);
-            OPTION_CLAUSE(odometry_node, odometry_options, robust_num_attempts, int);
-            OPTION_CLAUSE(odometry_node, odometry_options, robust_max_voxel_neighborhood, int);
+            OPTION_CLAUSE(odometry_node, odometry_options, debug_viz, bool);
 
             OPTION_CLAUSE(odometry_node, odometry_options, min_distance_points, double);
             OPTION_CLAUSE(odometry_node, odometry_options, distance_error_threshold, double);
             OPTION_CLAUSE(odometry_node, odometry_options, init_num_frames, int);
             OPTION_CLAUSE(odometry_node, odometry_options, init_voxel_size, double);
             OPTION_CLAUSE(odometry_node, odometry_options, init_sample_voxel_size, double);
+
+            OPTION_CLAUSE(odometry_node, odometry_options, robust_registration, bool);
+            OPTION_CLAUSE(odometry_node, odometry_options, robust_full_voxel_threshold, double);
+            OPTION_CLAUSE(odometry_node, odometry_options, robust_fail_early, bool);
+            OPTION_CLAUSE(odometry_node, odometry_options, robust_num_attempts, int);
+            OPTION_CLAUSE(odometry_node, odometry_options, robust_max_voxel_neighborhood, int);
+
 
             if (odometry_node["motion_compensation"]) {
                 auto compensation = odometry_node["motion_compensation"].as<std::string>();
@@ -166,6 +194,7 @@ SLAMOptions read_config(const std::string &config_path) {
                 auto icp_node = odometry_node["ct_icp_options"];
                 auto &icp_options = odometry_options.ct_icp_options;
 
+                OPTION_CLAUSE(icp_node, icp_options, threshold_voxel_occupancy, int);
                 OPTION_CLAUSE(icp_node, icp_options, size_voxel_map, double);
                 OPTION_CLAUSE(icp_node, icp_options, num_iters_icp, int);
                 OPTION_CLAUSE(icp_node, icp_options, min_number_neighbors, int);
@@ -184,6 +213,12 @@ SLAMOptions read_config(const std::string &config_path) {
                 OPTION_CLAUSE(icp_node, icp_options, ls_num_threads, int);
                 OPTION_CLAUSE(icp_node, icp_options, ls_sigma, double);
                 OPTION_CLAUSE(icp_node, icp_options, ls_tolerant_min_threshold, double);
+                OPTION_CLAUSE(icp_node, icp_options, debug_viz, bool);
+
+                if (options.display_aggregated_frames) {
+                    icp_options.debug_viz = false;
+                    odometry_options.debug_viz = false;
+                }
 
                 if (icp_node["distance"]) {
                     auto distance = icp_node["distance"].as<std::string>();
@@ -363,6 +398,8 @@ int main(int argc, char **argv) {
     max_num_threads = 1;
     std::thread gui_thread{viz::ExplorationEngine::LaunchMainLoop};
     auto &instance = viz::ExplorationEngine::Instance();
+    auto window = std::make_shared<ControlSlamWindow>("SLAM Controls");
+    instance.AddWindow(window);
 #endif
 
 
@@ -412,15 +449,6 @@ int main(int argc, char **argv) {
             camera_pose = camera_pose.inverse().eval();
 
             instance.SetCameraPose(camera_pose);
-            {
-                auto model_ptr = std::make_shared<viz::PointCloudModel>();
-                auto &model_data = model_ptr->ModelData();
-                model_data.xyz.resize(summary.all_corrected_points.size());
-                for (size_t i(0); i < summary.all_corrected_points.size(); ++i) {
-                    model_data.xyz[i] = summary.all_corrected_points[i].pt.cast<float>();
-                }
-                instance.AddModel(frame_id % 500, model_ptr);
-            }
 
             {
                 auto model_ptr = std::make_shared<viz::PosesModel>();
@@ -431,6 +459,25 @@ int main(int argc, char **argv) {
                     model_data.instance_model_to_world[i] = trajectory[i].MidPose().cast<float>();
                 }
                 instance.AddModel(-11, model_ptr);
+
+            }
+            if (options.display_debug) {
+                {
+                    auto model_ptr = std::make_shared<viz::PointCloudModel>();
+                    auto &model_data = model_ptr->ModelData();
+                    model_data.xyz.resize(summary.all_corrected_points.size());
+                    for (size_t i(0); i < summary.all_corrected_points.size(); ++i) {
+                        model_data.xyz[i] = summary.all_corrected_points[i].pt.cast<float>();
+                    }
+                    instance.AddModel(frame_id % 500, model_ptr);
+                }
+
+            }
+
+            if (window) {
+                while (!window->ContinueSLAM()) {
+                    std::this_thread::sleep_for(std::chrono::duration<double>(0.01));
+                }
             }
 #endif
             if (!summary.success) {

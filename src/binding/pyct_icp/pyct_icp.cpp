@@ -170,9 +170,12 @@ PYBIND11_MODULE(pyct_icp, m) {
                     STRUCT_READWRITE(ct_icp::CTICPOptions, debug_print)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, point_to_plane_with_distortion)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, distance)
+                    STRUCT_READWRITE(ct_icp::CTICPOptions, init_num_frames)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, num_closest_neighbors)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, beta_location_consistency)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, beta_constant_velocity)
+                    STRUCT_READWRITE(ct_icp::CTICPOptions, beta_small_velocity)
+                    STRUCT_READWRITE(ct_icp::CTICPOptions, beta_orientation_consistency)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, loss_function)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_max_num_iters)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_num_threads)
@@ -184,6 +187,7 @@ PYBIND11_MODULE(pyct_icp, m) {
     py::class_<ct_icp::OdometryOptions>(m, "OdometryOptions")
             .def(py::init())
                     STRUCT_READWRITE(ct_icp::OdometryOptions, voxel_size)
+                    STRUCT_READWRITE(ct_icp::OdometryOptions, init_num_frames)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, sample_voxel_size)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, max_distance)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, max_num_points_in_voxel)
@@ -201,7 +205,7 @@ PYBIND11_MODULE(pyct_icp, m) {
 
 
     m.def("DefaultDrivingProfile", &ct_icp::OdometryOptions::DefaultDrivingProfile);
-    m.def("DefaultSlowOutdoorProfile", &ct_icp::OdometryOptions::DefaultSlowOutdoorProfile);
+    m.def("DefaultRobustOutdoorLowInertia", &ct_icp::OdometryOptions::DefaultRobustOutdoorLowInertia);
 
     using RegSummary = ct_icp::Odometry::RegistrationSummary;
     py::class_<PyRegistrationSummary,

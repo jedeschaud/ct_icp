@@ -45,6 +45,10 @@ namespace ct_icp {
     // Options for the Elastic_ICP
     struct CTICPOptions {
 
+        // The threshold on the voxel occupancy
+        // To be considered in the neighbor search, a voxel must have at least threshold_voxel_occupancy points
+        int threshold_voxel_occupancy = 1;
+
         int init_num_frames = 20; // The number of frames defining the initialization of the map
 
         double size_voxel_map = 1.0; //Max Voxel : -32767 to 32767 then 32km map for SIZE_VOXEL_MAP = 1m
@@ -61,7 +65,6 @@ namespace ct_icp {
 
         double norm_x_end_iteration_ct_icp = 0.001; // The threshold on the norm of the parameters vector
 
-        bool debug_print = true; // Whether to output debug information to std::cout
 
         bool point_to_plane_with_distortion = true; // Whether to distort the frames at each ICP iteration
 
@@ -94,6 +97,10 @@ namespace ct_icp {
 
         double ls_tolerant_min_threshold = 0.05; // The Tolerant
 
+        // Debug params
+        bool debug_print = true; // Whether to output debug information to std::cout
+
+        bool debug_viz = false; // Whether to pass the key points to the ExplorationEngine
     };
 
     // CT_ICP_CERES : Registers keypoints into the voxel_map taking into account the motion of the

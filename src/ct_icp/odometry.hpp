@@ -35,8 +35,6 @@ namespace ct_icp {
 
         int max_num_points_in_voxel = 20; // The maximum number of points in a voxel
 
-        bool debug_print = true; // Whether to print debug information into the console
-
         double min_distance_points = 0.1; // The minimal distance between points in the map
 
         double distance_error_threshold = 5.0; // The Ego-Motion Distance considered as an error
@@ -53,12 +51,22 @@ namespace ct_icp {
         int robust_num_attempts = 6;
         short robust_max_voxel_neighborhood = 3;
 
+        // The number of consecutive failures before considering adding points again to the map
+        int robust_num_failures_before_new_init = 10;
+        // The minimum size of voxels on which we allow points to be added in case of robust failure
+        int robust_thresh_voxel_size_before_add = 0;
 
         CTICPOptions ct_icp_options;
 
         MOTION_COMPENSATION motion_compensation = CONTINUOUS;
 
         INITIALIZATION initialization = INIT_CONSTANT_VELOCITY;
+
+
+        // Debug Parameters
+        bool debug_print = true; // Whether to print debug information into the console
+
+        bool debug_viz = false; // Whether to display the Local Map in a window
 
         ////////////////////////
         /// DEFAULT PROFILES ///
@@ -70,7 +78,7 @@ namespace ct_icp {
 
         // Returns the default parameters for abrupt profiles
         // e.g. Used for the dataset NCLT
-        static OdometryOptions DefaultSlowOutdoorProfile();
+        static OdometryOptions DefaultRobustOutdoorLowInertia();
 
         // TODO: INDOOR
 
@@ -78,7 +86,8 @@ namespace ct_icp {
 
     // Add Points To the Map
     void AddPointsToMap(VoxelHashMap &map, const std::vector<Point3D> &points,
-                        double voxel_size, int max_num_points_in_voxel, double min_distance_points);
+                        double voxel_size, int max_num_points_in_voxel,
+                        double min_distance_points, int min_num_points = 0);
 
     // Add Points To the Map
     void AddPointsToMap(VoxelHashMap &map, const ArrayVector3d &points, double voxel_size,
@@ -121,6 +130,8 @@ namespace ct_icp {
             std::vector<Point3D> corrected_points; // Sampled points expressed in the initial frame
 
             std::vector<Point3D> all_corrected_points; // Initial points expressed in the initial frame
+
+            std::vector<Point3D> keypoints; // Last Keypoints selected
 
         };
 
@@ -173,6 +184,7 @@ namespace ct_icp {
         std::vector<TrajectoryFrame> trajectory_;
         VoxelHashMap voxel_map_;
         int registered_frames_ = 0;
+        int robust_num_consecutive_failures_ = 0;
         OdometryOptions options_;
 
         // Initialize the Frame
