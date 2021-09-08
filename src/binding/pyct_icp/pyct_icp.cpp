@@ -192,7 +192,13 @@ PYBIND11_MODULE(pyct_icp, m) {
                     STRUCT_READWRITE(ct_icp::OdometryOptions, min_distance_points)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, initialization)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, distance_error_threshold)
+                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_registration)
+                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_fail_early)
+                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_full_voxel_threshold)
+                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_num_attempts)
+                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_max_voxel_neighborhood)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, ct_icp_options);
+
 
     m.def("DefaultDrivingProfile", &ct_icp::OdometryOptions::DefaultDrivingProfile);
     m.def("DefaultSlowOutdoorProfile", &ct_icp::OdometryOptions::DefaultSlowOutdoorProfile);
@@ -206,6 +212,8 @@ PYBIND11_MODULE(pyct_icp, m) {
             .def_readonly("relative_distance", &RegSummary::relative_distance)
             .def_readonly("success", &RegSummary::success)
             .def_readonly("frame", &RegSummary::frame)
+            .def_readonly("frame", &RegSummary::error_message)
+            .def_readonly("frame", &RegSummary::number_of_attempts)
             .def_readonly("points", &PyRegistrationSummary::lidar_points);
 
 

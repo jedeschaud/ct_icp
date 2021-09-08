@@ -41,6 +41,18 @@ namespace ct_icp {
 
         double distance_error_threshold = 5.0; // The Ego-Motion Distance considered as an error
 
+        // Whether to assess the quality of the registration,
+        // And try a new registration with more conservative parameters in case of failure
+        bool robust_registration = false;
+
+        double robust_full_voxel_threshold = 0.7;
+
+        bool robust_fail_early = false; // Stop iterations if the final assessment of the registration is unsucessful
+
+        int robust_num_attempts = 6;
+
+        short robust_max_voxel_neighborhood = 4;
+
         CTICPOptions ct_icp_options;
 
         MOTION_COMPENSATION motion_compensation = CONTINUOUS;
@@ -99,6 +111,10 @@ namespace ct_icp {
 
             bool success = true; // Whether the registration was a success
 
+            int number_of_attempts = 0; // The number of attempts at registering the new frame
+
+            std::string error_message;
+
             std::vector<Point3D> corrected_points; // Sampled points expressed in the initial frame
 
             std::vector<Point3D> all_corrected_points; // Initial points expressed in the initial frame
@@ -156,11 +172,29 @@ namespace ct_icp {
         int registered_frames_ = 0;
         OdometryOptions options_;
 
-        // Register a frame after the motion was initialized
+        // Initialize the Frame
+        std::vector<Point3D> InitializeFrame(const std::vector<Point3D> &const_frame,
+                                             int index_frame);
+
+        // Registers a frame after the motion was initialized
+        // When the Robust Registration profile is activated, it can call TryRegister
+        // Multiple times changing the options in order to increase the chance of registration
         RegistrationSummary DoRegister(const std::vector<Point3D> &frame, int frame_index);
+
+        // Tries to register a frame given a set of options
+        RegistrationSummary TryRegister(std::vector<Point3D> &frame,
+                                        int frame_index,
+                                        const CTICPOptions &options,
+                                        RegistrationSummary &summary,
+                                        double sample_voxel_size);
 
         // Insert a New Trajectory Frame, and initializes the motion for this new frame
         int InitializeMotion(const TrajectoryFrame *initial_estimate = nullptr);
+
+        // Try to insert Points to the map
+        // Returns false if it fails
+        bool AssessRegistration(const std::vector<Point3D> &points, RegistrationSummary &summary,
+                                std::ostream *log_stream = nullptr) const;
 
     };
 

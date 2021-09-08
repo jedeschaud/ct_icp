@@ -39,6 +39,7 @@ namespace ct_icp {
         double max_local_err;
         double average_elapsed_ms = -1.0;
         int index_max_local_err;
+        double mean_num_attempts;
     };
 
 
