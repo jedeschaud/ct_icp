@@ -16,6 +16,7 @@ namespace ct_icp {
         default_options.voxel_size = 0.5;
         default_options.sample_voxel_size = 1.5;
         default_options.max_distance = 100.0;
+        default_options.init_num_frames = 100;
         default_options.max_num_points_in_voxel = 20;
         default_options.min_distance_points = 0.1;
         default_options.distance_error_threshold = 5.0;
@@ -37,7 +38,7 @@ namespace ct_icp {
         ct_icp_options.distance = CT_POINT_TO_PLANE;
         ct_icp_options.num_closest_neighbors = 1;
         ct_icp_options.beta_constant_velocity = 0.0;
-        ct_icp_options.beta_location_consistency = 0.001;
+        ct_icp_options.beta_location_consistency = 0.0001;
         ct_icp_options.loss_function = CAUCHY;
         ct_icp_options.solver = CERES;
         ct_icp_options.ls_max_num_iters = 5;
@@ -292,9 +293,14 @@ namespace ct_icp {
         }
 
         // Compute Modification of trajectory
-        if (index_frame > 0)
+        if (index_frame > 0) {
             summary.distance_correction = (trajectory_[index_frame].begin_t -
                                            trajectory_[index_frame - 1].end_t).norm();
+
+            Eigen::Matrix3d delta_R = (trajectory_[index_frame].end_R *
+                                       trajectory_[index_frame].begin_R.inverse());
+            summary.relative_orientation = (delta_R - Eigen::Matrix3d::Identity()).norm();
+        }
 
         summary.relative_distance = (trajectory_[index_frame].end_t - trajectory_[index_frame].begin_t).norm();
         if (kDisplay) {
@@ -396,16 +402,24 @@ namespace ct_icp {
                                       RegistrationSummary &summary, std::ostream *log_stream) const {
 
         bool success = summary.success;
-        if (registered_frames_ > options_.init_num_frames) {
+        if (summary.relative_distance > options_.robust_relative_trans_threshold) {
+            summary.error_message = "The relative distance is too important";
+            return false;
+        }
+
+        bool do_neighbor_assessment = summary.distance_correction > 0.1;
+        do_neighbor_assessment |= summary.relative_distance > options_.robust_neighborhood_min_dist;
+        do_neighbor_assessment |= summary.relative_orientation > options_.robust_neighborhood_min_orientation;
+
+        if (do_neighbor_assessment && registered_frames_ > options_.init_num_frames) {
             if (options_.robust_registration) {
                 const double kSizeVoxelMap = options_.ct_icp_options.size_voxel_map;
-
                 Voxel voxel;
                 double ratio_voxel_occupied = 0;
                 for (auto &point: points) {
                     voxel = Voxel::Coordinates(point.pt, kSizeVoxelMap);
                     if (voxel_map_.find(voxel) != voxel_map_.end())
-                        ratio_voxel_occupied += voxel_map_.at(voxel).IsFull() ? 1 : 0;
+                        ratio_voxel_occupied += voxel_map_.at(voxel).NumPoints() / options_.max_num_points_in_voxel;
                 }
 
                 ratio_voxel_occupied /= points.size();

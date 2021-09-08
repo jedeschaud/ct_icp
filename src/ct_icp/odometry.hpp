@@ -44,14 +44,19 @@ namespace ct_icp {
         // Whether to assess the quality of the registration,
         // And try a new registration with more conservative parameters in case of failure
         bool robust_registration = false;
-
         double robust_full_voxel_threshold = 0.7;
+        double robust_neighborhood_min_dist = 0.10; // The minimum relative distance to launch a robust neighborhood test
+        double robust_neighborhood_min_orientation = 0.01; // The minimum relative orientation to launch a robust neighborhood
+
+        // Threshold on the relative transform (all motion at 10Hz should be below this value)
+        double robust_relative_trans_threshold = 1.0;
 
         bool robust_fail_early = false; // Stop iterations if the final assessment of the registration is unsucessful
 
         int robust_num_attempts = 6;
 
         short robust_max_voxel_neighborhood = 4;
+
 
         CTICPOptions ct_icp_options;
 
@@ -108,6 +113,8 @@ namespace ct_icp {
             double distance_correction = 0.0; // The correction between the last frame's end, and the new frame's beginning
 
             double relative_distance = 0.0; // The distance between the beginning of the new frame and the end
+
+            double relative_orientation = 0.0; // The distance between the beginning of the new frame and the end
 
             bool success = true; // Whether the registration was a success
 
