@@ -37,7 +37,7 @@ namespace ct_icp {
         ct_icp_options.distance = CT_POINT_TO_PLANE;
         ct_icp_options.num_closest_neighbors = 1;
         ct_icp_options.beta_constant_velocity = 0.0;
-        ct_icp_options.beta_location_consistency = 0.0001;
+        ct_icp_options.beta_location_consistency = 0.001;
         ct_icp_options.loss_function = CAUCHY;
         ct_icp_options.solver = CERES;
         ct_icp_options.ls_max_num_iters = 5;
