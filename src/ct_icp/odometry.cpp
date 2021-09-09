@@ -54,7 +54,7 @@ namespace ct_icp {
         ct_icp_options.max_number_neighbors = 20;
         ct_icp_options.min_number_neighbors = 20;
         ct_icp_options.max_dist_to_plane_ct_icp = 0.5;
-        ct_icp_options.norm_x_end_iteration_ct_icp = 0.0001;
+        ct_icp_options.threshold_orientation_norm = 0.0001;
         ct_icp_options.point_to_plane_with_distortion = true;
         ct_icp_options.distance = CT_POINT_TO_PLANE;
         ct_icp_options.num_closest_neighbors = 1;
@@ -308,7 +308,8 @@ namespace ct_icp {
                 }
                 summary.relative_distance = (trajectory_[index_frame].end_t - trajectory_[index_frame].begin_t).norm();
 
-                success = AssessRegistration(summary.keypoints, summary, kDisplay ? &log_out : nullptr);
+                success = AssessRegistration(frame, summary,
+                                             kDisplay ? &log_out : nullptr);
                 if (options_.robust_fail_early)
                     summary.success = success;
                 if (!success) {
@@ -323,34 +324,44 @@ namespace ct_icp {
                             log_out << "Distance to previous trans : " << trans_distance <<
                                     " rot distance " << rot_distance << std::endl;
 
-                        if (previous_frame.TranslationDistance(summary.frame) < 1.e-2 &&
-                            previous_frame.RotationDistance(summary.frame) < 1.e-3) {
-                            // Do not waste time for no reward
-                            break;
-                        }
+//                        if (previous_frame.TranslationDistance(summary.frame) < 1.e-2 &&
+//                            previous_frame.RotationDistance(summary.frame) < 1.e-3) {
+//                            // Do not waste time for no reward
+//                            if (kDisplay)
+//                                std::cout << "Break"
+//                        }
+
                         previous_frame = summary.frame;
                         // Handle the failure cases
-                        // trajectory_[index_frame] = initial_estimate;
-                        ct_icp_options.threshold_voxel_occupancy = std::min(
-                                ct_icp_options.threshold_voxel_occupancy + 5,
-                                options_.max_num_points_in_voxel);
+                        trajectory_[index_frame] = initial_estimate;
                         ct_icp_options.voxel_neighborhood = std::min(++ct_icp_options.voxel_neighborhood,
                                                                      options_.robust_max_voxel_neighborhood);
                         ct_icp_options.ls_max_num_iters += 30;
                         ct_icp_options.num_iters_icp = min(ct_icp_options.num_iters_icp + 20, 50);
-                        ct_icp_options.norm_x_end_iteration_ct_icp = max(
-                                ct_icp_options.norm_x_end_iteration_ct_icp / 10, 1.e-5);
+                        ct_icp_options.threshold_orientation_norm = max(
+                                ct_icp_options.threshold_orientation_norm / 10, 1.e-5);
+                        ct_icp_options.threshold_translation_norm = max(
+                                ct_icp_options.threshold_orientation_norm / 10, 1.e-4);
                         sample_voxel_size = std::max(sample_voxel_size / 1.5, min_voxel_size);
+                        ct_icp_options.ls_sigma *= 1.1;
+                        ct_icp_options.max_dist_to_plane_ct_icp *= 1.1;
 
                         summary.number_of_attempts++;
                     } else {
                         success = true;
+                        if (summary.number_of_attempts >= options_.robust_num_attempts)
+                            robust_num_consecutive_failures_++;
+                        else
+                            robust_num_consecutive_failures_ = 0;
                     }
                 }
             } while (!success);
 
-            if (!summary.success)
+            if (!summary.success) {
+                if (kDisplay)
+                    log_out << "Failure to register, after " << summary.number_of_attempts << std::endl;
                 return summary;
+            }
         }
 
         if (kDisplay) {
@@ -368,18 +379,33 @@ namespace ct_icp {
         bool add_points = true;
 
         if (options_.robust_registration) {
-            if (kDisplay)
+
+            // Communicate whether we suspect an error
+            suspect_registration_error_ = summary.number_of_attempts >= options_.robust_num_attempts;
+            if (kDisplay) {
+                log_out << "[Robust Registration] " << (suspect_registration_error_ ? "Suspect Registration." : "") <<
+                        "Might be failing. Consecutive failures: " << robust_num_consecutive_failures_ << std::endl;
                 log_out << "[Robust Registration] The rotation ego motion is "
                         << summary.ego_orientation << " (deg)/ " << " relative orientation "
                         << summary.relative_orientation << " (deg) " << std::endl;
-            if (summary.ego_orientation > options_.robust_threshold_ego_orientation ||
-                summary.relative_orientation > options_.robust_threshold_relative_orientation) {
-                if (kDisplay)
-                    log_out << "[Robust Registration] Change in orientation too important. "
-                               "Points will not be added." << std::endl;
-                add_points = false;
+                if (summary.ego_orientation > options_.robust_threshold_ego_orientation ||
+                    summary.relative_orientation > options_.robust_threshold_relative_orientation) {
+                    if (kDisplay)
+                        log_out << "[Robust Registration] Change in orientation too important. "
+                                   "Points will not be added." << std::endl;
+                    add_points = false;
+                }
+
+                if (suspect_registration_error_) {
+                    if (robust_num_consecutive_failures_ < 5) {
+                        if (kDisplay)
+                            log_out << "Adding points despite failure" << std::endl;
+                    }
+                    add_points |= (robust_num_consecutive_failures_ < 5);
+                }
             }
         }
+
 
         if (add_points) {
             //Update Voxel Map+
@@ -423,7 +449,6 @@ namespace ct_icp {
             log_out << "Elapsed Time: " << elapsed_seconds.count() * 1000.0 << " (ms)" << std::endl;
         }
 
-
         summary.corrected_points = frame;
         summary.all_corrected_points = const_frame;
 
@@ -455,16 +480,14 @@ namespace ct_icp {
 
         int number_keypoints_used = 0;
         {
-
-            bool success = false;
             //CT ICP
             if (options_.ct_icp_options.solver == CT_ICP_SOLVER::GN) {
-                success = CT_ICP_GN(options, voxel_map_, keypoints, trajectory_, index_frame);
+                summary.success = CT_ICP_GN(options, voxel_map_, keypoints, trajectory_, index_frame);
             } else {
-                success = CT_ICP_CERES(options, voxel_map_, keypoints, trajectory_, index_frame);
+                summary.success = CT_ICP_CERES(options, voxel_map_, keypoints, trajectory_, index_frame);
             }
 
-            if (!success) {
+            if (!summary.success) {
                 summary.success = false;
                 return summary;
             }
@@ -490,6 +513,14 @@ namespace ct_icp {
                                       RegistrationSummary &summary, std::ostream *log_stream) const {
 
         bool success = summary.success;
+
+        if (robust_num_consecutive_failures_ > 0) {
+            if (summary.number_of_attempts < 2) {
+                summary.error_message = "The previous registration failed. "
+                                        "Need at least two iterations for the next one.";
+                return false;
+            }
+        }
         if (summary.relative_orientation > options_.robust_threshold_relative_orientation ||
             summary.ego_orientation > options_.robust_threshold_ego_orientation) {
             if (summary.number_of_attempts < options_.robust_num_attempts_when_rotation) {
@@ -498,9 +529,7 @@ namespace ct_icp {
                                         " attempts. Got " + std::to_string(summary.number_of_attempts);
                 return false;
             }
-
         }
-
 
         if (summary.relative_distance > options_.robust_relative_trans_threshold) {
             summary.error_message = "The relative distance is too important";
@@ -572,7 +601,8 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    Odometry::Odometry(const OdometryOptions &options) {
+    Odometry::Odometry(
+            const OdometryOptions &options) {
         options_ = options;
         options_.ct_icp_options.init_num_frames = options_.init_num_frames;
         // Update the motion compensation

@@ -12,7 +12,9 @@
 #include <glog/logging.h>
 
 #include "utils.hpp"
+
 #define _USE_MATH_DEFINES
+
 #include <math.h>
 
 namespace ct_icp {
@@ -101,11 +103,15 @@ namespace ct_icp {
         short z;
     };
 
+    typedef std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> ArrayVector3d;
+    typedef std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>> ArrayMatrix4d;
+    typedef ArrayMatrix4d ArrayPoses;
+
     struct VoxelBlock {
 
         explicit VoxelBlock(int num_points = 20) : num_points_(num_points) { points.reserve(num_points); }
 
-        std::vector<Eigen::Vector3d> points;
+        ArrayVector3d points;
 
         bool IsFull() const { return num_points_ == points.size(); }
 
@@ -125,9 +131,6 @@ namespace ct_icp {
 
     typedef tsl::robin_map<Voxel, VoxelBlock> VoxelHashMap;
 
-    typedef std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> ArrayVector3d;
-    typedef std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>> ArrayMatrix4d;
-    typedef ArrayMatrix4d ArrayPoses;
 
 } // namespace Elastic_ICP
 
