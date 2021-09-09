@@ -3,6 +3,9 @@
 #include "odometry.hpp"
 #include "Utilities/PersoTimer.h"
 
+#define _USE_MATH_DEFINES
+#include <math.h>
+
 #ifdef CT_ICP_WITH_VIZ
 
 #include <viz3d/engine.hpp>
