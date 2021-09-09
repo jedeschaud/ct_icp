@@ -144,8 +144,6 @@ namespace ct_icp {
 
         explicit Odometry(const OdometryOptions *options) : Odometry(*options) {}
 
-        TrajectoryFrame LastInsertedPose() const;
-
         // Registers a new Frame to the Map
         RegistrationSummary RegisterFrame(const std::vector<Point3D> &frame);
 
