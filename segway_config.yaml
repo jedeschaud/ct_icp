@@ -32,8 +32,8 @@ odometry_options:
   robust_registration: true
   robust_full_voxel_threshold: 0.7
   robust_max_num_neighbors: 3
-  robust_num_attempts: 10
-  robust_max_voxel_neighborhood: 5
+  robust_num_attempts: 4
+  robust_max_voxel_neighborhood: 4
 
   debug_viz: true
 
