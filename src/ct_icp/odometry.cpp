@@ -251,7 +251,7 @@ namespace ct_icp {
                                                        int index_frame) {
         auto start = std::chrono::steady_clock::now();
         auto &log_out = *log_out_;
-        const bool kDisplay = options_.debug_print;
+        bool kDisplay = options_.debug_print;
         CTICPOptions ct_icp_options = options_.ct_icp_options; // Make a copy of the options
         const double kSizeVoxelInitSample = options_.voxel_size;
 
@@ -533,7 +533,7 @@ namespace ct_icp {
                 ratio_empty_voxel /= points.size();
                 ratio_half_full_voxel /= points.size();
 
-                if (*log_stream)
+                if (log_stream != nullptr)
                     *log_stream << "[Quality Assessment] Keypoint Ratio of voxel half occupied: " <<
                                 ratio_half_full_voxel << std::endl
                                 << "[Quality Assessment] Keypoint Ratio of empty voxel " <<
@@ -599,6 +599,7 @@ namespace ct_icp {
             log_file_ = std::make_unique<std::ofstream>(options_.log_file_destination.c_str(),
                                                         std::ofstream::trunc);
             log_out_ = log_file_.get();
+            *log_out_ << "Debug Print ?" << options_.debug_print << std::endl;
         } else
             log_out_ = &std::cout;
     }

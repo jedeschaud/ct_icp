@@ -212,23 +212,23 @@ PYBIND11_MODULE(pyct_icp, m) {
     using RegSummary = ct_icp::Odometry::RegistrationSummary;
     py::class_<PyRegistrationSummary,
             std::shared_ptr<PyRegistrationSummary>>(m, "RegistrationSummary")
-            .def_readonly("sample_size", &RegSummary::sample_size)
-            .def_readonly("number_keypoints", &RegSummary::number_keypoints)
-            .def_readonly("distance_correction", &RegSummary::distance_correction)
-            .def_readonly("relative_distance", &RegSummary::relative_distance)
-            .def_readonly("number_of_attempts", &RegSummary::relative_orientation)
-            .def_readonly("number_of_attempts", &RegSummary::ego_orientation)
-            .def_readonly("success", &RegSummary::success)
-            .def_readonly("frame", &RegSummary::frame)
-            .def_readonly("error_message", &RegSummary::error_message)
-            .def_readonly("number_of_attempts", &RegSummary::number_of_attempts)
+            .def_readonly("sample_size", &PyRegistrationSummary::sample_size)
+            .def_readonly("number_keypoints", &PyRegistrationSummary::number_keypoints)
+            .def_readonly("distance_correction", &PyRegistrationSummary::distance_correction)
+            .def_readonly("relative_distance", &PyRegistrationSummary::relative_distance)
+            .def_readonly("number_of_attempts", &PyRegistrationSummary::relative_orientation)
+            .def_readonly("number_of_attempts", &PyRegistrationSummary::ego_orientation)
+            .def_readonly("success", &PyRegistrationSummary::success)
+            .def_readonly("frame", &PyRegistrationSummary::frame)
+            .def_readonly("error_message", &PyRegistrationSummary::error_message)
+            .def_readonly("number_of_attempts", &PyRegistrationSummary::number_of_attempts)
             .def_readonly("points", &PyRegistrationSummary::lidar_points);
 
 
     py::class_<ct_icp::Odometry,
             std::shared_ptr<ct_icp::Odometry>>(m, "Odometry")
             .def(py::init([](ct_icp::OdometryOptions &options) {
-                return ct_icp::Odometry(options);
+                return std::make_shared<ct_icp::Odometry>(options);
             }))
             .def("RegisterFrame", [](ct_icp::Odometry &odometry, const LiDARFrame &frame) {
                 return PyRegistrationSummary(odometry.RegisterFrame(frame.points));
