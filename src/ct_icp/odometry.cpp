@@ -275,7 +275,7 @@ namespace ct_icp {
         auto previous_frame = initial_estimate;
         if (index_frame > 0) {
             bool success = false;
-            int num_attempt = 1;
+            summary.number_of_attempts = 1;
             double sample_voxel_size = index_frame < options_.init_num_frames ?
                                        options_.init_sample_voxel_size : options_.sample_voxel_size;
             double min_voxel_size = std::min(options_.init_voxel_size, options_.voxel_size);
@@ -292,9 +292,12 @@ namespace ct_icp {
                     summary.distance_correction = (trajectory_[index_frame].begin_t -
                                                    trajectory_[index_frame - 1].end_t).norm();
 
-                    Eigen::Matrix3d delta_R = (trajectory_[index_frame].end_R *
+                    Eigen::Matrix3d delta_R = (trajectory_[index_frame - 1].end_R *
                                                trajectory_[index_frame].begin_R.inverse());
-                    summary.relative_orientation = (delta_R - Eigen::Matrix3d::Identity()).norm();
+                    summary.relative_orientation = AngularDistance(trajectory_[index_frame - 1].end_R,
+                                                                   trajectory_[index_frame].end_R);
+                    summary.ego_orientation = summary.frame.EgoAngularDistance();
+
                 }
                 summary.relative_distance = (trajectory_[index_frame].end_t - trajectory_[index_frame].begin_t).norm();
 
@@ -304,9 +307,9 @@ namespace ct_icp {
                 if (!success) {
                     // Either fail or
                     if (kDisplay)
-                        log_out << "Registration Attempt n°" << num_attempt << " failed with message: "
+                        log_out << "Registration Attempt n°" << summary.number_of_attempts << " failed with message: "
                                 << summary.error_message << std::endl;
-                    if (options_.robust_registration && num_attempt < options_.robust_num_attempts) {
+                    if (options_.robust_registration && summary.number_of_attempts < options_.robust_num_attempts) {
                         double trans_distance = previous_frame.TranslationDistance(summary.frame);
                         double rot_distance = previous_frame.RotationDistance(summary.frame);
                         if (kDisplay)
@@ -332,13 +335,12 @@ namespace ct_icp {
                                 ct_icp_options.norm_x_end_iteration_ct_icp / 10, 1.e-5);
                         sample_voxel_size = std::max(sample_voxel_size / 1.5, min_voxel_size);
 
-                        num_attempt++;
+                        summary.number_of_attempts++;
                     } else {
                         success = true;
                     }
                 }
             } while (!success);
-            summary.number_of_attempts = num_attempt;
 
             if (!summary.success)
                 return summary;
@@ -356,9 +358,28 @@ namespace ct_icp {
             voxel_map_.clear();
         }
 
-        //Update Voxel Map+
-        AddPointsToMap(voxel_map_, frame, kSizeVoxelMap,
-                       kMaxNumPointsInVoxel, kMinDistancePoints);
+        bool add_points = true;
+
+        if (options_.robust_registration) {
+            if (kDisplay)
+                log_out << "[Robust Registration] The rotation ego motion is "
+                        << summary.ego_orientation << " (deg)/ " << " relative orientation "
+                        << summary.relative_orientation << " (deg) " << std::endl;
+            if (summary.ego_orientation > options_.robust_threshold_ego_orientation ||
+                summary.relative_orientation > options_.robust_threshold_relative_orientation) {
+                if (kDisplay)
+                    log_out << "[Robust Registration] Change in orientation too important. "
+                               "Points will not be added." << std::endl;
+                add_points = false;
+            }
+        }
+
+        if (add_points) {
+            //Update Voxel Map+
+            AddPointsToMap(voxel_map_, frame, kSizeVoxelMap,
+                           kMaxNumPointsInVoxel, kMinDistancePoints);
+        }
+
 
 #ifdef CT_ICP_WITH_VIZ
         if (options_.debug_viz) {
@@ -462,6 +483,18 @@ namespace ct_icp {
                                       RegistrationSummary &summary, std::ostream *log_stream) const {
 
         bool success = summary.success;
+        if (summary.relative_orientation > options_.robust_threshold_relative_orientation ||
+            summary.ego_orientation > options_.robust_threshold_ego_orientation) {
+            if (summary.number_of_attempts < options_.robust_num_attempts_when_rotation) {
+                summary.error_message = "Large rotations require at least " +
+                                        std::to_string(options_.robust_num_attempts_when_rotation) +
+                                        " attempts. Got " + std::to_string(summary.number_of_attempts);
+                return false;
+            }
+
+        }
+
+
         if (summary.relative_distance > options_.robust_relative_trans_threshold) {
             summary.error_message = "The relative distance is too important";
             return false;

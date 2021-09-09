@@ -28,6 +28,13 @@ namespace ct_icp {
         Point3D() = default;
     };
 
+    inline double AngularDistance(const Eigen::Matrix3d &rota,
+                                  const Eigen::Matrix3d &rotb) {
+        double norm = ((rota * rotb.transpose()).trace() - 1) / 2;
+        norm = std::acos(norm) * 180 / M_PI;
+        return norm;
+    }
+
     // A Trajectory Frame
     struct TrajectoryFrame {
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -36,6 +43,10 @@ namespace ct_icp {
         Eigen::Vector3d begin_t;
         Eigen::Matrix3d end_R;
         Eigen::Vector3d end_t;
+
+        inline double EgoAngularDistance() const {
+            return AngularDistance(begin_R, end_R);
+        }
 
         double TranslationDistance(const TrajectoryFrame &other) {
             return (begin_t - other.begin_t).norm() + (end_t - other.end_t).norm();
