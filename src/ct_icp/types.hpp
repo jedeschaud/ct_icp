@@ -12,6 +12,8 @@
 #include <glog/logging.h>
 
 #include "utils.hpp"
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 namespace ct_icp {
 
