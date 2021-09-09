@@ -59,12 +59,18 @@ namespace ct_icp {
 
         short voxel_neighborhood = 1; // Visits the (3 * voxel_neighborhood)^3 neighboring voxels
 
+        double power_planarity = 2.0; // The power of planarity defined in a weight
+
+        // Whether to estimate the normal of the key point or the closest neighbor
+        bool estimate_normal_from_neighborhood = true;
+
         int max_number_neighbors = 20;
 
         double max_dist_to_plane_ct_icp = 0.3; // The maximum distance point-to-plane (OLD Version of ICP)
 
-        double norm_x_end_iteration_ct_icp = 0.001; // The threshold on the norm of the parameters vector
+        double threshold_orientation_norm = 0.0001; // Threshold on rotation (deg) for ICP's stopping criterion
 
+        double threshold_translation_norm = 0.001; // Threshold on translation (deg) for ICP's stopping criterion
 
         bool point_to_plane_with_distortion = true; // Whether to distort the frames at each ICP iteration
 

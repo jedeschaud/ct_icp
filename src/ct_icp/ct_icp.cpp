@@ -99,11 +99,11 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     // Search Neighbors with VoxelHashMap lookups
-    using pair_distance_t = std::pair<double, Eigen::Vector3d>;
+    using pair_distance_t = std::tuple<double, Eigen::Vector3d, Voxel>;
 
     struct Comparator {
         bool operator()(const pair_distance_t &left, const pair_distance_t &right) const {
-            return left.first < right.first;
+            return std::get<0>(left) < std::get<0>(right);
         }
     };
 
@@ -115,7 +115,11 @@ namespace ct_icp {
                      int nb_voxels_visited,
                      double size_voxel_map,
                      int max_num_neighbors,
-                     int threshold_voxel_capacity = 1) {
+                     int threshold_voxel_capacity = 1,
+                     std::vector<Voxel> *voxels = nullptr) {
+
+        if (voxels != nullptr)
+            voxels->reserve(max_num_neighbors);
 
         short kx = static_cast<short>(point[0] / size_voxel_map);
         short ky = static_cast<short>(point[1] / size_voxel_map);
@@ -123,10 +127,15 @@ namespace ct_icp {
 
         priority_queue_t priority_queue;
 
+        Voxel voxel(kx, ky, kz);
         for (short kxx = kx - nb_voxels_visited; kxx < kx + nb_voxels_visited + 1; ++kxx) {
             for (short kyy = ky - nb_voxels_visited; kyy < ky + nb_voxels_visited + 1; ++kyy) {
                 for (short kzz = kz - nb_voxels_visited; kzz < kz + nb_voxels_visited + 1; ++kzz) {
-                    auto search = map.find(Voxel(kxx, kyy, kzz));
+                    voxel.x = kxx;
+                    voxel.y = kyy;
+                    voxel.z = kzz;
+
+                    auto search = map.find(voxel);
                     if (search != map.end()) {
                         const auto &voxel_block = search.value();
                         if (voxel_block.NumPoints() < threshold_voxel_capacity)
@@ -135,12 +144,12 @@ namespace ct_icp {
                             auto &neighbor = voxel_block.points[i];
                             double distance = (neighbor - point).norm();
                             if (priority_queue.size() == max_num_neighbors) {
-                                if (distance < priority_queue.top().first) {
+                                if (distance < std::get<0>(priority_queue.top())) {
                                     priority_queue.pop();
-                                    priority_queue.emplace(distance, neighbor);
+                                    priority_queue.emplace(distance, neighbor, voxel);
                                 }
                             } else
-                                priority_queue.emplace(distance, neighbor);
+                                priority_queue.emplace(distance, neighbor, voxel);
                         }
                     }
                 }
@@ -149,10 +158,16 @@ namespace ct_icp {
 
         auto size = priority_queue.size();
         ArrayVector3d closest_neighbors(size);
+        if (voxels != nullptr) {
+            voxels->resize(size);
+        }
         for (auto i = 0; i < size; ++i) {
-            closest_neighbors[size - 1 - i] = priority_queue.top().second;
+            closest_neighbors[size - 1 - i] = std::get<1>(priority_queue.top());
+            if (voxels != nullptr)
+                (*voxels)[size - 1 - i] = std::get<2>(priority_queue.top());
             priority_queue.pop();
         }
+
 
         return closest_neighbors;
     }
@@ -396,8 +411,71 @@ namespace ct_icp {
         }
 
         int num_iter_icp = index_frame < options.init_num_frames ? 15 : options.num_iters_icp;
-        for (int iter(0); iter < num_iter_icp; iter++) {
 
+        auto transform_keypoints = [&]() {
+            // Elastically distorts the frame to improve on Neighbor estimation
+            Eigen::Matrix3d R;
+            Eigen::Vector3d t;
+            for (auto &keypoint: keypoints) {
+                if (options.point_to_plane_with_distortion || options.distance == CT_POINT_TO_PLANE) {
+                    double alpha_timestamp = keypoint.alpha_timestamp;
+                    Eigen::Quaterniond q = begin_quat.slerp(alpha_timestamp, end_quat);
+                    q.normalize();
+                    R = q.toRotationMatrix();
+                    t = (1.0 - alpha_timestamp) * begin_t + alpha_timestamp * end_t;
+                } else {
+                    R = end_quat.normalized().toRotationMatrix();
+                    t = end_t;
+                }
+
+                keypoint.pt = R * keypoint.raw_pt + t;
+            }
+
+#if CT_ICP_WITH_VIZ
+            if (options.debug_viz) {
+                auto palette = colormap::palettes.at("jet").rescale(0, 1);
+                auto &instance = viz::ExplorationEngine::Instance();
+                auto model_ptr = std::make_shared<viz::PointCloudModel>();
+                auto &model_data = model_ptr->ModelData();
+                model_data.xyz.resize(keypoints.size());
+                model_data.point_size = 4;
+                model_data.default_color = Eigen::Vector3f(1, 0, 0);
+                model_data.rgb.resize(keypoints.size());
+                std::vector<double> scalars(keypoints.size());
+
+                for (size_t i(0); i < keypoints.size(); ++i) {
+                    model_data.xyz[i] = keypoints[i].pt.cast<float>();
+                    scalars[i] = keypoints[i].alpha_timestamp;
+                    colormap::rgb value = palette(keypoints[i].alpha_timestamp);
+
+                    std::uint8_t *rgb_color_ptr = reinterpret_cast<std::uint8_t *>(&value);
+                    model_data.rgb[i].x() = (float) rgb_color_ptr[0] / 255.0f;
+                    model_data.rgb[i].y() = (float) rgb_color_ptr[1] / 255.0f;
+                    model_data.rgb[i].z() = (float) rgb_color_ptr[2] / 255.0f;
+
+                }
+
+                instance.AddModel(-2, model_ptr);
+            }
+#endif
+        };
+
+        auto estimate_normal_and_planarity = [&](ArrayVector3d &vector_neighbors,
+                                                 Eigen::Vector3d &location,
+                                                 Eigen::Vector3d &normal,
+                                                 double &planarity) {
+
+            double a2D; // The planarity coefficient
+            normal = compute_normal(vector_neighbors, a2D);
+            planarity = std::pow(a2D, options.power_planarity);
+
+            if (normal.dot(trajectory[index_frame].begin_t - location) < 0) {
+                normal = -1.0 * normal;
+            }
+        };
+
+        for (int iter(0); iter < num_iter_icp; iter++) {
+            transform_keypoints();
 
             builder.InitProblem(keypoints.size() * options.num_closest_neighbors);
             builder.AddParameterBlocks(begin_quat, end_quat, begin_t, end_t);
@@ -410,28 +488,34 @@ namespace ct_icp {
                 auto &keypoint = keypoints[k];
                 auto &raw_point = keypoint.raw_pt;
                 // Neighborhood search
+                std::vector<Voxel> voxels;
                 auto vector_neighbors = search_neighbors(voxels_map, keypoint.pt,
                                                          nb_voxels_visited, options.size_voxel_map,
-                                                         options.max_number_neighbors, kThresholdCapacity);
+                                                         options.max_number_neighbors, kThresholdCapacity,
+                                                         options.estimate_normal_from_neighborhood ? nullptr : &voxels);
+
                 if (vector_neighbors.size() < kMinNumNeighbors)
                     continue;
 
-                // Compute normals from neighbors
-                double a2D; // The planarity coefficient
-                auto normal = compute_normal(vector_neighbors, a2D);
-
-
-                if (normal.dot(trajectory[index_frame].begin_t - raw_point) < 0) {
-                    normal = -1.0 * normal;
-                }
-
                 // TODO : Add multiple neighbors ?
+                double weight;
+                Eigen::Vector3d normal;
+
+                estimate_normal_and_planarity(vector_neighbors,
+                                              raw_point,
+                                              normal,
+                                              weight);
+
                 double point_to_plane_dist;
+                std::set<Voxel> neighbor_voxels;
+                int next_neighbor_id = 0;
                 for (int i(0); i < options.num_closest_neighbors; ++i) {
-                    point_to_plane_dist = std::abs((keypoint.pt - vector_neighbors[i]).transpose() * normal);
+                    point_to_plane_dist = std::abs(
+                            (keypoint.pt - vector_neighbors[i]).transpose() * normal);
                     if (point_to_plane_dist < options.max_dist_to_plane_ct_icp) {
-                        builder.SetResidualBlock(options.num_closest_neighbors * k + i, k, vector_neighbors[i],
-                                                 normal, a2D * a2D, keypoint.alpha_timestamp);
+                        builder.SetResidualBlock(options.num_closest_neighbors * k + i, k,
+                                                 vector_neighbors[i],
+                                                 normal, weight, keypoint.alpha_timestamp);
                     }
                 }
             }
@@ -495,72 +579,30 @@ namespace ct_icp {
             end_quat.normalize();
 
             double diff_trans = (current_estimate.begin_t - begin_t).norm() + (current_estimate.end_t - end_t).norm();
-            double diff_rot = (current_estimate.begin_R * (begin_quat.toRotationMatrix().transpose()) -
-                               Eigen::Matrix3d::Identity()).norm();
-            diff_rot += (current_estimate.end_R * (end_quat.toRotationMatrix().transpose()) -
-                         Eigen::Matrix3d::Identity()).norm();
+            double diff_rot = AngularDistance(current_estimate.begin_R, begin_quat.toRotationMatrix()) +
+                              AngularDistance(current_estimate.end_R, end_quat.toRotationMatrix());
 
             current_estimate.begin_t = begin_t;
             current_estimate.end_t = end_t;
             current_estimate.begin_R = begin_quat.toRotationMatrix();
             current_estimate.end_R = end_quat.toRotationMatrix();
 
-            // Elastically distorts the frame to improve on Neighbor estimation
-            Eigen::Matrix3d R;
-            Eigen::Vector3d t;
-            for (auto &keypoint: keypoints) {
-                if (options.point_to_plane_with_distortion || options.distance == CT_POINT_TO_PLANE) {
-                    double alpha_timestamp = keypoint.alpha_timestamp;
-                    Eigen::Quaterniond q = begin_quat.slerp(alpha_timestamp, end_quat);
-                    q.normalize();
-                    R = q.toRotationMatrix();
-                    t = (1.0 - alpha_timestamp) * begin_t + alpha_timestamp * end_t;
-                } else {
-                    R = end_quat.normalized().toRotationMatrix();
-                    t = end_t;
-                }
-
-                keypoint.pt = R * keypoint.raw_pt + t;
-            }
-
-#if CT_ICP_WITH_VIZ
-            if (options.debug_viz) {
-                auto palette = colormap::palettes.at("jet").rescale(0, 1);
-                auto &instance = viz::ExplorationEngine::Instance();
-                auto model_ptr = std::make_shared<viz::PointCloudModel>();
-                auto &model_data = model_ptr->ModelData();
-                model_data.xyz.resize(keypoints.size());
-                model_data.point_size = 4;
-                model_data.default_color = Eigen::Vector3f(1, 0, 0);
-                model_data.rgb.resize(keypoints.size());
-                std::vector<double> scalars(keypoints.size());
-
-                for (size_t i(0); i < keypoints.size(); ++i) {
-                    model_data.xyz[i] = keypoints[i].pt.cast<float>();
-                    scalars[i] = keypoints[i].alpha_timestamp;
-                    colormap::rgb value = palette(keypoints[i].alpha_timestamp);
-
-                    std::uint8_t *rgb_color_ptr = reinterpret_cast<std::uint8_t *>(&value);
-                    model_data.rgb[i].x() = (float) rgb_color_ptr[0] / 255.0f;
-                    model_data.rgb[i].y() = (float) rgb_color_ptr[1] / 255.0f;
-                    model_data.rgb[i].z() = (float) rgb_color_ptr[2] / 255.0f;
-
-                }
-
-                instance.AddModel(-2, model_ptr);
-            }
-#endif
-
-
             if (options.point_to_plane_with_distortion) {
                 builder.DistortFrame(begin_quat, end_quat, begin_t, end_t);
             }
 
             if ((index_frame > 1) &&
-                (diff_rot < options.norm_x_end_iteration_ct_icp && diff_trans < options.norm_x_end_iteration_ct_icp)) {
+                (diff_rot < options.threshold_orientation_norm &&
+                 diff_trans < options.threshold_translation_norm)) {
+
+                if (options.debug_print) {
+                    std::cout << "CT_ICP: Finished with N=" << iter << " ICP iterations" << std::endl;
+
+                }
                 break;
             }
         }
+        transform_keypoints();
 
         return true;
     }
@@ -810,7 +852,7 @@ namespace ct_icp {
             elapsed_update += _elapsed_update.count() * 1000.0;
 
 
-            if ((index_frame > 1) && (x_bundle.norm() < options.norm_x_end_iteration_ct_icp)) {
+            if ((index_frame > 1) && (x_bundle.norm() < options.threshold_orientation_norm)) {
                 if (options.debug_print) {
                     std::cout << "Number iterations CT-ICP : " << iter << std::endl;
                     std::cout << "Elapsed Normals: " << elapsed_normals << std::endl;

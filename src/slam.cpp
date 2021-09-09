@@ -162,6 +162,8 @@ SLAMOptions read_config(const std::string &config_path) {
             OPTION_CLAUSE(odometry_node, odometry_options, robust_fail_early, bool);
             OPTION_CLAUSE(odometry_node, odometry_options, robust_num_attempts, int);
             OPTION_CLAUSE(odometry_node, odometry_options, robust_max_voxel_neighborhood, int);
+            OPTION_CLAUSE(odometry_node, odometry_options, robust_threshold_relative_orientation, double)
+            OPTION_CLAUSE(odometry_node, odometry_options, robust_threshold_ego_orientation, double);
 
 
             if (odometry_node["motion_compensation"]) {
@@ -203,7 +205,8 @@ SLAMOptions read_config(const std::string &config_path) {
                 OPTION_CLAUSE(icp_node, icp_options, voxel_neighborhood, short);
                 OPTION_CLAUSE(icp_node, icp_options, max_number_neighbors, int);
                 OPTION_CLAUSE(icp_node, icp_options, max_dist_to_plane_ct_icp, double);
-                OPTION_CLAUSE(icp_node, icp_options, norm_x_end_iteration_ct_icp, double);
+                OPTION_CLAUSE(icp_node, icp_options, threshold_orientation_norm, double);
+                OPTION_CLAUSE(icp_node, icp_options, threshold_translation_norm, double);
                 OPTION_CLAUSE(icp_node, icp_options, debug_print, bool);
                 OPTION_CLAUSE(icp_node, icp_options, point_to_plane_with_distortion, bool);
                 OPTION_CLAUSE(icp_node, icp_options, num_closest_neighbors, int);
@@ -484,7 +487,8 @@ int main(int argc, char **argv) {
 #endif
             if (!summary.success) {
                 std::cerr << "Error while running SLAM for sequence " << sequence_id <<
-                          ", at frame index " << frame_id << std::endl;
+                          ", at frame index " << frame_id << ". Error Message: "
+                          << summary.error_message << std::endl;
                 if (options.suspend_on_failure) {
 #ifdef CT_ICP_WITH_VIZ
                     gui_thread.join();

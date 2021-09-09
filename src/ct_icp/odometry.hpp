@@ -166,6 +166,7 @@ namespace ct_icp {
         VoxelHashMap voxel_map_;
         int registered_frames_ = 0;
         int robust_num_consecutive_failures_ = 0;
+        bool suspect_registration_error_ = false;
         OdometryOptions options_;
         std::ostream *log_out_ = nullptr;
         std::unique_ptr<std::ofstream> log_file_ = nullptr;
