@@ -393,10 +393,7 @@ namespace ct_icp {
                         summary.number_of_attempts++;
                     } else {
                         success = true;
-                        if (summary.number_of_attempts >= options_.robust_num_attempts)
-                            robust_num_consecutive_failures_++;
-                        else
-                            robust_num_consecutive_failures_ = 0;
+
                     }
                 }
             } while (!success);
@@ -406,6 +403,11 @@ namespace ct_icp {
                     log_out << "Failure to register, after " << summary.number_of_attempts << std::endl;
                 return summary;
             }
+
+            if (summary.number_of_attempts >= options_.robust_num_attempts)
+                robust_num_consecutive_failures_++;
+            else
+                robust_num_consecutive_failures_ = 0;
         }
 
         if (kDisplay) {
