@@ -2,8 +2,12 @@
 #include <chrono>
 #include "odometry.hpp"
 #include "Utilities/PersoTimer.h"
+#include "utils.hpp"
+#include <iostream>
+#include <fstream>
 
 #define _USE_MATH_DEFINES
+
 #include <math.h>
 
 #ifdef CT_ICP_WITH_VIZ
@@ -246,7 +250,7 @@ namespace ct_icp {
     Odometry::RegistrationSummary Odometry::DoRegister(const std::vector<Point3D> &const_frame,
                                                        int index_frame) {
         auto start = std::chrono::steady_clock::now();
-        auto &log_out = std::cout;
+        auto &log_out = *log_out_;
         const bool kDisplay = options_.debug_print;
         CTICPOptions ct_icp_options = options_.ct_icp_options; // Make a copy of the options
         const double kSizeVoxelInitSample = options_.voxel_size;
@@ -565,6 +569,38 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     ArrayVector3d Odometry::GetLocalMap() const {
         return MapAsPointcloud(voxel_map_);
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    Odometry::Odometry(const OdometryOptions &options) {
+        options_ = options;
+        options_.ct_icp_options.init_num_frames = options_.init_num_frames;
+        // Update the motion compensation
+        switch (options_.motion_compensation) {
+            case MOTION_COMPENSATION::NONE:
+            case MOTION_COMPENSATION::CONSTANT_VELOCITY:
+                // ElasticICP does not compensate the motion
+                options_.ct_icp_options.point_to_plane_with_distortion = false;
+                options_.ct_icp_options.distance = POINT_TO_PLANE;
+                break;
+            case MOTION_COMPENSATION::ITERATIVE:
+                // ElasticICP compensates the motion at each ICP iteration
+                options_.ct_icp_options.point_to_plane_with_distortion = true;
+                options_.ct_icp_options.distance = POINT_TO_PLANE;
+                break;
+            case MOTION_COMPENSATION::CONTINUOUS:
+                // ElasticICP compensates continuously the motion
+                options_.ct_icp_options.point_to_plane_with_distortion = true;
+                options_.ct_icp_options.distance = CT_POINT_TO_PLANE;
+                break;
+        }
+
+        if (options_.log_to_file) {
+            log_file_ = std::make_unique<std::ofstream>(options_.log_file_destination.c_str(),
+                                                        std::ofstream::trunc);
+            log_out_ = log_file_.get();
+        } else
+            log_out_ = &std::cout;
     }
 
 

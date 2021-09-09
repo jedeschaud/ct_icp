@@ -55,11 +55,6 @@ namespace ct_icp {
         double robust_threshold_ego_orientation = 3; // Angle in degrees
         double robust_threshold_relative_orientation = 3; // Angle in degrees
 
-        // The number of consecutive failures before considering adding points again to the map
-        int robust_num_failures_before_new_init = 10;
-        // The minimum size of voxels on which we allow points to be added in case of robust failure
-        int robust_thresh_voxel_size_before_add = 0;
-
         CTICPOptions ct_icp_options;
 
         MOTION_COMPENSATION motion_compensation = CONTINUOUS;
@@ -71,6 +66,10 @@ namespace ct_icp {
         bool debug_print = true; // Whether to print debug information into the console
 
         bool debug_viz = false; // Whether to display the Local Map in a window
+
+        bool log_to_file = false;
+
+        std::string log_file_destination = "/tmp/ct_icp.log";
 
         ////////////////////////
         /// DEFAULT PROFILES ///
@@ -141,29 +140,7 @@ namespace ct_icp {
 
         };
 
-        explicit Odometry(const OdometryOptions &options) {
-            options_ = options;
-            options_.ct_icp_options.init_num_frames = options_.init_num_frames;
-            // Update the motion compensation
-            switch (options_.motion_compensation) {
-                case MOTION_COMPENSATION::NONE:
-                case MOTION_COMPENSATION::CONSTANT_VELOCITY:
-                    // ElasticICP does not compensate the motion
-                    options_.ct_icp_options.point_to_plane_with_distortion = false;
-                    options_.ct_icp_options.distance = POINT_TO_PLANE;
-                    break;
-                case MOTION_COMPENSATION::ITERATIVE:
-                    // ElasticICP compensates the motion at each ICP iteration
-                    options_.ct_icp_options.point_to_plane_with_distortion = true;
-                    options_.ct_icp_options.distance = POINT_TO_PLANE;
-                    break;
-                case MOTION_COMPENSATION::CONTINUOUS:
-                    // ElasticICP compensates continuously the motion
-                    options_.ct_icp_options.point_to_plane_with_distortion = true;
-                    options_.ct_icp_options.distance = CT_POINT_TO_PLANE;
-                    break;
-            }
-        }
+        explicit Odometry(const OdometryOptions &options);
 
         explicit Odometry(const OdometryOptions *options) : Odometry(*options) {}
 
@@ -192,6 +169,8 @@ namespace ct_icp {
         int registered_frames_ = 0;
         int robust_num_consecutive_failures_ = 0;
         OdometryOptions options_;
+        std::ostream *log_out_ = nullptr;
+        std::unique_ptr<std::ofstream> log_file_ = nullptr;
 
         // Initialize the Frame
         std::vector<Point3D> InitializeFrame(const std::vector<Point3D> &const_frame,

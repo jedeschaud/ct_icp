@@ -201,6 +201,8 @@ PYBIND11_MODULE(pyct_icp, m) {
                     STRUCT_READWRITE(ct_icp::OdometryOptions, robust_full_voxel_threshold)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, robust_num_attempts)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, robust_max_voxel_neighborhood)
+                    STRUCT_READWRITE(ct_icp::OdometryOptions, log_file_destination)
+                    STRUCT_READWRITE(ct_icp::OdometryOptions, log_to_file)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, ct_icp_options);
 
 
@@ -214,6 +216,8 @@ PYBIND11_MODULE(pyct_icp, m) {
             .def_readonly("number_keypoints", &RegSummary::number_keypoints)
             .def_readonly("distance_correction", &RegSummary::distance_correction)
             .def_readonly("relative_distance", &RegSummary::relative_distance)
+            .def_readonly("number_of_attempts", &RegSummary::relative_orientation)
+            .def_readonly("number_of_attempts", &RegSummary::ego_orientation)
             .def_readonly("success", &RegSummary::success)
             .def_readonly("frame", &RegSummary::frame)
             .def_readonly("error_message", &RegSummary::error_message)
