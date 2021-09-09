@@ -200,6 +200,9 @@ PYBIND11_MODULE(pyct_icp, m) {
                     STRUCT_READWRITE(ct_icp::OdometryOptions, robust_registration)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, robust_fail_early)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, robust_full_voxel_threshold)
+                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_empty_voxel_threshold)
+                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_threshold_relative_orientation)
+                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_threshold_ego_orientation)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, robust_num_attempts)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, robust_max_voxel_neighborhood)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, log_file_destination)
@@ -208,6 +211,7 @@ PYBIND11_MODULE(pyct_icp, m) {
 
 
     m.def("DefaultDrivingProfile", &ct_icp::OdometryOptions::DefaultDrivingProfile);
+    m.def("RobustDrivingProfile", &ct_icp::OdometryOptions::RobustDrivingProfile);
     m.def("DefaultRobustOutdoorLowInertia", &ct_icp::OdometryOptions::DefaultRobustOutdoorLowInertia);
 
     using RegSummary = ct_icp::Odometry::RegistrationSummary;
