@@ -154,6 +154,8 @@ SLAMOptions read_config(const std::string &config_path) {
             OPTION_CLAUSE(odometry_node, odometry_options, init_num_frames, int);
             OPTION_CLAUSE(odometry_node, odometry_options, init_voxel_size, double);
             OPTION_CLAUSE(odometry_node, odometry_options, init_sample_voxel_size, double);
+            OPTION_CLAUSE(odometry_node, odometry_options, log_to_file, bool);
+            OPTION_CLAUSE(odometry_node, odometry_options, log_file_destination, std::string);
 
             OPTION_CLAUSE(odometry_node, odometry_options, robust_registration, bool);
             OPTION_CLAUSE(odometry_node, odometry_options, robust_full_voxel_threshold, double);
