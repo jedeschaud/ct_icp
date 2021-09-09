@@ -19,31 +19,33 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     OdometryOptions OdometryOptions::DefaultRobustOutdoorLowInertia() {
         OdometryOptions default_options;
-        default_options.voxel_size = 0.5;
-        default_options.sample_voxel_size = 1.0;
+        default_options.voxel_size = 0.3;
+        default_options.sample_voxel_size = 1.5;
         default_options.max_distance = 100.0;
-        default_options.init_num_frames = 100;
-        default_options.max_num_points_in_voxel = 30;
-        default_options.min_distance_points = 0.1;
+        default_options.init_num_frames = 20;
+        default_options.max_num_points_in_voxel = 20;
+        default_options.min_distance_points = 0.05;
         default_options.distance_error_threshold = 5.0;
         default_options.motion_compensation = CONTINUOUS;
         default_options.initialization = INIT_NONE;
         default_options.robust_registration = true;
         default_options.debug_viz = false;
 
-        default_options.robust_full_voxel_threshold = 0.7;
+        default_options.robust_full_voxel_threshold = 0.5;
+        default_options.robust_empty_voxel_threshold = 0.1;
         default_options.robust_num_attempts = 10;
-        default_options.robust_max_voxel_neighborhood = 5;
+        default_options.robust_max_voxel_neighborhood = 4;
 
         auto &ct_icp_options = default_options.ct_icp_options;
-        ct_icp_options.size_voxel_map = 1.0;
-        ct_icp_options.num_iters_icp = 20;
-        ct_icp_options.threshold_voxel_occupancy = 10;
+        ct_icp_options.size_voxel_map = 0.8;
+        ct_icp_options.num_iters_icp = 10;
+        ct_icp_options.threshold_voxel_occupancy = 5;
         ct_icp_options.min_number_neighbors = 20;
         ct_icp_options.voxel_neighborhood = 1;
 
-        ct_icp_options.init_num_frames = 100;
+        ct_icp_options.init_num_frames = 20;
         ct_icp_options.max_number_neighbors = 20;
+        ct_icp_options.min_number_neighbors = 20;
         ct_icp_options.max_dist_to_plane_ct_icp = 0.5;
         ct_icp_options.norm_x_end_iteration_ct_icp = 0.0001;
         ct_icp_options.point_to_plane_with_distortion = true;
@@ -56,7 +58,7 @@ namespace ct_icp {
         ct_icp_options.solver = CERES;
         ct_icp_options.ls_max_num_iters = 20;
         ct_icp_options.ls_num_threads = 8;
-        ct_icp_options.ls_sigma = 0.1;
+        ct_icp_options.ls_sigma = 0.2;
         ct_icp_options.ls_tolerant_min_threshold = 0.05;
 
         return default_options;
@@ -241,7 +243,7 @@ namespace ct_icp {
     Odometry::RegistrationSummary Odometry::DoRegister(const std::vector<Point3D> &const_frame,
                                                        int index_frame) {
         auto start = std::chrono::steady_clock::now();
-        auto &log_out = LOG(INFO);
+        auto &log_out = std::cout;
         const bool kDisplay = options_.debug_print;
         CTICPOptions ct_icp_options = options_.ct_icp_options; // Make a copy of the options
         const double kSizeVoxelInitSample = options_.voxel_size;
@@ -270,6 +272,7 @@ namespace ct_icp {
         const auto initial_estimate = trajectory_.back();
         RegistrationSummary summary;
         summary.frame = initial_estimate;
+        auto previous_frame = initial_estimate;
         if (index_frame > 0) {
             bool success = false;
             int num_attempt = 1;
@@ -304,8 +307,20 @@ namespace ct_icp {
                         log_out << "Registration Attempt n°" << num_attempt << " failed with message: "
                                 << summary.error_message << std::endl;
                     if (options_.robust_registration && num_attempt < options_.robust_num_attempts) {
+                        double trans_distance = previous_frame.TranslationDistance(summary.frame);
+                        double rot_distance = previous_frame.RotationDistance(summary.frame);
+                        if (kDisplay)
+                            log_out << "Distance to previous trans : " << trans_distance <<
+                                    " rot distance " << rot_distance << std::endl;
+
+                        if (previous_frame.TranslationDistance(summary.frame) < 1.e-2 &&
+                            previous_frame.RotationDistance(summary.frame) < 1.e-3) {
+                            // Do not waste time for no reward
+                            break;
+                        }
+                        previous_frame = summary.frame;
                         // Handle the failure cases
-                        trajectory_.back() = initial_estimate;
+                        // trajectory_[index_frame] = initial_estimate;
                         ct_icp_options.threshold_voxel_occupancy = std::min(
                                 ct_icp_options.threshold_voxel_occupancy + 5,
                                 options_.max_num_points_in_voxel);
@@ -341,38 +356,9 @@ namespace ct_icp {
             voxel_map_.clear();
         }
 
-        int min_num_points = 0;
-        if (options_.robust_registration) {
-            if (summary.number_of_attempts >= options_.robust_num_attempts) {
-                // Considered a failure: Had to use all attempts
-                // We must be careful before adding points to the Map as this strategy can
-                // Pollute the map with bad points
-                if (registered_frames_ >= options_.init_num_frames &&
-                    robust_num_consecutive_failures_ < options_.robust_num_failures_before_new_init) {
-                    min_num_points = std::min(options_.robust_thresh_voxel_size_before_add,
-                                              options_.max_num_points_in_voxel - 1);
-
-                    if (kDisplay) {
-                        log_out << "Consecutive Failure n°" << robust_num_consecutive_failures_ << std::endl;
-                        log_out << "Only adding points in voxels containing at least " << min_num_points << " points";
-                    }
-                } else {
-                    if (kDisplay) {
-                        log_out << "Consecutive Failure n°" << robust_num_consecutive_failures_ << std::endl;
-                        log_out << "Too many consecutive failures. Attempting to add points again in the map" <<
-                                "(Will probably fail)" << std::endl;
-                    }
-                }
-                robust_num_consecutive_failures_++;
-
-            } else {
-                robust_num_consecutive_failures_ = 0;
-            }
-        }
-
         //Update Voxel Map+
         AddPointsToMap(voxel_map_, frame, kSizeVoxelMap,
-                       kMaxNumPointsInVoxel, kMinDistancePoints, min_num_points);
+                       kMaxNumPointsInVoxel, kMinDistancePoints);
 
 #ifdef CT_ICP_WITH_VIZ
         if (options_.debug_viz) {
@@ -490,24 +476,38 @@ namespace ct_icp {
             if (options_.robust_registration) {
                 const double kSizeVoxelMap = options_.ct_icp_options.size_voxel_map;
                 Voxel voxel;
-                double ratio_voxel_occupied = 0;
+                double ratio_empty_voxel = 0;
+                double ratio_half_full_voxel = 0;
+
                 for (auto &point: points) {
                     voxel = Voxel::Coordinates(point.pt, kSizeVoxelMap);
+                    if (voxel_map_.find(voxel) == voxel_map_.end())
+                        ratio_empty_voxel += 1;
                     if (voxel_map_.find(voxel) != voxel_map_.end() &&
-                        voxel_map_.at(voxel).NumPoints() > (2 * options_.max_num_points_in_voxel / 3)) {
+                        voxel_map_.at(voxel).NumPoints() > options_.max_num_points_in_voxel / 2) {
                         // Only count voxels which have at least
-                        ratio_voxel_occupied += 1;
+                        ratio_half_full_voxel += 1;
                     }
                 }
 
-                ratio_voxel_occupied /= points.size();
+                ratio_empty_voxel /= points.size();
+                ratio_half_full_voxel /= points.size();
+
                 if (*log_stream)
-                    *log_stream << "[Quality Assessment] Ratio of voxel half occupied: " <<
-                                ratio_voxel_occupied << std::endl;
-                if (ratio_voxel_occupied < options_.robust_full_voxel_threshold) {
+                    *log_stream << "[Quality Assessment] Keypoint Ratio of voxel half occupied: " <<
+                                ratio_half_full_voxel << std::endl
+                                << "[Quality Assessment] Keypoint Ratio of empty voxel " <<
+                                ratio_empty_voxel << std::endl;
+                if (ratio_half_full_voxel < options_.robust_full_voxel_threshold ||
+                    ratio_empty_voxel > options_.robust_empty_voxel_threshold) {
                     success = false;
-                    summary.error_message = "[Odometry::AssessRegistration] Ratio of new occupied voxels " +
-                                            std::to_string(ratio_voxel_occupied) + "below threshold.";
+                    if (ratio_empty_voxel > options_.robust_empty_voxel_threshold)
+                        summary.error_message = "[Odometry::AssessRegistration] Ratio of empty voxels " +
+                                                std::to_string(ratio_empty_voxel) + "above threshold.";
+                    else
+                        summary.error_message = "[Odometry::AssessRegistration] Ratio of half full voxels " +
+                                                std::to_string(ratio_half_full_voxel) + "below threshold.";
+
                 }
             }
         }

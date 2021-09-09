@@ -43,6 +43,7 @@ namespace ct_icp {
         // And try a new registration with more conservative parameters in case of failure
         bool robust_registration = false;
         double robust_full_voxel_threshold = 0.7;
+        double robust_empty_voxel_threshold = 0.1;
         double robust_neighborhood_min_dist = 0.10; // The minimum relative distance to launch a robust neighborhood test
         double robust_neighborhood_min_orientation = 0.01; // The minimum relative orientation to launch a robust neighborhood
         // Threshold on the relative transform (all motion at 10Hz should be below this value)

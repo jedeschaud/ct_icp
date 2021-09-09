@@ -37,7 +37,14 @@ namespace ct_icp {
         Eigen::Matrix3d end_R;
         Eigen::Vector3d end_t;
 
-        // TODO : Add begin and end Timestamp
+        double TranslationDistance(const TrajectoryFrame &other) {
+            return (begin_t - other.begin_t).norm() + (end_t - other.end_t).norm();
+        }
+
+        double RotationDistance(const TrajectoryFrame &other) {
+            return (begin_R * other.begin_R.inverse() - Eigen::Matrix3d::Identity()).norm() +
+                   (end_R * other.end_R.inverse() - Eigen::Matrix3d::Identity()).norm();
+        }
 
         TrajectoryFrame() = default;
 
