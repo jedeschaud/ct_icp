@@ -24,11 +24,59 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
+    OdometryOptions OdometryOptions::RobustDrivingProfile() {
+        OdometryOptions default_options;
+
+        default_options.voxel_size = 0.5;
+        default_options.sample_voxel_size = 1.5;
+        default_options.max_distance = 200.0;
+        default_options.min_distance_points = 0.15;
+        default_options.init_num_frames = 20;
+        default_options.max_num_points_in_voxel = 20;
+        default_options.min_distance_points = 0.05;
+        default_options.distance_error_threshold = 5.0;
+        default_options.motion_compensation = CONTINUOUS;
+        default_options.initialization = INIT_CONSTANT_VELOCITY;
+
+        default_options.debug_viz = false;
+        default_options.robust_registration = true;
+        default_options.robust_full_voxel_threshold = 0.5;
+        default_options.robust_empty_voxel_threshold = 0.2;
+        default_options.robust_num_attempts = 10;
+        default_options.robust_max_voxel_neighborhood = 4;
+        default_options.robust_threshold_relative_orientation = 5;
+        default_options.robust_threshold_ego_orientation = 5;
+
+        auto &ct_icp_options = default_options.ct_icp_options;
+        ct_icp_options.init_num_frames = 40;
+        ct_icp_options.max_number_neighbors = 20;
+        ct_icp_options.min_number_neighbors = 20;
+        ct_icp_options.num_iters_icp = 15;
+        ct_icp_options.max_dist_to_plane_ct_icp = 0.5;
+        ct_icp_options.threshold_orientation_norm = 0.1;
+        ct_icp_options.threshold_orientation_norm = 0.01;
+        ct_icp_options.point_to_plane_with_distortion = true;
+        ct_icp_options.distance = CT_POINT_TO_PLANE;
+        ct_icp_options.num_closest_neighbors = 1;
+        ct_icp_options.beta_constant_velocity = 0.001;
+        ct_icp_options.beta_location_consistency = 0.001;
+        ct_icp_options.beta_small_velocity = 0.00;
+        ct_icp_options.loss_function = CAUCHY;
+        ct_icp_options.solver = CERES;
+        ct_icp_options.ls_max_num_iters = 20;
+        ct_icp_options.ls_num_threads = 8;
+        ct_icp_options.ls_sigma = 0.2;
+        ct_icp_options.ls_tolerant_min_threshold = 0.05;
+        return default_options;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
     OdometryOptions OdometryOptions::DefaultRobustOutdoorLowInertia() {
         OdometryOptions default_options;
         default_options.voxel_size = 0.3;
         default_options.sample_voxel_size = 1.5;
-        default_options.max_distance = 100.0;
+        default_options.max_distance = 200.0;
+        default_options.min_distance_points = 0.15;
         default_options.init_num_frames = 20;
         default_options.max_num_points_in_voxel = 20;
         default_options.min_distance_points = 0.05;
@@ -38,14 +86,16 @@ namespace ct_icp {
         default_options.robust_registration = true;
         default_options.debug_viz = false;
 
-        default_options.robust_full_voxel_threshold = 0.5;
+        default_options.robust_full_voxel_threshold = 0.6;
         default_options.robust_empty_voxel_threshold = 0.1;
         default_options.robust_num_attempts = 10;
         default_options.robust_max_voxel_neighborhood = 4;
+        default_options.robust_threshold_relative_orientation = 2;
+        default_options.robust_threshold_ego_orientation = 2;
 
         auto &ct_icp_options = default_options.ct_icp_options;
-        ct_icp_options.size_voxel_map = 0.8;
-        ct_icp_options.num_iters_icp = 10;
+        ct_icp_options.size_voxel_map = 1.0;
+        ct_icp_options.num_iters_icp = 30;
         ct_icp_options.threshold_voxel_occupancy = 5;
         ct_icp_options.min_number_neighbors = 20;
         ct_icp_options.voxel_neighborhood = 1;
@@ -54,7 +104,8 @@ namespace ct_icp {
         ct_icp_options.max_number_neighbors = 20;
         ct_icp_options.min_number_neighbors = 20;
         ct_icp_options.max_dist_to_plane_ct_icp = 0.5;
-        ct_icp_options.threshold_orientation_norm = 0.0001;
+        ct_icp_options.threshold_orientation_norm = 0.1;
+        ct_icp_options.threshold_orientation_norm = 0.01;
         ct_icp_options.point_to_plane_with_distortion = true;
         ct_icp_options.distance = CT_POINT_TO_PLANE;
         ct_icp_options.num_closest_neighbors = 1;
@@ -63,7 +114,7 @@ namespace ct_icp {
         ct_icp_options.beta_small_velocity = 0.01;
         ct_icp_options.loss_function = CAUCHY;
         ct_icp_options.solver = CERES;
-        ct_icp_options.ls_max_num_iters = 20;
+        ct_icp_options.ls_max_num_iters = 10;
         ct_icp_options.ls_num_threads = 8;
         ct_icp_options.ls_sigma = 0.2;
         ct_icp_options.ls_tolerant_min_threshold = 0.05;
@@ -323,13 +374,6 @@ namespace ct_icp {
                         if (kDisplay)
                             log_out << "Distance to previous trans : " << trans_distance <<
                                     " rot distance " << rot_distance << std::endl;
-
-//                        if (previous_frame.TranslationDistance(summary.frame) < 1.e-2 &&
-//                            previous_frame.RotationDistance(summary.frame) < 1.e-3) {
-//                            // Do not waste time for no reward
-//                            if (kDisplay)
-//                                std::cout << "Break"
-//                        }
 
                         previous_frame = summary.frame;
                         // Handle the failure cases

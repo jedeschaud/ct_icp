@@ -79,10 +79,12 @@ namespace ct_icp {
         // e.g. Used for the dataset KITTI
         static OdometryOptions DefaultDrivingProfile();
 
-        // Returns the default parameters for abrupt profiles
+        // Returns the default parameters for sensor with high frequency acceleration changes
         // e.g. Used for the dataset NCLT
         static OdometryOptions DefaultRobustOutdoorLowInertia();
 
+        // Returns the default parameters for a robust Driving Profile
+        static OdometryOptions RobustDrivingProfile();
         // TODO: INDOOR
 
     };
