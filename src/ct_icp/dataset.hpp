@@ -11,7 +11,8 @@ namespace ct_icp {
         KITTI_CARLA = 1,
         KITTI = 2,
         KITTI_360 = 3,
-        NCLT = 4
+        NCLT = 4,
+        PLY_DIRECTORY = 5
     };
 
     class DatasetSequence {
@@ -94,7 +95,7 @@ namespace ct_icp {
     ArrayPoses load_sensor_ground_truth(const DatasetOptions &, int sequence_id);
 
     // Returns a DatasetSequence
-    std::shared_ptr<DatasetSequence> get_dataset_sequence(const DatasetOptions &, int sequence_id);
+    std::shared_ptr<DatasetSequence> get_dataset_sequence(const DatasetOptions &, int sequence_id=-1);
 
 }
 

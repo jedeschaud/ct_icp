@@ -2,7 +2,8 @@
 
 BUILD_TYPE=$1
 GENERATOR=$2
-WITH_VIZ=$3
+WITH_PYTHON_BINDING=$3
+WITH_VIZ=$4
 
 if [ -z "$BUILD_TYPE" ]
 then
@@ -14,10 +15,16 @@ then
 	GENERATOR="Unix Makefiles"
 fi
 
+if [ -z "$WITH_PYTHON_BINDING" ]
+then
+	WITH_PYTHON_BINDING=OFF
+fi
+
 if [ -z "$WITH_VIZ" ]
 then
 	WITH_VIZ=OFF
 fi
+
 
 # Setting variables
 SRC_DIR=$(pwd)
@@ -50,7 +57,7 @@ check_status_code $?
 
 echo "[CT_ICP] -- [MAIN PROJECT] -- Generating the cmake project"
 cd $BUILD_DIR
-cmake -G "$GENERATOR" -S $SRC_DIR -DCMAKE_BUILD_TYPE=${BUILD_TYPE}  -DWITH_VIZ3D=$WITH_VIZ
+cmake -G "$GENERATOR" -S $SRC_DIR -DCMAKE_BUILD_TYPE=${BUILD_TYPE}  -DWITH_VIZ3D=$WITH_VIZ -DWITH_PYTHON_BINDING=${WITH_PYTHON_BINDING}
 check_status_code $?
 
 echo "[CT_ICP] -- [MAIN PROJECT] -- Building the CMake Project"

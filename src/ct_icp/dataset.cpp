@@ -35,7 +35,7 @@ namespace ct_icp {
 
     // Calibration Sequence 00, 01, 02, 13, 14, 15, 16, 17, 18, 19, 20, 21
     const double R_Tr_data_A_KITTI[] = {4.276802385584e-04, -9.999672484946e-01, -8.084491683471e-03,
-                                        -7.210626507497e-03, 8.081198471645e-03, -9.999413164504e-01, 
+                                        -7.210626507497e-03, 8.081198471645e-03, -9.999413164504e-01,
                                         9.999738645903e-01, 4.859485810390e-04, -7.206933692422e-03};
     Eigen::Matrix3d R_Tr_A_KITTI(R_Tr_data_A_KITTI);
     Eigen::Vector3d T_Tr_A_KITTI = Eigen::Vector3d(-1.198459927713e-02, -5.403984729748e-02, -2.921968648686e-01);
@@ -49,7 +49,7 @@ namespace ct_icp {
 
     // Calibration Sequence 04, 05, 06, 07, 08, 09, 10, 11, 12
     const double R_Tr_data_C_KITTI[] = {-1.857739385241e-03, -9.999659513510e-01, -8.039975204516e-03,
-                                        -6.481465826011e-03, 8.051860151134e-03, -9.999466081774e-01, 
+                                        -6.481465826011e-03, 8.051860151134e-03, -9.999466081774e-01,
                                         9.999773098287e-01, -1.805528627661e-03, -6.496203536139e-03};
     const Eigen::Matrix3d R_Tr_C_KITTI(R_Tr_data_C_KITTI);
     const Eigen::Vector3d T_Tr_C_KITTI = Eigen::Vector3d(-4.784029760483e-03, -7.337429464231e-02, -3.339968064433e-01);
@@ -246,11 +246,19 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     std::vector<Point3D> read_pointcloud(const DatasetOptions &options, int sequence_id, int frame_id) {
-        std::string frames_dir_path = pointclouds_dir_path(options, sequence_name(options, sequence_id));
+
+        std::string frames_dir_path;
+        if (options.dataset == PLY_DIRECTORY)
+        {
+          frames_dir_path = options.root_path + "/";
+        }
+        else
+          frames_dir_path= pointclouds_dir_path(options, sequence_name(options, sequence_id));
         std::string frame_path = frames_dir_path + frame_file_name(frame_id);
 
         // Read the pointcloud
         switch (options.dataset) {
+            case PLY_DIRECTORY:
             case KITTI_raw:
                 return read_kitti_raw_pointcloud(options, frame_path);
             case KITTI_CARLA:
@@ -671,7 +679,7 @@ namespace ct_icp {
     /// DirectoryIterator for KITTI_raw and KITTI_CARLA and KITTI
     class DirectoryIterator : public DatasetSequence {
     public:
-        explicit DirectoryIterator(const DatasetOptions &options, int sequence_id) : options_(options),
+        explicit DirectoryIterator(const DatasetOptions &options, int sequence_id=-1) : options_(options),
                                                                                      sequence_id_(sequence_id) {
             switch (options.dataset) {
                 case KITTI_raw:
@@ -850,7 +858,8 @@ namespace ct_icp {
                 return std::make_shared<DirectoryIterator>(options, sequence_id);
             case NCLT:
                 return std::make_shared<NCLTIterator>(options, sequence_id);
-
+            case PLY_DIRECTORY:
+                return std::make_shared<DirectoryIterator>(options);
             default:
                 throw std::runtime_error("Not Implemented Error");
         }
