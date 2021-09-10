@@ -92,7 +92,8 @@ SLAMOptions read_config(const std::string &config_path) {
 
         if (dataset_node["dataset"]) {
             auto dataset = dataset_node["dataset"].as<std::string>();
-            CHECK(dataset == "KITTI_raw" || dataset == "KITTI_CARLA" || dataset == "KITTI" || dataset == "KITTI-360" || dataset == "NCLT");
+            CHECK(dataset == "KITTI_raw" || dataset == "KITTI_CARLA" || dataset == "KITTI" ||
+            dataset == "KITTI-360" || dataset == "NCLT" || dataset == "PLY_DIRECTORY");
             if (dataset == "KITTI_raw")
                 dataset_options.dataset = KITTI_raw;
             if (dataset == "KITTI_CARLA")
