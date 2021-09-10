@@ -643,6 +643,8 @@ namespace ct_icp {
                 return sequence_id >= 0 && sequence_id <= 10;
             case KITTI_360:
                 return sequence_id >= 0 && sequence_id <= 10;
+            case PLY_DIRECTORY:
+              return false;
             case NCLT:
                 // TODO Ground truth for NCLT
                 return false;
