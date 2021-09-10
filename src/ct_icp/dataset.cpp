@@ -185,59 +185,73 @@ namespace ct_icp {
             case NCLT:
                 num_sequences = 27;
                 break;
+          case PLY_DIRECTORY:
+                num_sequences = 1;
+                break;
         }
 
         sequences.reserve(num_sequences);
-
-        for (auto i(0); i < num_sequences; ++i) {
-            SequenceInfo new_sequence_info;
-            switch (options.dataset) {
-                case KITTI_raw:
-                    new_sequence_info.sequence_id = KITTI_raw_SEQUENCE_IDS[i];
-                    new_sequence_info.sequence_size = LENGTH_SEQUENCE_KITTI[new_sequence_info.sequence_id] + 1;
-                    new_sequence_info.sequence_name = KITTI_SEQUENCE_NAMES[new_sequence_info.sequence_id];
-                    break;
-                case KITTI_CARLA:
-                    new_sequence_info.sequence_id = i;
-                    new_sequence_info.sequence_size = 5000;
-                    new_sequence_info.sequence_name = KITTI_CARLA_SEQUENCE_NAMES[new_sequence_info.sequence_id];
-                    break;
-                case KITTI:
-                    new_sequence_info.sequence_id = KITTI_SEQUENCE_IDS[i];
-                    new_sequence_info.sequence_size = LENGTH_SEQUENCE_KITTI[new_sequence_info.sequence_id] + 1;
-                    new_sequence_info.sequence_name = KITTI_SEQUENCE_NAMES[new_sequence_info.sequence_id];
-                    break;
-                case KITTI_360:
-                    new_sequence_info.sequence_id = KITTI_360_SEQUENCE_IDS[i];
-                    new_sequence_info.sequence_size = LENGTH_SEQUENCE_KITTI_360[new_sequence_info.sequence_id] + 1;
-                    new_sequence_info.sequence_name = KITTI_360_SEQUENCE_NAMES[new_sequence_info.sequence_id];
-                    break;
-                case NCLT:
-                    new_sequence_info.sequence_id = i;
-                    new_sequence_info.sequence_size = -1;
-                    new_sequence_info.sequence_name =
-                            std::string(NCLT_SEQUENCE_NAMES[new_sequence_info.sequence_id]) + "_vel";
-                    break;
-            }
-
-            bool add_sequence = true;
-#ifdef WITH_STD_FILESYSTEM
-            std::filesystem::path root_path(options.root_path);
-            auto sequence_path = root_path / new_sequence_info.sequence_name;
-            if (!fs::exists(sequence_path)) {
-                add_sequence = false;
-                LOG(INFO) << "Could not find sequence directory at " << sequence_path.string()
-                          << "... Skipping sequence " << new_sequence_info.sequence_name;
-            } else {
-                LOG(INFO) << "Found Sequence " << new_sequence_info.sequence_name << std::endl;
-            }
-#endif
-
-            if (add_sequence)
-                sequences.push_back(new_sequence_info);
+        int size = 0;
+        if (options.dataset == PLY_DIRECTORY) {
+          auto dirIter = std::filesystem::directory_iterator(options.root_path);
+          size = std::count_if(
+              begin(dirIter),
+              end(dirIter),
+              [](auto &entry) { return entry.is_regular_file(); });
         }
-        return sequences;
-    }
+        for (auto i(0); i < num_sequences; ++i) {
+              SequenceInfo new_sequence_info;
+              switch (options.dataset) {
+                  case PLY_DIRECTORY:
+                      new_sequence_info.sequence_id = 0;;
+                      new_sequence_info.sequence_size= size;
+
+                  case KITTI_raw:
+                      new_sequence_info.sequence_id = KITTI_raw_SEQUENCE_IDS[i];
+                      new_sequence_info.sequence_size = LENGTH_SEQUENCE_KITTI[new_sequence_info.sequence_id] + 1;
+                      new_sequence_info.sequence_name = KITTI_SEQUENCE_NAMES[new_sequence_info.sequence_id];
+                      break;
+                  case KITTI_CARLA:
+                      new_sequence_info.sequence_id = i;
+                      new_sequence_info.sequence_size = 5000;
+                      new_sequence_info.sequence_name = KITTI_CARLA_SEQUENCE_NAMES[new_sequence_info.sequence_id];
+                      break;
+                  case KITTI:
+                      new_sequence_info.sequence_id = KITTI_SEQUENCE_IDS[i];
+                      new_sequence_info.sequence_size = LENGTH_SEQUENCE_KITTI[new_sequence_info.sequence_id] + 1;
+                      new_sequence_info.sequence_name = KITTI_SEQUENCE_NAMES[new_sequence_info.sequence_id];
+                      break;
+                  case KITTI_360:
+                      new_sequence_info.sequence_id = KITTI_360_SEQUENCE_IDS[i];
+                      new_sequence_info.sequence_size = LENGTH_SEQUENCE_KITTI_360[new_sequence_info.sequence_id] + 1;
+                      new_sequence_info.sequence_name = KITTI_360_SEQUENCE_NAMES[new_sequence_info.sequence_id];
+                      break;
+                  case NCLT:
+                      new_sequence_info.sequence_id = i;
+                      new_sequence_info.sequence_size = -1;
+                      new_sequence_info.sequence_name =
+                              std::string(NCLT_SEQUENCE_NAMES[new_sequence_info.sequence_id]) + "_vel";
+                      break;
+              }
+
+              bool add_sequence = true;
+  #ifdef WITH_STD_FILESYSTEM
+              std::filesystem::path root_path(options.root_path);
+              auto sequence_path = root_path / new_sequence_info.sequence_name;
+              if (!fs::exists(sequence_path)) {
+                  add_sequence = false;
+                  LOG(INFO) << "Could not find sequence directory at " << sequence_path.string()
+                            << "... Skipping sequence " << new_sequence_info.sequence_name;
+              } else {
+                  LOG(INFO) << "Found Sequence " << new_sequence_info.sequence_name << std::endl;
+              }
+  #endif
+
+              if (add_sequence)
+                  sequences.push_back(new_sequence_info);
+          }
+          return sequences;
+      }
 
 
     /* -------------------------------------------------------------------------------------------------------------- */
