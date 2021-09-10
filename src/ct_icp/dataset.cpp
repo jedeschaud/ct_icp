@@ -113,16 +113,12 @@ namespace ct_icp {
 
         switch (options.dataset) {
             case KITTI_raw:
-                folder_path += sequence_name + "/frames/";
-                break;
             case KITTI_CARLA:
-                folder_path += sequence_name + "/frames/";
-                break;
             case KITTI:
-                folder_path += sequence_name + "/frames/";
-                break;
             case KITTI_360:
-                folder_path += sequence_name + "/frames/";
+              folder_path += sequence_name + "/frames/";
+          case PLY_DIRECTORY:
+              folder_path += "/frames/";
                 break;
             case NCLT:
                 throw std::runtime_error("Not Implemented!");
@@ -247,13 +243,7 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     std::vector<Point3D> read_pointcloud(const DatasetOptions &options, int sequence_id, int frame_id) {
 
-        std::string frames_dir_path;
-        if (options.dataset == PLY_DIRECTORY)
-        {
-          frames_dir_path = options.root_path + "/";
-        }
-        else
-          frames_dir_path= pointclouds_dir_path(options, sequence_name(options, sequence_id));
+        std::string frames_dir_path= pointclouds_dir_path(options, sequence_name(options, sequence_id));
         std::string frame_path = frames_dir_path + frame_file_name(frame_id);
 
         // Read the pointcloud

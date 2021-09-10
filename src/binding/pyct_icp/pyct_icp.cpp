@@ -231,6 +231,8 @@ PYBIND11_MODULE(pyct_icp, m) {
             ADD_VALUE(ct_icp::DATASET, KITTI_raw)
             ADD_VALUE(ct_icp::DATASET, KITTI_CARLA)
             ADD_VALUE(ct_icp::DATASET, NCLT)
+            ADD_VALUE(ct_icp::DATASET, PLY_DIRECTORY)
+            ADD_VALUE(ct_icp::DATASET, KITTI_360)
             .export_values();
 
     py::class_<ct_icp::DatasetOptions>(m, "DatasetOptions")
