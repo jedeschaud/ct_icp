@@ -117,7 +117,7 @@ SLAMOptions read_config(const std::string &config_path) {
         if (dataset_node["dataset"]) {
             auto dataset = dataset_node["dataset"].as<std::string>();
             CHECK(dataset == "KITTI_raw" || dataset == "KITTI_CARLA" || dataset == "KITTI" ||
-            dataset == "KITTI-360" || dataset == "NCLT" || dataset == "PLY_DIRECTORY");
+                  dataset == "KITTI-360" || dataset == "NCLT" || dataset == "PLY_DIRECTORY");
             if (dataset == "KITTI_raw")
                 dataset_options.dataset = KITTI_raw;
             if (dataset == "KITTI_CARLA")
@@ -129,7 +129,7 @@ SLAMOptions read_config(const std::string &config_path) {
             if (dataset == "NCLT")
                 dataset_options.dataset = NCLT;
             if (dataset == "PLY_DIRECTORY")
-              dataset_options.dataset = PLY_DIRECTORY;
+                dataset_options.dataset = PLY_DIRECTORY;
         }
         OPTION_CLAUSE(dataset_node, dataset_options, root_path, std::string);
         OPTION_CLAUSE(dataset_node, dataset_options, fail_if_incomplete, bool);
@@ -329,8 +329,8 @@ SLAMOptions read_arguments(int argc, char **argv) {
                       << std::endl;
             exit(1);
         }
-        if(dataset == "PLY_DIRECTORY")
-          options.dataset_options.dataset = DATASET::PLY_DIRECTORY;
+        if (dataset == "PLY_DIRECTORY")
+            options.dataset_options.dataset = DATASET::PLY_DIRECTORY;
         if (dataset == "KITTI_raw")
             options.dataset_options.dataset = DATASET::KITTI_raw;
         if (dataset == "KITTI_CARLA")
