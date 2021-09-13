@@ -281,6 +281,8 @@ namespace ct_icp {
             }
         }
 
+        std::shuffle(frame.begin(), frame.end(), g);
+
         if (index_frame > 1) {
             if (options_.motion_compensation == CONSTANT_VELOCITY) {
                 // The motion compensation of Constant velocity modifies the raw points of the point cloud
@@ -339,19 +341,51 @@ namespace ct_icp {
         RegistrationSummary summary;
         summary.frame = initial_estimate;
         auto previous_frame = initial_estimate;
+
+
         if (index_frame > 0) {
             bool success = false;
             summary.number_of_attempts = 1;
             double sample_voxel_size = index_frame < options_.init_num_frames ?
                                        options_.init_sample_voxel_size : options_.sample_voxel_size;
             double min_voxel_size = std::min(options_.init_voxel_size, options_.voxel_size);
+
+            auto increase_robustness_level = [&]() {
+                previous_frame = summary.frame;
+                // Handle the failure cases
+                trajectory_[index_frame] = initial_estimate;
+                ct_icp_options.voxel_neighborhood = std::min(++ct_icp_options.voxel_neighborhood,
+                                                             options_.robust_max_voxel_neighborhood);
+                ct_icp_options.ls_max_num_iters += 30;
+                if (ct_icp_options.max_num_residuals > 0)
+                    ct_icp_options.max_num_residuals = ct_icp_options.max_num_residuals * 2;
+                ct_icp_options.num_iters_icp = min(ct_icp_options.num_iters_icp + 20, 50);
+                ct_icp_options.threshold_orientation_norm = max(
+                        ct_icp_options.threshold_orientation_norm / 10, 1.e-5);
+                ct_icp_options.threshold_translation_norm = max(
+                        ct_icp_options.threshold_orientation_norm / 10, 1.e-4);
+                sample_voxel_size = std::max(sample_voxel_size / 1.5, min_voxel_size);
+                ct_icp_options.ls_sigma *= 1.1;
+                ct_icp_options.max_dist_to_plane_ct_icp *= 1.1;
+            };
+
+            summary.robust_level = 0;
             do {
+                if (summary.robust_level < next_robust_level_) {
+                    // Increase the robustness for the first iteration after a failure
+                    summary.robust_level++;
+                    increase_robustness_level();
+                    continue;
+                }
                 auto start_ct_icp = std::chrono::steady_clock::now();
                 TryRegister(frame, index_frame, ct_icp_options, summary, sample_voxel_size);
                 auto end_ct_icp = std::chrono::steady_clock::now();
                 std::chrono::duration<double> elapsed_icp = (end_ct_icp - start);
-                if (kDisplay)
+                if (kDisplay) {
                     log_out << "Elapsed Elastic_ICP: " << (elapsed_icp.count()) * 1000.0 << std::endl;
+                    log_out << "Number of Keypoints extracted: " << summary.sample_size <<
+                            " / Actual number of residuals: " << summary.number_of_residuals << std::endl;
+                }
 
                 // Compute Modification of trajectory
                 if (index_frame > 0) {
@@ -382,22 +416,8 @@ namespace ct_icp {
                         if (kDisplay)
                             log_out << "Distance to previous trans : " << trans_distance <<
                                     " rot distance " << rot_distance << std::endl;
-
-                        previous_frame = summary.frame;
-                        // Handle the failure cases
-                        trajectory_[index_frame] = initial_estimate;
-                        ct_icp_options.voxel_neighborhood = std::min(++ct_icp_options.voxel_neighborhood,
-                                                                     options_.robust_max_voxel_neighborhood);
-                        ct_icp_options.ls_max_num_iters += 30;
-                        ct_icp_options.num_iters_icp = min(ct_icp_options.num_iters_icp + 20, 50);
-                        ct_icp_options.threshold_orientation_norm = max(
-                                ct_icp_options.threshold_orientation_norm / 10, 1.e-5);
-                        ct_icp_options.threshold_translation_norm = max(
-                                ct_icp_options.threshold_orientation_norm / 10, 1.e-4);
-                        sample_voxel_size = std::max(sample_voxel_size / 1.5, min_voxel_size);
-                        ct_icp_options.ls_sigma *= 1.1;
-                        ct_icp_options.max_dist_to_plane_ct_icp *= 1.1;
-
+                        increase_robustness_level();
+                        summary.robust_level++;
                         summary.number_of_attempts++;
                     } else {
                         success = true;
@@ -442,22 +462,37 @@ namespace ct_icp {
                 log_out << "[Robust Registration] The rotation ego motion is "
                         << summary.ego_orientation << " (deg)/ " << " relative orientation "
                         << summary.relative_orientation << " (deg) " << std::endl;
-                if (summary.ego_orientation > options_.robust_threshold_ego_orientation ||
-                    summary.relative_orientation > options_.robust_threshold_relative_orientation) {
-                    if (kDisplay)
-                        log_out << "[Robust Registration] Change in orientation too important. "
-                                   "Points will not be added." << std::endl;
-                    add_points = false;
-                }
+            }
 
-                if (suspect_registration_error_) {
-                    if (robust_num_consecutive_failures_ < 5) {
-                        if (kDisplay)
-                            log_out << "Adding points despite failure" << std::endl;
-                    }
-                    add_points |= (robust_num_consecutive_failures_ < 5);
+            if (summary.ego_orientation > options_.robust_threshold_ego_orientation ||
+                summary.relative_orientation > options_.robust_threshold_relative_orientation) {
+                if (kDisplay)
+                    log_out << "[Robust Registration] Change in orientation too important. "
+                               "Points will not be added." << std::endl;
+                add_points = false;
+            }
+
+            if (suspect_registration_error_) {
+                if (robust_num_consecutive_failures_ > 5) {
+                    if (kDisplay)
+                        log_out << "Adding points despite failure" << std::endl;
+                }
+                add_points |= (robust_num_consecutive_failures_ > 5);
+            }
+
+            next_robust_level_ = add_points ? options_.robust_minimal_level : options_.robust_minimal_level + 1;
+            if (!summary.success)
+                next_robust_level_ = options_.robust_minimal_level + 2;
+            else {
+                if (summary.relative_orientation > options_.robust_threshold_relative_orientation ||
+                    summary.ego_orientation > options_.robust_threshold_ego_orientation) {
+                    next_robust_level_ = options_.robust_minimal_level + 1;
+                }
+                if (summary.number_of_attempts > 1) {
+                    next_robust_level_ = options_.robust_minimal_level + 1;
                 }
             }
+
         }
 
 
@@ -532,14 +567,18 @@ namespace ct_icp {
         auto num_keypoints = (int) keypoints.size();
         summary.sample_size = num_keypoints;
 
-        int number_keypoints_used = 0;
         {
+
             //CT ICP
+            ICPSummary _summary;
             if (options_.ct_icp_options.solver == CT_ICP_SOLVER::GN) {
-                summary.success = CT_ICP_GN(options, voxel_map_, keypoints, trajectory_, index_frame);
+
+                _summary = CT_ICP_GN(options, voxel_map_, keypoints, trajectory_, index_frame);
             } else {
-                summary.success = CT_ICP_CERES(options, voxel_map_, keypoints, trajectory_, index_frame);
+                _summary = CT_ICP_CERES(options, voxel_map_, keypoints, trajectory_, index_frame);
             }
+            summary.success = _summary.success;
+            summary.number_of_residuals = _summary.num_residuals_used;
 
             if (!summary.success) {
                 summary.success = false;
@@ -557,7 +596,6 @@ namespace ct_icp {
             }
         }
         summary.keypoints = keypoints;
-        summary.number_keypoints = number_keypoints_used;
         summary.frame = trajectory_[index_frame];
         return summary;
     }
@@ -567,20 +605,12 @@ namespace ct_icp {
                                       RegistrationSummary &summary, std::ostream *log_stream) const {
 
         bool success = summary.success;
-
-        if (robust_num_consecutive_failures_ > 0) {
-            if (summary.number_of_attempts < 2) {
-                summary.error_message = "The previous registration failed. "
-                                        "Need at least two iterations for the next one.";
-                return false;
-            }
-        }
-        if (summary.relative_orientation > options_.robust_threshold_relative_orientation ||
-            summary.ego_orientation > options_.robust_threshold_ego_orientation) {
+        if (summary.robust_level == 0 &&
+            (summary.relative_orientation > options_.robust_threshold_relative_orientation ||
+             summary.ego_orientation > options_.robust_threshold_ego_orientation)) {
             if (summary.number_of_attempts < options_.robust_num_attempts_when_rotation) {
-                summary.error_message = "Large rotations require at least " +
-                                        std::to_string(options_.robust_num_attempts_when_rotation) +
-                                        " attempts. Got " + std::to_string(summary.number_of_attempts);
+                summary.error_message = "Large rotations require at a robust_level of at least 1 (got:" +
+                                        std::to_string(summary.robust_level) + ").";
                 return false;
             }
         }
@@ -678,6 +708,7 @@ namespace ct_icp {
                 options_.ct_icp_options.distance = CT_POINT_TO_PLANE;
                 break;
         }
+        next_robust_level_ = options.robust_minimal_level;
 
         if (options_.log_to_file) {
             log_file_ = std::make_unique<std::ofstream>(options_.log_file_destination.c_str(),
@@ -720,7 +751,6 @@ namespace ct_icp {
         }
         for (auto &vox: voxels_to_erase)
             map.erase(vox);
-
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */

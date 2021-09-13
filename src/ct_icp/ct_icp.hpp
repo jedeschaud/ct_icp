@@ -74,6 +74,10 @@ namespace ct_icp {
 
         bool point_to_plane_with_distortion = true; // Whether to distort the frames at each ICP iteration
 
+        int max_num_residuals = -1; // The maximum number of keypoints used
+
+        int min_num_residuals = 100; // Below this number, CT_ICP will crash
+
         ICP_DISTANCE distance = CT_POINT_TO_PLANE;
 
         int num_closest_neighbors = 1; // The number of closest neighbors considered as residuals
@@ -109,6 +113,14 @@ namespace ct_icp {
         bool debug_viz = false; // Whether to pass the key points to the ExplorationEngine
     };
 
+    struct ICPSummary {
+        bool success = false; // Whether the registration succeeded
+
+        int num_residuals_used = 0;
+
+        std::string error_log;
+    };
+
     // CT_ICP_CERES : Registers keypoints into the voxel_map taking into account the motion of the
     //               Sensor during the acquisition of the LiDAR Frame
     //
@@ -129,11 +141,11 @@ namespace ct_icp {
     //      At each iteration, after refinement of the estimate of the end pose of the trajectory frame
     //
     // Note: CT_ICP_CERES will modify the last TrajectoryFrame of the trajectory vector
-    bool CT_ICP_CERES(const CTICPOptions &options,
+    ICPSummary CT_ICP_CERES(const CTICPOptions &options,
                       const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
                       std::vector<TrajectoryFrame> &trajectory, int index_frame);
 
-    bool CT_ICP_GN(const CTICPOptions &options,
+    ICPSummary CT_ICP_GN(const CTICPOptions &options,
                    const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
                    std::vector<TrajectoryFrame> &trajectory, int index_frame);
 

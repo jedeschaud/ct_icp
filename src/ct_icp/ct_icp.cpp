@@ -218,6 +218,8 @@ namespace ct_icp {
             corrected_raw_points_.resize(keypoints->size());
             for (int i(0); i < points->size(); ++i)
                 corrected_raw_points_[i] = (*points)[i].raw_pt;
+
+            max_num_residuals_ = options->max_num_residuals;
         }
 
         bool InitProblem(int num_residuals) {
@@ -334,19 +336,30 @@ namespace ct_icp {
             out_number_of_residuals = 0;
             for (auto &pt_to_plane_residual: vector_ct_icp_residuals_) {
                 if (pt_to_plane_residual != nullptr) {
+                    if (max_num_residuals_ <= 0 || out_number_of_residuals < max_num_residuals_) {
+                        problem->AddResidualBlock(pt_to_plane_residual, loss_function,
+                                                  begin_quat_, begin_t_, end_quat_, end_t_);
+                        pt_to_plane_residual = nullptr;
+                    } else {
+                        auto* ptr = pt_to_plane_residual;
+                        pt_to_plane_residual = nullptr;
+                        delete ptr;
+                    }
                     out_number_of_residuals++;
-                    problem->AddResidualBlock(pt_to_plane_residual, loss_function,
-                                              begin_quat_, begin_t_, end_quat_, end_t_);
-
-                    pt_to_plane_residual = nullptr;
                 }
             }
             for (auto &pt_to_plane_residual: vector_pt_to_pl_residuals_) {
                 if (pt_to_plane_residual != nullptr) {
+                    if (max_num_residuals_ <= 0 || out_number_of_residuals < max_num_residuals_) {
+                        problem->AddResidualBlock(pt_to_plane_residual, loss_function,
+                                                  begin_quat_, begin_t_, end_quat_, end_t_);
+                        pt_to_plane_residual = nullptr;
+                    } else {
+                        auto* ptr = pt_to_plane_residual;
+                        pt_to_plane_residual = nullptr;
+                        delete ptr;
+                    }
                     out_number_of_residuals++;
-                    problem->AddResidualBlock(pt_to_plane_residual, loss_function,
-                                              end_quat_, end_t_);
-                    pt_to_plane_residual = nullptr;
                 }
             }
             return std::move(problem);
@@ -355,6 +368,7 @@ namespace ct_icp {
     private:
         const CTICPOptions *options_;
         std::unique_ptr<ceres::Problem> problem = nullptr;
+        int max_num_residuals_ = -1;
 
         // Parameters block pointers
         bool parameter_block_set_ = false;
@@ -373,9 +387,9 @@ namespace ct_icp {
     };
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    bool CT_ICP_CERES(const CTICPOptions &options,
-                      const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-                      std::vector<TrajectoryFrame> &trajectory, int index_frame) {
+    ICPSummary CT_ICP_CERES(const CTICPOptions &options,
+                            const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
+                            std::vector<TrajectoryFrame> &trajectory, int index_frame) {
 
         const short nb_voxels_visited = index_frame < options.init_num_frames ? 2 : options.voxel_neighborhood;
         const int kMinNumNeighbors = options.min_number_neighbors;
@@ -403,7 +417,7 @@ namespace ct_icp {
         Eigen::Vector3d begin_t = current_estimate.begin_t;
         Eigen::Vector3d end_t = current_estimate.end_t;
 
-        int number_keypoints_used;
+        int number_of_residuals;
 
         ICPOptimizationBuilder builder(&options, &keypoints);
         if (options.point_to_plane_with_distortion) {
@@ -520,7 +534,7 @@ namespace ct_icp {
                 }
             }
 
-            auto problem = builder.GetProblem(number_keypoints_used);
+            auto problem = builder.GetProblem(number_of_residuals);
 
             if (index_frame > 1) {
                 if (options.distance == CT_POINT_TO_PLANE) {
@@ -528,14 +542,14 @@ namespace ct_icp {
                     problem->AddResidualBlock(new ceres::AutoDiffCostFunction<LocationConsistencyFunctor,
                                                       LocationConsistencyFunctor::NumResiduals(), 3>(
                                                       new LocationConsistencyFunctor(previous_estimate->end_t,
-                                                                                     sqrt(number_keypoints_used *
+                                                                                     sqrt(number_of_residuals *
                                                                                           options.beta_location_consistency))),
                                               nullptr,
                                               &begin_t.x());
                     problem->AddResidualBlock(new ceres::AutoDiffCostFunction<ConstantVelocityFunctor,
                                                       ConstantVelocityFunctor::NumResiduals(), 3, 3>(
                                                       new ConstantVelocityFunctor(previous_velocity,
-                                                                                  sqrt(number_keypoints_used * options.beta_constant_velocity))),
+                                                                                  sqrt(number_of_residuals * options.beta_constant_velocity))),
                                               nullptr,
                                               &begin_t.x(),
                                               &end_t.x());
@@ -543,7 +557,7 @@ namespace ct_icp {
                     // SMALL VELOCITY
                     problem->AddResidualBlock(new ceres::AutoDiffCostFunction<SmallVelocityFunctor,
                                                       SmallVelocityFunctor::NumResiduals(), 3, 3>(
-                                                      new SmallVelocityFunctor(sqrt(number_keypoints_used * options.beta_small_velocity))),
+                                                      new SmallVelocityFunctor(sqrt(number_of_residuals * options.beta_small_velocity))),
                                               nullptr,
                                               &begin_t.x(), &end_t.x());
 
@@ -551,18 +565,24 @@ namespace ct_icp {
                     problem->AddResidualBlock(new ceres::AutoDiffCostFunction<OrientationConsistencyFunctor,
                                                       OrientationConsistencyFunctor::NumResiduals(), 4>(
                                                       new OrientationConsistencyFunctor(previous_orientation,
-                                                                                        sqrt(number_keypoints_used *
+                                                                                        sqrt(number_of_residuals *
                                                                                              options.beta_orientation_consistency))),
                                               nullptr,
                                               &begin_quat.x());
                 }
             }
-            if (number_keypoints_used < 100) {
+            if (number_of_residuals < options.min_number_neighbors) {
+                std::stringstream ss_out;
+                ss_out << "[CT_ICP] Error : not enough keypoints selected in ct-icp !" << std::endl;
+                ss_out << "[CT_ICP] number_of_residuals : " << number_of_residuals << std::endl;
+                ICPSummary summary;
+                summary.success = false;
+                summary.num_residuals_used = number_of_residuals;
+                summary.error_log = ss_out.str();
                 if (options.debug_print) {
-                    std::cout << "Error : not enough keypoints selected in ct-icp !" << std::endl;
-                    std::cout << "number_keypoints : " << number_keypoints_used << std::endl;
+                    std::cout << summary.error_log;
                 }
-                return false;
+                return summary;
             }
 
             ceres::Solver::Summary summary;
@@ -604,13 +624,16 @@ namespace ct_icp {
         }
         transform_keypoints();
 
-        return true;
+        ICPSummary summary;
+        summary.success = true;
+        summary.num_residuals_used = number_of_residuals;
+        return summary;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    bool CT_ICP_GN(const CTICPOptions &options,
-                   const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-                   std::vector<TrajectoryFrame> &trajectory, int index_frame) {
+    ICPSummary CT_ICP_GN(const CTICPOptions &options,
+                         const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
+                         std::vector<TrajectoryFrame> &trajectory, int index_frame) {
 
         //Optimization with Traj constraints
         double ALPHA_C = options.beta_location_consistency; // 0.001;
@@ -633,6 +656,8 @@ namespace ct_icp {
         double elapsed_A_construction = 0.0;
         double elapsed_solve = 0.0;
         double elapsed_update = 0.0;
+
+        ICPSummary summary;
 
         int num_iter_icp = index_frame < options.init_num_frames ? 15 : options.num_iters_icp;
         for (int iter(0); iter < num_iter_icp; iter++) {
@@ -746,12 +771,16 @@ namespace ct_icp {
 
 
             if (number_keypoints_used < 100) {
-                if (options.debug_print) {
-                    std::cout << "Error : not enough keypoints selected in ct-icp !" << std::endl;
-                    std::cout << "number_keypoints : " << number_keypoints_used << std::endl;
-                }
-                //exit(1);
-                return false;
+                std::stringstream ss_out;
+                ss_out << "[CT_ICP]Error : not enough keypoints selected in ct-icp !" << std::endl;
+                ss_out << "[CT_ICP]Number_of_residuals : " << number_keypoints_used << std::endl;
+
+                summary.error_log = ss_out.str();
+                if (options.debug_print)
+                    std::cout << summary.error_log;
+
+                summary.success = false;
+                return summary;
             }
 
             auto start = std::chrono::steady_clock::now();
@@ -853,16 +882,7 @@ namespace ct_icp {
 
 
             if ((index_frame > 1) && (x_bundle.norm() < options.threshold_orientation_norm)) {
-                if (options.debug_print) {
-                    std::cout << "Number iterations CT-ICP : " << iter << std::endl;
-                    std::cout << "Elapsed Normals: " << elapsed_normals << std::endl;
-                    std::cout << "Elapsed Search Neighbors: " << elapsed_search_neighbors << std::endl;
-                    std::cout << "Elapsed A Construction: " << elapsed_A_construction << std::endl;
-                    std::cout << "Elapsed Select closest: " << elapsed_select_closest_neighbors << std::endl;
-                    std::cout << "Elapsed Solve: " << elapsed_solve << std::endl;
-                    std::cout << "Elapsed Solve: " << elapsed_update << std::endl;
-                }
-                return true;
+                break;
             }
         }
 
@@ -875,8 +895,10 @@ namespace ct_icp {
             std::cout << "Elapsed Solve: " << elapsed_update << std::endl;
             std::cout << "Number iterations CT-ICP : " << options.num_iters_icp << std::endl;
         }
+        summary.success = true;
+        summary.num_residuals_used = number_keypoints_used;
 
-        return true;
+        return summary;
     }
 
 

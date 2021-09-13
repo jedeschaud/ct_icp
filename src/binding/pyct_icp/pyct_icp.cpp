@@ -218,7 +218,7 @@ PYBIND11_MODULE(pyct_icp, m) {
     py::class_<PyRegistrationSummary,
             std::shared_ptr<PyRegistrationSummary>>(m, "RegistrationSummary")
             .def_readonly("sample_size", &PyRegistrationSummary::sample_size)
-            .def_readonly("number_keypoints", &PyRegistrationSummary::number_keypoints)
+            .def_readonly("number_of_residuals", &PyRegistrationSummary::number_of_residuals)
             .def_readonly("distance_correction", &PyRegistrationSummary::distance_correction)
             .def_readonly("relative_distance", &PyRegistrationSummary::relative_distance)
             .def_readonly("number_of_attempts", &PyRegistrationSummary::relative_orientation)

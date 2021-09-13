@@ -41,6 +41,7 @@ namespace ct_icp {
 
         // Whether to assess the quality of the registration,
         // And try a new registration with more conservative parameters in case of failure
+        int robust_minimal_level = 0;
         bool robust_registration = false;
         double robust_full_voxel_threshold = 0.7;
         double robust_empty_voxel_threshold = 0.1;
@@ -118,7 +119,9 @@ namespace ct_icp {
 
             int sample_size = 0; // The number of points sampled
 
-            int number_keypoints = 0; // The number of keypoints used for ICP registration
+            int number_of_residuals = 0; // The number of keypoints used for ICP registration
+
+            int robust_level = 0;
 
             double distance_correction = 0.0; // The correction between the last frame's end, and the new frame's beginning
 
@@ -154,14 +157,14 @@ namespace ct_icp {
                                                       const TrajectoryFrame &initial_estimate);
 
         // Returns the currently registered trajectory
-        std::vector<TrajectoryFrame> Trajectory() const;
+        [[nodiscard]] std::vector<TrajectoryFrame> Trajectory() const;
 
         // Returns the Aggregated PointCloud of the Local Map
-        ArrayVector3d GetLocalMap() const;
+        [[nodiscard]] ArrayVector3d GetLocalMap() const;
 
         // Num Points in the Map
         // Note: This requires a traversal of the whole map which is in O(n)
-        size_t MapSize() const;
+        [[nodiscard]] size_t MapSize() const;
 
     private:
         std::vector<TrajectoryFrame> trajectory_;
@@ -169,6 +172,7 @@ namespace ct_icp {
         int registered_frames_ = 0;
         int robust_num_consecutive_failures_ = 0;
         bool suspect_registration_error_ = false;
+        int next_robust_level_ = 0;
         OdometryOptions options_;
         std::ostream *log_out_ = nullptr;
         std::unique_ptr<std::ofstream> log_file_ = nullptr;

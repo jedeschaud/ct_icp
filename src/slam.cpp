@@ -157,6 +157,7 @@ SLAMOptions read_config(const std::string &config_path) {
             OPTION_CLAUSE(odometry_node, odometry_options, log_to_file, bool);
             OPTION_CLAUSE(odometry_node, odometry_options, log_file_destination, std::string);
 
+            OPTION_CLAUSE(odometry_node, odometry_options, robust_minimal_level, int);
             OPTION_CLAUSE(odometry_node, odometry_options, robust_registration, bool);
             OPTION_CLAUSE(odometry_node, odometry_options, robust_full_voxel_threshold, double);
             OPTION_CLAUSE(odometry_node, odometry_options, robust_fail_early, bool);
@@ -217,6 +218,8 @@ SLAMOptions read_config(const std::string &config_path) {
                 OPTION_CLAUSE(icp_node, icp_options, ls_max_num_iters, int);
                 OPTION_CLAUSE(icp_node, icp_options, ls_num_threads, int);
                 OPTION_CLAUSE(icp_node, icp_options, ls_sigma, double);
+                OPTION_CLAUSE(icp_node, icp_options, min_num_residuals, int);
+                OPTION_CLAUSE(icp_node, icp_options, max_num_residuals, int);
                 OPTION_CLAUSE(icp_node, icp_options, ls_tolerant_min_threshold, double);
                 OPTION_CLAUSE(icp_node, icp_options, debug_viz, bool);
 
