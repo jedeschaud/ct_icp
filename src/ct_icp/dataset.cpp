@@ -117,6 +117,7 @@ namespace ct_icp {
             case KITTI:
             case KITTI_360:
                 folder_path += sequence_name + "/frames/";
+                break;
             case PLY_DIRECTORY:
                 folder_path += "frames/";
                 break;
