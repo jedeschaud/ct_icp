@@ -745,9 +745,15 @@ namespace ct_icp {
             return frame_id_ < num_frames_;
         }
 
+        void SetInitFrame(int frame_index) override {
+            CHECK(frame_index < num_frames_);
+            DatasetSequence::SetInitFrame(frame_index);
+            frame_id_ = frame_index;
+        }
+
         bool WithRandomAccess() const override { return true; }
 
-        size_t NumFrames() const override { return num_frames_; }
+        size_t NumFrames() const override { return num_frames_ - init_frame_id_; }
 
         std::vector<Point3D> Frame(size_t index) const override {
             int frame_id = index;
@@ -770,20 +776,13 @@ namespace ct_icp {
     /// NCLT Iterator for NCLT
     class NCLTIterator final : public DatasetSequence {
     public:
+
+
         explicit NCLTIterator(const DatasetOptions &options, int sequence_id) :
                 num_aggregated_pc_(options.nclt_num_aggregated_pc) {
-
-            auto sequence_name = std::string(NCLT_SEQUENCE_NAMES[sequence_id]);
-#ifdef WITH_STD_FILESYSTEM
-            std::filesystem::path root_path(options.root_path);
-            auto _hits_file_path = root_path / (sequence_name + "_vel") / sequence_name / "velodyne_hits.bin";
-            CHECK(std::filesystem::exists(_hits_file_path))
-                            << "The file " << _hits_file_path << " does not exist on disk" << std::endl;
-            auto hits_file_path = _hits_file_path.string();
-#elif
-            auto hits_file_path = options.root_path + sequence_name + "_vel/" + sequence_name + "/velodyne_hits.bin";
-#endif
-            file = std::make_unique<std::ifstream>(hits_file_path);
+            sequence_name_ = std::string(NCLT_SEQUENCE_NAMES[sequence_id]);
+            root_path_ = options.root_path;
+            OpenFile();
         }
 
         [[nodiscard]] bool HasNext() const override {
@@ -791,8 +790,16 @@ namespace ct_icp {
             return !file->eof();
         }
 
-        std::vector<ct_icp::Point3D> Next() override {
+        void SetInitFrame(int frame_index) override {
+            DatasetSequence::SetInitFrame(frame_index);
+            OpenFile();
+            for (int i(0); i < frame_index; i++) {
+                std::cout << "[NCLT] Jumping frame " << i << std::endl;
+                DoNext(true);
+            }
+        }
 
+        std::vector<ct_icp::Point3D> DoNext(bool jump_frame = false) {
             std::vector<ct_icp::Point3D> points;
             // Normalize timestamps
             double min_timestamp = std::numeric_limits<double>::infinity(), max_timestamp = std::numeric_limits<double>::lowest();
@@ -800,7 +807,11 @@ namespace ct_icp {
                 if (!HasNext())
                     break;
 
-                auto next_batch = NextBatch();
+                auto next_batch = NextBatch(jump_frame);
+
+                if (jump_frame)
+                    continue;
+
                 auto old_size = points.size();
 
                 if (!next_batch.empty()) {
@@ -816,12 +827,15 @@ namespace ct_icp {
             }
             for (auto &point: points)
                 point.alpha_timestamp = (point.timestamp - min_timestamp) / (max_timestamp - min_timestamp);
-
-
             return points;
         }
 
-        std::vector<ct_icp::Point3D> NextBatch() {
+        std::vector<ct_icp::Point3D> Next() override {
+            return DoNext();
+
+        }
+
+        std::vector<ct_icp::Point3D> NextBatch(bool jump_batch) {
             CHECK(HasNext()) << "No more points to read" << std::endl;
             std::vector<ct_icp::Point3D> points;
 
@@ -839,9 +853,13 @@ namespace ct_icp {
             file->read(reinterpret_cast<char *>(&utime), 8);
             file->read(reinterpret_cast<char *>(&padding), 4);
 
-            points.resize(num_hits);
             unsigned short xyz[3];
             unsigned char il[2];
+            if (jump_batch) {
+                file->ignore((sizeof(xyz) + sizeof(il)) * num_hits);
+                return points;
+            }
+            points.resize(num_hits);
 
             Point3D point;
             double _x, _y, _z;
@@ -867,6 +885,21 @@ namespace ct_icp {
         }
 
     private:
+
+        void OpenFile() {
+            Close();
+#ifdef WITH_STD_FILESYSTEM
+            std::filesystem::path root_path(root_path_);
+            auto _hits_file_path = root_path / (sequence_name_ + "_vel") / sequence_name_ / "velodyne_hits.bin";
+            CHECK(std::filesystem::exists(_hits_file_path))
+                            << "The file " << _hits_file_path << " does not exist on disk" << std::endl;
+            auto hits_file_path = _hits_file_path.string();
+#elif
+            auto hits_file_path = root_path_ + sequence_name_ + "_vel/" + sequence_name_ + "/velodyne_hits.bin";
+#endif
+            file = std::make_unique<std::ifstream>(hits_file_path);
+        }
+
         void Close() {
             if (file) {
                 file->close();
@@ -877,6 +910,7 @@ namespace ct_icp {
         int num_aggregated_pc_;
 
         std::unique_ptr<std::ifstream> file = nullptr;
+        std::string sequence_name_, root_path_;
     };
 
     /* -------------------------------------------------------------------------------------------------------------- */

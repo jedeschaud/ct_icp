@@ -31,9 +31,16 @@ namespace ct_icp {
             throw std::runtime_error("Random Access is not supported");
         }
 
+        virtual void SetInitFrame(int frame_index) {
+            init_frame_id_ = frame_index;
+        };
+
         virtual bool WithRandomAccess() const {
             return false;
         }
+
+    protected:
+        int init_frame_id_ = 0; // The initial frame index of the sequence
     };
 
     struct DatasetOptions {
@@ -72,7 +79,7 @@ namespace ct_icp {
     std::vector<Point3D> read_kitti_carla_pointcloud(const DatasetOptions &, const std::string &path);
 
     // Reads a PointCloud from the Dataset KITTI
-    std::vector<Point3D> read_kitti_pointcloud(const DatasetOptions&, const std::string& path);
+    std::vector<Point3D> read_kitti_pointcloud(const DatasetOptions &, const std::string &path);
 
     // Reads a PointCloud from the disk
     std::vector<Point3D> read_pointcloud(const DatasetOptions &, int sequence_id, int frame_id);
@@ -95,7 +102,7 @@ namespace ct_icp {
     ArrayPoses load_sensor_ground_truth(const DatasetOptions &, int sequence_id);
 
     // Returns a DatasetSequence
-    std::shared_ptr<DatasetSequence> get_dataset_sequence(const DatasetOptions &, int sequence_id=-1);
+    std::shared_ptr<DatasetSequence> get_dataset_sequence(const DatasetOptions &, int sequence_id = -1);
 
 }
 

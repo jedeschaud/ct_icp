@@ -5,6 +5,7 @@
 
 #include <Eigen/StdVector>
 #include <ceres/ceres.h>
+#include <glog/logging.h>
 
 #include "ct_icp.hpp"
 #include "cost_functions.h"
@@ -246,14 +247,8 @@ namespace ct_icp {
             }
 
             // Resize the number of residuals
-            switch (options_->distance) {
-                case CT_POINT_TO_PLANE:
-                    vector_ct_icp_residuals_.resize(num_residuals);
-                    break;
-                case POINT_TO_PLANE:
-                    vector_pt_to_pl_residuals_.resize(num_residuals);
-                    break;
-            }
+            vector_ct_icp_residuals_.resize(num_residuals);
+            vector_cost_functors_.resize(num_residuals);
             begin_quat_ = nullptr;
             end_quat_ = nullptr;
             begin_t_ = nullptr;
@@ -315,20 +310,33 @@ namespace ct_icp {
                                      const Eigen::Vector3d &reference_normal,
                                      double weight = 1.0,
                                      double alpha_timestamp = -1.0) {
+
+            CTPointToPlaneFunctor *ct_point_to_plane_functor = nullptr;
+            PointToPlaneFunctor *point_to_plane_functor = nullptr;
+            void *cost_functor = nullptr;
+            void *cost_function = nullptr;
+            if (alpha_timestamp < 0 || alpha_timestamp > 1)
+                throw std::runtime_error("BAD ALPHA TIMESTAMP !");
             switch (options_->distance) {
                 case CT_POINT_TO_PLANE:
-                    vector_ct_icp_residuals_[residual_id] = new ceres::AutoDiffCostFunction<CTPointToPlaneFunctor, 1, 4, 3, 4, 3>(
-                            new CTPointToPlaneFunctor(reference_point, corrected_raw_points_[keypoint_id],
-                                                      reference_normal,
-                                                      alpha_timestamp, weight));
+                    ct_point_to_plane_functor = new CTPointToPlaneFunctor(reference_point,
+                                                                          corrected_raw_points_[keypoint_id],
+                                                                          reference_normal,
+                                                                          alpha_timestamp, weight);
+                    cost_functor = ct_point_to_plane_functor;
+                    cost_function = static_cast<void *>(new CTICP_PointToPlaneResidual(ct_point_to_plane_functor));
                     break;
                 case POINT_TO_PLANE:
-                    vector_pt_to_pl_residuals_[residual_id] = new ceres::AutoDiffCostFunction<PointToPlaneFunctor, 1, 4, 3>(
-                            new PointToPlaneFunctor(reference_point, corrected_raw_points_[keypoint_id],
-                                                    reference_normal,
-                                                    weight));
+                    point_to_plane_functor = new PointToPlaneFunctor(reference_point,
+                                                                     corrected_raw_points_[keypoint_id],
+                                                                     reference_normal,
+                                                                     weight);
+                    cost_functor = point_to_plane_functor;
+                    cost_function = static_cast<void *>(new PointToPlaneResidual(point_to_plane_functor));
                     break;
             }
+            vector_ct_icp_residuals_[residual_id] = cost_function;
+            vector_cost_functors_[residual_id] = cost_functor;
         }
 
 
@@ -337,31 +345,116 @@ namespace ct_icp {
             for (auto &pt_to_plane_residual: vector_ct_icp_residuals_) {
                 if (pt_to_plane_residual != nullptr) {
                     if (max_num_residuals_ <= 0 || out_number_of_residuals < max_num_residuals_) {
-                        problem->AddResidualBlock(pt_to_plane_residual, loss_function,
-                                                  begin_quat_, begin_t_, end_quat_, end_t_);
-                        pt_to_plane_residual = nullptr;
+
+                        switch (options_->distance) {
+                            case CT_POINT_TO_PLANE:
+                                problem->AddResidualBlock(
+                                        static_cast<CTICP_PointToPlaneResidual *>(pt_to_plane_residual), loss_function,
+                                        begin_quat_, begin_t_, end_quat_, end_t_);
+                                break;
+                            case POINT_TO_PLANE:
+                                problem->AddResidualBlock(
+                                        static_cast<PointToPlaneResidual *>(pt_to_plane_residual), loss_function,
+                                        begin_quat_, begin_t_, end_quat_, end_t_);
+                                break;
+                        }
+                        out_number_of_residuals++;
                     } else {
-                        auto* ptr = pt_to_plane_residual;
-                        pt_to_plane_residual = nullptr;
-                        delete ptr;
+                        // Need to deallocate memory from the allocated pointers not managed by Ceres
+                        CTICP_PointToPlaneResidual *ct_pt_to_pl_ptr = nullptr;
+                        PointToPlaneResidual *pt_to_pl_ptr = nullptr;
+                        switch (options_->distance) {
+                            case CT_POINT_TO_PLANE:
+                                ct_pt_to_pl_ptr = static_cast<CTICP_PointToPlaneResidual *>(pt_to_plane_residual);
+                                delete ct_pt_to_pl_ptr;
+                                break;
+                            case POINT_TO_PLANE:
+                                pt_to_pl_ptr = static_cast<PointToPlaneResidual *>(pt_to_plane_residual);
+                                delete pt_to_pl_ptr;
+                                break;
+                        }
                     }
-                    out_number_of_residuals++;
                 }
             }
-            for (auto &pt_to_plane_residual: vector_pt_to_pl_residuals_) {
-                if (pt_to_plane_residual != nullptr) {
-                    if (max_num_residuals_ <= 0 || out_number_of_residuals < max_num_residuals_) {
-                        problem->AddResidualBlock(pt_to_plane_residual, loss_function,
-                                                  begin_quat_, begin_t_, end_quat_, end_t_);
-                        pt_to_plane_residual = nullptr;
-                    } else {
-                        auto* ptr = pt_to_plane_residual;
-                        pt_to_plane_residual = nullptr;
-                        delete ptr;
+
+
+#if CT_ICP_WITH_VIZ
+            if (options_->debug_viz) {
+                auto palette = colormap::palettes.at("jet").rescale(0, 1);
+                auto &instance = viz::ExplorationEngine::Instance();
+                auto model_ptr = std::make_shared<viz::PointCloudModel>();
+                auto &model_data = model_ptr->ModelData();
+                model_data.xyz.resize(keypoints->size());
+                model_data.point_size = 4;
+                model_data.default_color = Eigen::Vector3f(1, 0, 0);
+                model_data.rgb.resize(keypoints->size());
+                std::vector<double> scalars(keypoints->size());
+
+                double s_min = 0.0;
+                double s_max = 1.0;
+                std::vector<double> s_values;
+                if (options_->viz_mode == WEIGHT || options_->viz_mode == TIMESTAMP) {
+                    s_min = std::numeric_limits<double>::max();
+                    s_max = std::numeric_limits<double>::min();
+                    s_values.resize(model_data.rgb.size());
+                    for (int i(0); i < keypoints->size(); ++i) {
+                        double new_s;
+                        auto *ptr = vector_cost_functors_[i];
+                        if (ptr != nullptr) {
+                            CTPointToPlaneFunctor *ct_ptr;
+                            PointToPlaneFunctor *pt_to_pl_ptr;
+
+                            switch (options_->distance) {
+                                case CT_POINT_TO_PLANE:
+                                    ct_ptr = static_cast<CTPointToPlaneFunctor *>(ptr);
+                                    new_s = options_->viz_mode == WEIGHT ? ct_ptr->weight_ : ct_ptr->alpha_timestamps_;
+                                    break;
+                                case POINT_TO_PLANE:
+                                    pt_to_pl_ptr = static_cast<PointToPlaneFunctor *>(ptr);
+                                    new_s = options_->viz_mode == WEIGHT ? pt_to_pl_ptr->weight_ : 1.0;
+                                    break;
+                            }
+                            if (new_s < s_min)
+                                s_min = new_s;
+                            if (new_s > s_max)
+                                s_max = new_s;
+                            s_values[i] = new_s;
+                        }
+
                     }
-                    out_number_of_residuals++;
                 }
+
+                for (size_t i(0); i < keypoints->size(); ++i) {
+                    model_data.xyz[i] = (*keypoints)[i].pt.cast<float>();
+                    scalars[i] = (*keypoints)[i].alpha_timestamp;
+                    if (options_->viz_mode == NORMAL) {
+                        void *ptr = vector_cost_functors_[i];
+                        if (!ptr)
+                            continue;
+                        switch (options_->distance) {
+                            case CT_POINT_TO_PLANE:
+                                model_data.rgb[i] = static_cast<CTPointToPlaneFunctor *>(ptr)->reference_normal_.cwiseAbs().cast<float>();
+                                break;
+                            case POINT_TO_PLANE:
+                                model_data.rgb[i] = static_cast<PointToPlaneFunctor *>(ptr)->reference_normal_.cwiseAbs().cast<float>();
+                                break;
+                        }
+                    } else {
+                        double s = s_min == s_max ? 1.0 : (s_values[i] - s_min) / (s_max - s_min);
+                        colormap::rgb value = palette(s);
+                        std::uint8_t *rgb_color_ptr = reinterpret_cast<std::uint8_t *>(&value);
+                        model_data.rgb[i].x() = (float) rgb_color_ptr[0] / 255.0f;
+                        model_data.rgb[i].y() = (float) rgb_color_ptr[1] / 255.0f;
+                        model_data.rgb[i].z() = (float) rgb_color_ptr[2] / 255.0f;
+                    }
+                }
+
+                instance.AddModel(-2, model_ptr);
             }
+#endif
+            std::fill(vector_cost_functors_.begin(), vector_cost_functors_.end(), nullptr);
+            std::fill(vector_ct_icp_residuals_.begin(), vector_ct_icp_residuals_.end(), nullptr);
+
             return std::move(problem);
         }
 
@@ -381,8 +474,8 @@ namespace ct_icp {
         const std::vector<Point3D> *keypoints;
         std::vector<Eigen::Vector3d> corrected_raw_points_;
 
-        std::vector<CTICP_PointToPlaneResidual *> vector_ct_icp_residuals_;
-        std::vector<PointToPlaneResidual *> vector_pt_to_pl_residuals_;
+        std::vector<void *> vector_cost_functors_;
+        std::vector<void *> vector_ct_icp_residuals_;
         ceres::LossFunction *loss_function = nullptr;
     };
 
@@ -445,33 +538,6 @@ namespace ct_icp {
                 keypoint.pt = R * keypoint.raw_pt + t;
             }
 
-#if CT_ICP_WITH_VIZ
-            if (options.debug_viz) {
-                auto palette = colormap::palettes.at("jet").rescale(0, 1);
-                auto &instance = viz::ExplorationEngine::Instance();
-                auto model_ptr = std::make_shared<viz::PointCloudModel>();
-                auto &model_data = model_ptr->ModelData();
-                model_data.xyz.resize(keypoints.size());
-                model_data.point_size = 4;
-                model_data.default_color = Eigen::Vector3f(1, 0, 0);
-                model_data.rgb.resize(keypoints.size());
-                std::vector<double> scalars(keypoints.size());
-
-                for (size_t i(0); i < keypoints.size(); ++i) {
-                    model_data.xyz[i] = keypoints[i].pt.cast<float>();
-                    scalars[i] = keypoints[i].alpha_timestamp;
-                    colormap::rgb value = palette(keypoints[i].alpha_timestamp);
-
-                    std::uint8_t *rgb_color_ptr = reinterpret_cast<std::uint8_t *>(&value);
-                    model_data.rgb[i].x() = (float) rgb_color_ptr[0] / 255.0f;
-                    model_data.rgb[i].y() = (float) rgb_color_ptr[1] / 255.0f;
-                    model_data.rgb[i].z() = (float) rgb_color_ptr[2] / 255.0f;
-
-                }
-
-                instance.AddModel(-2, model_ptr);
-            }
-#endif
         };
 
         auto estimate_normal_and_planarity = [&](ArrayVector3d &vector_neighbors,
@@ -487,6 +553,15 @@ namespace ct_icp {
                 normal = -1.0 * normal;
             }
         };
+
+        double lambda_weight = std::abs(options.weight_alpha);
+        double lambda_neighborhood = std::abs(options.weight_neighborhood);
+        const double kMaxPointToPlane = options.max_dist_to_plane_ct_icp;
+        const double sum = lambda_weight + lambda_neighborhood;
+        CHECK(sum > 0.0) << "Invalid requirement: weight_alpha(" << options.weight_alpha <<
+                         ") + weight_neighborhood(" << options.weight_neighborhood << ") <= 0 " << std::endl;
+        lambda_weight /= sum;
+        lambda_neighborhood /= sum;
 
         for (int iter(0); iter < num_iter_icp; iter++) {
             transform_keypoints();
@@ -519,6 +594,9 @@ namespace ct_icp {
                                               raw_point,
                                               normal,
                                               weight);
+                weight = lambda_weight * weight +
+                         lambda_neighborhood * std::exp(-(vector_neighbors[0] -
+                                                          keypoint.pt).norm() / (kMaxPointToPlane * kMinNumNeighbors));
 
                 double point_to_plane_dist;
                 std::set<Voxel> neighbor_voxels;

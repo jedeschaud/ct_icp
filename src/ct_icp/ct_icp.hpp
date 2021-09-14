@@ -42,6 +42,12 @@ namespace ct_icp {
         TRUNCATED
     };
 
+    enum VIZ_MODE {
+        TIMESTAMP,
+        WEIGHT,
+        NORMAL
+    };
+
     // Options for the Elastic_ICP
     struct CTICPOptions {
 
@@ -91,6 +97,10 @@ namespace ct_icp {
 
         double beta_orientation_consistency = 0.0; // Constraint on the orientation consistency
 
+        double weight_alpha = 1.0;
+
+        double weight_neighborhood = 0.0;
+
         CT_ICP_SOLVER solver = GN;
 
 
@@ -111,6 +121,8 @@ namespace ct_icp {
         bool debug_print = true; // Whether to output debug information to std::cout
 
         bool debug_viz = false; // Whether to pass the key points to the ExplorationEngine
+
+        VIZ_MODE viz_mode = TIMESTAMP;
     };
 
     struct ICPSummary {
@@ -142,12 +154,12 @@ namespace ct_icp {
     //
     // Note: CT_ICP_CERES will modify the last TrajectoryFrame of the trajectory vector
     ICPSummary CT_ICP_CERES(const CTICPOptions &options,
-                      const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-                      std::vector<TrajectoryFrame> &trajectory, int index_frame);
+                            const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
+                            std::vector<TrajectoryFrame> &trajectory, int index_frame);
 
     ICPSummary CT_ICP_GN(const CTICPOptions &options,
-                   const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-                   std::vector<TrajectoryFrame> &trajectory, int index_frame);
+                         const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
+                         std::vector<TrajectoryFrame> &trajectory, int index_frame);
 
 } // namespace Elastic_ICP
 

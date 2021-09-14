@@ -44,7 +44,6 @@ namespace ct_icp {
 
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    private:
         Eigen::Vector3d reference_;
         Eigen::Vector3d target_;
         Eigen::Vector3d reference_normal_;
@@ -87,7 +86,6 @@ namespace ct_icp {
 
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    private:
         Eigen::Vector3d raw_keypoint_;
         Eigen::Vector3d reference_point_;
         Eigen::Vector3d reference_normal_;

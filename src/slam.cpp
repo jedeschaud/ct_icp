@@ -183,6 +183,7 @@ SLAMOptions read_config(const std::string &config_path) {
                     CHECK(false) << "The `motion_compensation` " << compensation << " is not supported." << std::endl;
             }
 
+
             if (odometry_node["initialization"]) {
                 auto initialization = odometry_node["initialization"].as<std::string>();
                 CHECK(initialization == "INIT_NONE" || initialization == "INIT_CONSTANT_VELOCITY");
@@ -220,6 +221,8 @@ SLAMOptions read_config(const std::string &config_path) {
                 OPTION_CLAUSE(icp_node, icp_options, ls_sigma, double);
                 OPTION_CLAUSE(icp_node, icp_options, min_num_residuals, int);
                 OPTION_CLAUSE(icp_node, icp_options, max_num_residuals, int);
+                OPTION_CLAUSE(icp_node, icp_options, weight_alpha, double);
+                OPTION_CLAUSE(icp_node, icp_options, weight_neighborhood, double);
                 OPTION_CLAUSE(icp_node, icp_options, ls_tolerant_min_threshold, double);
                 OPTION_CLAUSE(icp_node, icp_options, debug_viz, bool);
 
@@ -227,7 +230,6 @@ SLAMOptions read_config(const std::string &config_path) {
                     icp_options.debug_viz = false;
                     odometry_options.debug_viz = false;
                 }
-
                 if (icp_node["distance"]) {
                     auto distance = icp_node["distance"].as<std::string>();
                     CHECK(distance == "CT_POINT_TO_PLANE" || distance == "POINT_TO_PLANE");
@@ -235,6 +237,17 @@ SLAMOptions read_config(const std::string &config_path) {
                         icp_options.distance = POINT_TO_PLANE;
                     else
                         icp_options.distance = CT_POINT_TO_PLANE;
+                }
+
+                if (icp_node["viz_mode"]) {
+                    auto viz_mode = icp_node["viz_mode"].as<std::string>();
+                    CHECK(viz_mode == "NORMAL" || viz_mode == "WEIGHT" || viz_mode == "TIMESTAMP");
+                    if (viz_mode == "NORMAL")
+                        icp_options.viz_mode = ct_icp::NORMAL;
+                    else if (viz_mode == "WEIGHT")
+                        icp_options.viz_mode = ct_icp::WEIGHT;
+                    else
+                        icp_options.viz_mode = ct_icp::TIMESTAMP;
                 }
 
                 if (icp_node["solver"]) {
@@ -430,14 +443,14 @@ int main(int argc, char **argv) {
 
         double avg_number_of_attempts = 0.0;
         int frame_id(0);
+        if (!options.all_sequences && options.start_index > 0) {
+            std::cout << "Starting at frame " << options.start_index << std::endl;
+            iterator_ptr->SetInitFrame(options.start_index);
+        }
         while (iterator_ptr->HasNext() && (options.max_frames < 0 || frame_id < options.max_frames)) {
             auto time_start_frame = std::chrono::steady_clock::now();
             std::vector<Point3D> frame = iterator_ptr->Next();
-            if (!options.all_sequences && frame_id < options.start_index) {
-                std::cout << "Skipping frame " << frame_id << std::endl;
-                frame_id++;
-                continue;
-            }
+
             auto time_read_pointcloud = std::chrono::steady_clock::now();
 
             auto summary = ct_icp_odometry.RegisterFrame(frame);
