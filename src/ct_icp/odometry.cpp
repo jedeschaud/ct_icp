@@ -519,6 +519,7 @@ namespace ct_icp {
                     model_data.xyz.push_back(voxel.second.points[i].cast<float>());
             }
             model_data.point_size = 1;
+            model_data.default_color = Eigen::Vector3f::Zero();
             instance.AddModel(-3, model_ptr);
         }
 #endif

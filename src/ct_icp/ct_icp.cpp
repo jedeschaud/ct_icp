@@ -384,10 +384,10 @@ namespace ct_icp {
                 auto &instance = viz::ExplorationEngine::Instance();
                 auto model_ptr = std::make_shared<viz::PointCloudModel>();
                 auto &model_data = model_ptr->ModelData();
-                model_data.xyz.resize(keypoints->size());
-                model_data.point_size = 4;
+                model_data.xyz.reserve(keypoints->size());
+                model_data.point_size = 6;
                 model_data.default_color = Eigen::Vector3f(1, 0, 0);
-                model_data.rgb.resize(keypoints->size());
+                model_data.rgb.reserve(keypoints->size());
                 std::vector<double> scalars(keypoints->size());
 
                 double s_min = 0.0;
@@ -396,7 +396,7 @@ namespace ct_icp {
                 if (options_->viz_mode == WEIGHT || options_->viz_mode == TIMESTAMP) {
                     s_min = std::numeric_limits<double>::max();
                     s_max = std::numeric_limits<double>::min();
-                    s_values.resize(model_data.rgb.size());
+                    s_values.resize(keypoints->size());
                     for (int i(0); i < keypoints->size(); ++i) {
                         double new_s;
                         auto *ptr = vector_cost_functors_[i];
@@ -425,27 +425,29 @@ namespace ct_icp {
                 }
 
                 for (size_t i(0); i < keypoints->size(); ++i) {
-                    model_data.xyz[i] = (*keypoints)[i].pt.cast<float>();
+                    void *ptr = vector_cost_functors_[i];
+                    if (!ptr)
+                        continue;
+                    model_data.xyz.push_back((*keypoints)[i].pt.cast<float>());
                     scalars[i] = (*keypoints)[i].alpha_timestamp;
                     if (options_->viz_mode == NORMAL) {
-                        void *ptr = vector_cost_functors_[i];
-                        if (!ptr)
-                            continue;
                         switch (options_->distance) {
                             case CT_POINT_TO_PLANE:
-                                model_data.rgb[i] = static_cast<CTPointToPlaneFunctor *>(ptr)->reference_normal_.cwiseAbs().cast<float>();
+                                model_data.rgb.push_back(
+                                        static_cast<CTPointToPlaneFunctor *>(ptr)->reference_normal_.cwiseAbs().cast<float>());
                                 break;
                             case POINT_TO_PLANE:
-                                model_data.rgb[i] = static_cast<PointToPlaneFunctor *>(ptr)->reference_normal_.cwiseAbs().cast<float>();
+                                model_data.rgb.push_back(
+                                        static_cast<PointToPlaneFunctor *>(ptr)->reference_normal_.cwiseAbs().cast<float>());
                                 break;
                         }
                     } else {
                         double s = s_min == s_max ? 1.0 : (s_values[i] - s_min) / (s_max - s_min);
                         colormap::rgb value = palette(s);
                         std::uint8_t *rgb_color_ptr = reinterpret_cast<std::uint8_t *>(&value);
-                        model_data.rgb[i].x() = (float) rgb_color_ptr[0] / 255.0f;
-                        model_data.rgb[i].y() = (float) rgb_color_ptr[1] / 255.0f;
-                        model_data.rgb[i].z() = (float) rgb_color_ptr[2] / 255.0f;
+                        Eigen::Vector3f rgb((float) rgb_color_ptr[0] / 255.0f,
+                                            (float) rgb_color_ptr[1] / 255.0f, (float) rgb_color_ptr[2] / 255.0f);
+                        model_data.rgb.push_back(rgb);
                     }
                 }
 
