@@ -182,6 +182,10 @@ PYBIND11_MODULE(pyct_icp, m) {
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_num_threads)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, size_voxel_map)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_sigma)
+                    STRUCT_READWRITE(ct_icp::CTICPOptions, max_num_residuals)
+                    STRUCT_READWRITE(ct_icp::CTICPOptions, min_num_residuals)
+                    STRUCT_READWRITE(ct_icp::CTICPOptions, weight_alpha)
+                    STRUCT_READWRITE(ct_icp::CTICPOptions, weight_neighborhood)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, solver)
                     STRUCT_READWRITE(ct_icp::CTICPOptions, ls_tolerant_min_threshold);
 
@@ -199,6 +203,7 @@ PYBIND11_MODULE(pyct_icp, m) {
                     STRUCT_READWRITE(ct_icp::OdometryOptions, distance_error_threshold)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, robust_registration)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, robust_fail_early)
+                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_minimal_level)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, robust_full_voxel_threshold)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, robust_empty_voxel_threshold)
                     STRUCT_READWRITE(ct_icp::OdometryOptions, robust_threshold_relative_orientation)

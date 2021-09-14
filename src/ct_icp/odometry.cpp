@@ -75,26 +75,25 @@ namespace ct_icp {
         OdometryOptions default_options;
         default_options.voxel_size = 0.3;
         default_options.sample_voxel_size = 1.5;
+        default_options.min_distance_points = 0.1;
         default_options.max_distance = 200.0;
-        default_options.min_distance_points = 0.15;
         default_options.init_num_frames = 20;
         default_options.max_num_points_in_voxel = 20;
-        default_options.min_distance_points = 0.05;
+        default_options.robust_registration = true;
         default_options.distance_error_threshold = 5.0;
         default_options.motion_compensation = CONTINUOUS;
         default_options.initialization = INIT_NONE;
-        default_options.robust_registration = true;
         default_options.debug_viz = false;
 
-        default_options.robust_full_voxel_threshold = 0.6;
+        default_options.robust_full_voxel_threshold = 0.5;
         default_options.robust_empty_voxel_threshold = 0.1;
-        default_options.robust_num_attempts = 10;
+        default_options.robust_num_attempts = 8;
         default_options.robust_max_voxel_neighborhood = 4;
         default_options.robust_threshold_relative_orientation = 2;
         default_options.robust_threshold_ego_orientation = 2;
 
         auto &ct_icp_options = default_options.ct_icp_options;
-        ct_icp_options.size_voxel_map = 1.0;
+        ct_icp_options.size_voxel_map = 0.8;
         ct_icp_options.num_iters_icp = 30;
         ct_icp_options.threshold_voxel_occupancy = 5;
         ct_icp_options.min_number_neighbors = 20;
@@ -118,6 +117,11 @@ namespace ct_icp {
         ct_icp_options.ls_num_threads = 8;
         ct_icp_options.ls_sigma = 0.2;
         ct_icp_options.ls_tolerant_min_threshold = 0.05;
+        ct_icp_options.weight_neighborhood = 0.2;
+        ct_icp_options.weight_alpha = 0.8;
+        ct_icp_options.max_num_residuals = 1000;
+        ct_icp_options.min_num_residuals = 200;
+
 
         return default_options;
     }
@@ -608,7 +612,7 @@ namespace ct_icp {
         if (summary.robust_level == 0 &&
             (summary.relative_orientation > options_.robust_threshold_relative_orientation ||
              summary.ego_orientation > options_.robust_threshold_ego_orientation)) {
-            if (summary.number_of_attempts < options_.robust_num_attempts_when_rotation) {
+            if (summary.robust_level < options_.robust_num_attempts_when_rotation) {
                 summary.error_message = "Large rotations require at a robust_level of at least 1 (got:" +
                                         std::to_string(summary.robust_level) + ").";
                 return false;
