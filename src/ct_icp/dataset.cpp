@@ -283,6 +283,8 @@ namespace ct_icp {
             case KITTI:
                 return read_kitti_pointcloud(options, frame_path);
             case PLY_DIRECTORY:
+                frame_path = frames_dir_path + frame_file_name_kitti_360(frame_id);
+                return read_ply_pointcloud(options, frame_path);
             case KITTI_360:
                 frame_path = frames_dir_path + frame_file_name_kitti_360(frame_id);
                 return read_kitti_raw_pointcloud(options, frame_path);
@@ -310,6 +312,57 @@ namespace ct_icp {
                 return "PLY_DIRECTORY";
         }
         throw std::runtime_error("Dataset not recognised");
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    std::vector<Point3D> read_ply_pointcloud(const DatasetOptions& options, const std::string& path) {
+        std::vector<Point3D> frame;
+        //read ply frame file
+        PlyFile plyFileIn(path, fileOpenMode_IN);
+        char* dataIn = nullptr;
+        int sizeOfPointsIn = 0;
+        int numPointsIn = 0;
+        plyFileIn.readFile(dataIn, sizeOfPointsIn, numPointsIn);
+
+        double frame_last_timestamp = 0.0;
+        double frame_first_timestamp = 1000000000.0;
+        frame.reserve(numPointsIn);
+        for (int i(0); i < numPointsIn; i++) {
+            unsigned long long int offset =
+                (unsigned long long int) i * (unsigned long long int) sizeOfPointsIn;
+            Point3D new_point;
+            new_point.raw_pt[0] = *((float*)(dataIn + offset));
+            offset += sizeof(float);
+            new_point.raw_pt[1] = *((float*)(dataIn + offset));
+            offset += sizeof(float);
+            new_point.raw_pt[2] = *((float*)(dataIn + offset));
+            offset += sizeof(float);
+            new_point.pt = new_point.raw_pt;
+            new_point.alpha_timestamp = *((float*)(dataIn + offset));
+            offset += sizeof(float);
+
+            if (new_point.alpha_timestamp < frame_first_timestamp) {
+                frame_first_timestamp = new_point.alpha_timestamp;
+            }
+
+            if (new_point.alpha_timestamp > frame_last_timestamp) {
+                frame_last_timestamp = new_point.alpha_timestamp;
+            }
+
+            double r = new_point.raw_pt.norm();
+            if ((r > options.min_dist_lidar_center) && (r < options.max_dist_lidar_center)) {
+                frame.push_back(new_point);
+            }
+        }
+        frame.shrink_to_fit();
+
+        for (int i(0); i < (int)frame.size(); i++) {
+            frame[i].alpha_timestamp = min(1.0, max(0.0, 1 - (frame_last_timestamp - frame[i].alpha_timestamp) /
+                (frame_last_timestamp - frame_first_timestamp))); //1.0
+        }
+        delete[] dataIn;
+
+        return frame;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
