@@ -2,9 +2,9 @@
 
 ![NCLT_GIF](./doc/keypoints_gif.GIF)
 
-# Installation
+This repository implements the SLAM **CT-ICP** (see  [our article](https://arxiv.org/abs/2109.12979)), a lightweight, precise and versatile pure LiDAR odometry.
 
-### Step 1: Install or build [GLOG](https://github.com/google/glog)
+# Installation
 
 ##### Ubuntu
 
@@ -25,13 +25,13 @@ To modify options (for viz3d support, or python binding) for the windows script,
 
 # Python binding
 
-> To Install a python binding project named `pyct_icp`:
+> The steps below will install a python package named `pyct_icp`:
 
 - Generate the cmake project with the following arguments (**Modify ct_build.sh**):
    
   - `-DWITH_PYTHON_BINDING=ON`: Activate the option to build the python binding
   - `-DPYTHON_EXECUTABLE=<path-to-target-python-exe>`: Path to the target python executable
-- Go into the build folder (e.g `cd ./cmake-release`)
+- Go into the build folder (e.g `cd ./cmake-Release`)
 - Build the target `pyct_icp` with `make pyct_icp -j6`
 - Install the python project `pip install ./src/binding`
 
@@ -72,24 +72,76 @@ The dataset available are the following:
   - 7 sequences of 5000 frames generated using the [CARLA](https://carla.readthedocs.io/en/0.9.10/) simulator
   - Imitates the KITTI sensor configuration (64 channel rotating LiDAR)
   - Simulated motion with very abrupt rotations
-- *ParisLuco* (publish with our work **CT-ICP**, cf below to cite us): 
+- *ParisLuco* (published with our work **CT-ICP**, cf below to cite us): 
   - A single sequence taken around the Luxembourg Garden
   - HDL-32, with numerous dynamic objects 
 
+## Running the SLAM
+
+###Usage
+``` 
+> chmod+x ./env.sh    # Set permission on unix to run env.sh
+> ./env.sh            # Setup environment variables 
+> ./slam -h           # Display help for the executable 
+
+USAGE:
+
+slam  [-h] [--version] [-c <string>] [-d <string>] [-j <int>] [-o
+<string>] [-p <bool>] [-r <string>]
 
 
+Where:
 
+-c <string>,  --config <string>
+Path to the yaml configuration file on disk
 
+-o <string>,  --output_dir <string>
+The Output Directory
 
+-p <bool>,  --debug <bool>
+Whether to display debug information (true by default)
 
+--,  --ignore_rest
+Ignores the rest of the labeled arguments following this flag.
 
-# Running the SLAM
+--version
+Displays version information and exits.
+
+-h,  --help
+Displays usage information and exits.
+```
+
+### Selecting the config / setting the options
+
+To run the SLAM call (on Unix, adapt for windows), please follow the following steps:
+
+1. Modify/Copy and modify one of the default config (`default_config.yaml`, `robust_high_frequency_config.yaml` or `robust_driving_config.yaml`) to suit your needs.
+   **Notably:** change the dataset and dataset root_path ```dataset_options.dataset``` and ```dataset_options.root_path```.
+2. Launch the SLAM with command:
+```./slam -c <config file path, e.g. default_config.yaml>  # Launches the SLAM on the default config```
+
+3. Find the trajectory (and optionally metrics if the dataset has a ground truth) in the output directory
+
+## Citation
+
+If you use our work in your research project, please consider citing:
+```
+@misc{dellenbach2021cticp,
+  title={CT-ICP: Real-time Elastic LiDAR Odometry with Loop Closure},
+  author={Pierre Dellenbach and Jean-Emmanuel Deschaud and Bastien Jacquet and François Goulette},
+  year={2021},
+  eprint={2109.12979},
+  archivePrefix={arXiv},
+  primaryClass={cs.RO}
+}
+```
+
 
 ## TODO
-
-- [ ] Make a first version of the documentation 
-- [ ] Add point-to-distribution cost 
+- [x] Make a first version of the documentation 
 - [ ] Fix bugs / Improve code quality (doc/comments/etc...)
+- [ ] Add point-to-distribution cost 
+- [ ] Add a wiki (documentation on the code)
 - [ ] Improve the robust regime (go faster and find parameters for robust and fast driving profile)
 - [ ] Increase speed (find bottleneck)
 - [ ] Add Unit Tests
