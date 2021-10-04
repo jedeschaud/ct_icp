@@ -355,7 +355,7 @@ namespace ct_icp {
                             case POINT_TO_PLANE:
                                 problem->AddResidualBlock(
                                         static_cast<PointToPlaneResidual *>(pt_to_plane_residual), loss_function,
-                                        begin_quat_, begin_t_, end_quat_, end_t_);
+                                        end_quat_, end_t_);
                                 break;
                         }
                         out_number_of_residuals++;
