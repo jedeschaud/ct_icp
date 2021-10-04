@@ -179,9 +179,9 @@ if (WITH_VIZ3D)
     message(INFO "${LOG_PREFIX}Successfully Found GLFW")
 
     if (SSH_GIT)
-        set(IMGUI_GIT_URL git@gitlab.com:pdell/imgui.git)
+        set(IMGUI_GIT_URL git@github.com:pierdell/imgui.git)
     else ()
-        set(IMGUI_GIT_URL https://gitlab.com/pdell/imgui.git)
+        set(IMGUI_GIT_URL https://github.com/pierdell/imgui)
     endif ()
     FetchContent_Declare(
             imgui
@@ -241,9 +241,9 @@ if (WITH_VIZ3D)
     endif ()
 
     if (SSH_GIT)
-        set(VIZ3D_GIT_URL git@gitlab.com:pdell/viz3d.git)
+        set(VIZ3D_GIT_URL git@github.com:pierdell/viz3d.git)
     else ()
-        set(VIZ3D_GIT_URL https://gitlab.com/pdell/viz3d.git)
+        set(VIZ3D_GIT_URL https://github.com/pierdell/viz3d)
     endif ()
     # VIZ 3D (For Visualization)
     FetchContent_Declare(
