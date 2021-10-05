@@ -60,14 +60,29 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
+
+    struct Neighborhood {
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+        Eigen::Vector3d center = Eigen::Vector3d::Zero();
+
+        Eigen::Vector3d normal = Eigen::Vector3d::Zero();
+
+        Eigen::Matrix3d covariance = Eigen::Matrix3d::Identity();
+
+        double a2D = 1.0; // Planarity coefficient
+    };
+
     // Computes normal and planarity coefficient
-    Eigen::Vector3d compute_normal(const ArrayVector3d &points, double &out_a2D) {
+    Neighborhood compute_neighborhood_distribution(const ArrayVector3d &points) {
+        Neighborhood neighborhood;
         // Compute the normals
         Eigen::Vector3d barycenter(Eigen::Vector3d(0, 0, 0));
         for (auto &point: points) {
             barycenter += point;
         }
         barycenter /= (double) points.size();
+        neighborhood.center = barycenter;
 
         Eigen::Matrix3d covariance_Matrix(Eigen::Matrix3d::Zero());
         for (auto &point: points) {
@@ -79,22 +94,24 @@ namespace ct_icp {
         covariance_Matrix(1, 0) = covariance_Matrix(0, 1);
         covariance_Matrix(2, 0) = covariance_Matrix(0, 2);
         covariance_Matrix(2, 1) = covariance_Matrix(1, 2);
+        neighborhood.covariance = covariance_Matrix;
         Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es(covariance_Matrix);
         Eigen::Vector3d normal(es.eigenvectors().col(0).normalized());
+        neighborhood.normal = normal;
 
         // Compute planarity from the eigen values
         double sigma_1 = sqrt(std::abs(
                 es.eigenvalues()[2])); //Be careful, the eigenvalues are not correct with the iterative way to compute the covariance matrix
         double sigma_2 = sqrt(std::abs(es.eigenvalues()[1]));
         double sigma_3 = sqrt(std::abs(es.eigenvalues()[0]));
-        out_a2D = (sigma_2 - sigma_3) / sigma_1;
+        neighborhood.a2D = (sigma_2 - sigma_3) / sigma_1;
 
-        if (out_a2D != out_a2D) {
+        if (neighborhood.a2D != neighborhood.a2D) {
             LOG(ERROR) << "FOUND NAN!!!";
             throw std::runtime_error("error");
         }
 
-        return normal;
+        return neighborhood;
     }
 
 
@@ -379,6 +396,7 @@ namespace ct_icp {
 
 
 #if CT_ICP_WITH_VIZ
+            // Adds to the visualizer keypoints colored by timestamp value
             if (options_->debug_viz) {
                 auto palette = colormap::palettes.at("jet").rescale(0, 1);
                 auto &instance = viz::ExplorationEngine::Instance();
@@ -542,18 +560,17 @@ namespace ct_icp {
 
         };
 
-        auto estimate_normal_and_planarity = [&](ArrayVector3d &vector_neighbors,
-                                                 Eigen::Vector3d &location,
-                                                 Eigen::Vector3d &normal,
-                                                 double &planarity) {
+        auto estimate_point_neighborhood = [&](ArrayVector3d &vector_neighbors,
+                                               Eigen::Vector3d &location,
+                                               double &planarity_weight) {
 
-            double a2D; // The planarity coefficient
-            normal = compute_normal(vector_neighbors, a2D);
-            planarity = std::pow(a2D, options.power_planarity);
+            auto neighborhood = compute_neighborhood_distribution(vector_neighbors);
+            planarity_weight = std::pow(neighborhood.a2D, options.power_planarity);
 
-            if (normal.dot(trajectory[index_frame].begin_t - location) < 0) {
-                normal = -1.0 * normal;
+            if (neighborhood.normal.dot(trajectory[index_frame].begin_t - location) < 0) {
+                neighborhood.normal = -1.0 * neighborhood.normal;
             }
+            return neighborhood;
         };
 
         double lambda_weight = std::abs(options.weight_alpha);
@@ -590,12 +607,10 @@ namespace ct_icp {
 
                 // TODO : Add multiple neighbors ?
                 double weight;
-                Eigen::Vector3d normal;
+                auto neighborhood = estimate_point_neighborhood(vector_neighbors,
+                                                               raw_point,
+                                                               weight);
 
-                estimate_normal_and_planarity(vector_neighbors,
-                                              raw_point,
-                                              normal,
-                                              weight);
                 weight = lambda_weight * weight +
                          lambda_neighborhood * std::exp(-(vector_neighbors[0] -
                                                           keypoint.pt).norm() / (kMaxPointToPlane * kMinNumNeighbors));
@@ -605,11 +620,11 @@ namespace ct_icp {
                 int next_neighbor_id = 0;
                 for (int i(0); i < options.num_closest_neighbors; ++i) {
                     point_to_plane_dist = std::abs(
-                            (keypoint.pt - vector_neighbors[i]).transpose() * normal);
+                            (keypoint.pt - vector_neighbors[i]).transpose() * neighborhood.normal);
                     if (point_to_plane_dist < options.max_dist_to_plane_ct_icp) {
                         builder.SetResidualBlock(options.num_closest_neighbors * k + i, k,
                                                  vector_neighbors[i],
-                                                 normal, weight, keypoint.alpha_timestamp);
+                                                 neighborhood.normal, weight, keypoint.alpha_timestamp);
                     }
                 }
             }
@@ -770,15 +785,17 @@ namespace ct_icp {
                 elapsed_select_closest_neighbors += _elapsed_neighbors_selection.count() * 1000.0;
 
                 // Compute normals from neighbors
-                double a2D; // The planarity coefficient
-                auto normal = compute_normal(vector_neighbors, a2D);
+                double planarity_weight; // The planarity coefficient
+                auto neighborhood = compute_neighborhood_distribution(vector_neighbors);
+                auto &normal = neighborhood.normal;
 
                 if (normal.dot(trajectory[index_frame].begin_t - pt_keypoint) < 0) {
                     normal = -1.0 * normal;
                 }
 
                 double alpha_timestamp = keypoint.alpha_timestamp;
-                double weight = a2D * a2D; //a2D**2 much better than a2D (a2D**3 is not working)
+                double weight = planarity_weight *
+                                planarity_weight; //planarity_weight**2 much better than planarity_weight (planarity_weight**3 is not working)
                 Eigen::Vector3d closest_pt_normal = weight * normal;
 
                 Eigen::Vector3d closest_point = vector_neighbors[0];

@@ -4,6 +4,9 @@
 
 This repository implements the SLAM **CT-ICP** (see  [our article](https://arxiv.org/abs/2109.12979)), a lightweight, precise and versatile pure LiDAR odometry.
 
+It is integrated with the python project **[pyLiDAR-SLAM](https://github.com/Kitware/pyLiDAR-SLAM)** which gives access to more datasets. 
+**pyLiDAR-SLAM** requires the installation of the python binding for **CT-ICP** (see below).
+
 # Installation
 
 ##### Ubuntu
@@ -35,6 +38,7 @@ To modify options (for viz3d support, or python binding) for the windows script,
 - Build the target `pyct_icp` with `make pyct_icp -j6`
 - Install the python project `pip install ./src/binding`
 
+> **Note:** This step is required to use **CT-ICP** with **pyLiDAR-SLAM**.
 # Install the Datasets
 
 The Datasets are publicly available at:
