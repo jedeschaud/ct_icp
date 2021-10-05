@@ -183,33 +183,6 @@ namespace ct_icp {
         double beta_;
     };
 
-
-    // A Const Functor which enforces a Constant Norm Velocity constraint on translation
-    struct ConstantNormVelocityFunctor {
-
-        static constexpr int NumResiduals() { return 1; }
-
-        ConstantNormVelocityFunctor(const Eigen::Vector3d &previous_velocity,
-                                    double beta) : previous_velocity_(previous_velocity), beta_(beta) {}
-
-        template<typename T>
-        bool operator()(const T *const begin_t, const T *const end_t, T *residual) const {
-            residual[0] = beta_ * (sqrt((end_t[0] - begin_t[0]) * (end_t[0] - begin_t[0]) +
-                                        (end_t[1] - begin_t[1]) * (end_t[1] - begin_t[1]) +
-                                        (end_t[2] - begin_t[2]) * (end_t[2] - begin_t[2]))
-                                   - sqrt(previous_velocity_(0, 0) * previous_velocity_(0, 0) +
-                                          previous_velocity_(1, 0) * previous_velocity_(1, 0) +
-                                          previous_velocity_(2, 0) * previous_velocity_(2, 0)));
-            return true;
-        }
-
-        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    private:
-        Eigen::Vector3d previous_velocity_;
-        double beta_ = 1.0;
-    };
-
-
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// LOSS FUNCTIONS
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

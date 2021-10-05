@@ -1,5 +1,6 @@
 # CT-ICP: Elastic SLAM for moving sensors
 
+![LUCO_GIF](./doc/aggregated.GIF)
 ![NCLT_GIF](./doc/keypoints_gif.GIF)
 
 This repository implements the SLAM **CT-ICP** (see  [our article](https://arxiv.org/abs/2109.12979)), a lightweight, precise and versatile pure LiDAR odometry.
@@ -143,6 +144,7 @@ If you use our work in your research project, please consider citing:
 
 ## TODO
 - [x] Make a first version of the documentation 
+- [ ] Save both poses for each TrajectoryFrame
 - [ ] Fix bugs / Improve code quality (doc/comments/etc...)
 - [ ] Add point-to-distribution cost 
 - [ ] Add a wiki (documentation on the code)

@@ -79,12 +79,12 @@ namespace ct_icp {
         default_options.max_distance = 200.0;
         default_options.init_num_frames = 20;
         default_options.max_num_points_in_voxel = 20;
-        default_options.robust_registration = true;
         default_options.distance_error_threshold = 5.0;
         default_options.motion_compensation = CONTINUOUS;
         default_options.initialization = INIT_NONE;
         default_options.debug_viz = false;
 
+        default_options.robust_registration = true;
         default_options.robust_full_voxel_threshold = 0.5;
         default_options.robust_empty_voxel_threshold = 0.1;
         default_options.robust_num_attempts = 8;
@@ -140,7 +140,6 @@ namespace ct_icp {
             double alpha_timestamp = point.alpha_timestamp;
             Eigen::Quaterniond q_alpha = begin_quat.slerp(alpha_timestamp, end_quat);
             q_alpha.normalize();
-            Eigen::Matrix3d R = q_alpha.toRotationMatrix();
             Eigen::Vector3d t = (1.0 - alpha_timestamp) * begin_t + alpha_timestamp * end_t;
 
             // Distort Raw Keypoints
@@ -305,8 +304,18 @@ namespace ct_icp {
             }
         }
 
-        for (auto &point: frame)
+        double min_timestamp = std::numeric_limits<double>::max();
+        double max_timestamp = std::numeric_limits<double>::min();
+        for (auto &point: frame) {
             point.index_frame = index_frame;
+            if (point.timestamp > max_timestamp)
+                max_timestamp = point.timestamp;
+            if (point.timestamp < min_timestamp)
+                min_timestamp = point.timestamp;
+        }
+
+        trajectory_[index_frame].begin_timestamp = min_timestamp;
+        trajectory_[index_frame].end_timestamp = max_timestamp;
 
         return frame;
     }
@@ -348,7 +357,7 @@ namespace ct_icp {
 
 
         if (index_frame > 0) {
-            bool success = false;
+            bool good_enough_registration = false;
             summary.number_of_attempts = 1;
             double sample_voxel_size = index_frame < options_.init_num_frames ?
                                        options_.init_sample_voxel_size : options_.sample_voxel_size;
@@ -369,8 +378,8 @@ namespace ct_icp {
                 ct_icp_options.threshold_translation_norm = max(
                         ct_icp_options.threshold_orientation_norm / 10, 1.e-4);
                 sample_voxel_size = std::max(sample_voxel_size / 1.5, min_voxel_size);
-                ct_icp_options.ls_sigma *= 1.1;
-                ct_icp_options.max_dist_to_plane_ct_icp *= 1.1;
+                ct_icp_options.ls_sigma *= 1.2;
+                ct_icp_options.max_dist_to_plane_ct_icp *= 1.5;
             };
 
             summary.robust_level = 0;
@@ -405,16 +414,18 @@ namespace ct_icp {
                 }
                 summary.relative_distance = (trajectory_[index_frame].end_t - trajectory_[index_frame].begin_t).norm();
 
-                success = AssessRegistration(frame, summary,
-                                             kDisplay ? &log_out : nullptr);
+                good_enough_registration = AssessRegistration(frame, summary,
+                                                              kDisplay ? &log_out : nullptr);
                 if (options_.robust_fail_early)
-                    summary.success = success;
-                if (!success) {
-                    // Either fail or
-                    if (kDisplay)
-                        log_out << "Registration Attempt n°" << summary.number_of_attempts << " failed with message: "
-                                << summary.error_message << std::endl;
+                    summary.success = good_enough_registration;
+
+                if (!good_enough_registration) {
                     if (options_.robust_registration && summary.number_of_attempts < options_.robust_num_attempts) {
+                        // Either fail or
+                        if (kDisplay)
+                            log_out << "Registration Attempt n°" << summary.number_of_attempts
+                                    << " failed with message: "
+                                    << summary.error_message << std::endl;
                         double trans_distance = previous_frame.TranslationDistance(summary.frame);
                         double rot_distance = previous_frame.RotationDistance(summary.frame);
                         if (kDisplay)
@@ -424,11 +435,12 @@ namespace ct_icp {
                         summary.robust_level++;
                         summary.number_of_attempts++;
                     } else {
-                        success = true;
-
+                        good_enough_registration = true;
                     }
                 }
-            } while (!success);
+            } while (!good_enough_registration);
+
+            trajectory_[index_frame].success = summary.success;
 
             if (!summary.success) {
                 if (kDisplay)
@@ -458,11 +470,13 @@ namespace ct_icp {
 
         if (options_.robust_registration) {
 
-            // Communicate whether we suspect an error
+            // Communicate whether we suspect an error due to too many attempts
             suspect_registration_error_ = summary.number_of_attempts >= options_.robust_num_attempts;
             if (kDisplay) {
-                log_out << "[Robust Registration] " << (suspect_registration_error_ ? "Suspect Registration." : "") <<
-                        "Might be failing. Consecutive failures: " << robust_num_consecutive_failures_ << std::endl;
+                log_out << "[Robust Registration] "
+                        << (suspect_registration_error_ ? "Suspect Registration due to a large number of attempts."
+                                                        : "")
+                        << "Might be failing. Consecutive failures: " << robust_num_consecutive_failures_ << std::endl;
                 log_out << "[Robust Registration] The rotation ego motion is "
                         << summary.ego_orientation << " (deg)/ " << " relative orientation "
                         << summary.relative_orientation << " (deg) " << std::endl;
@@ -499,13 +513,11 @@ namespace ct_icp {
 
         }
 
-
         if (add_points) {
             //Update Voxel Map+
             AddPointsToMap(voxel_map_, frame, kSizeVoxelMap,
                            kMaxNumPointsInVoxel, kMinDistancePoints);
         }
-
 
 #ifdef CT_ICP_WITH_VIZ
         if (options_.debug_viz) {
@@ -563,36 +575,36 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     Odometry::RegistrationSummary Odometry::TryRegister(vector<Point3D> &frame, int index_frame,
                                                         const CTICPOptions &options,
-                                                        RegistrationSummary &summary,
+                                                        RegistrationSummary &registration_summary,
                                                         double sample_voxel_size) {
         // Use new sub_sample frame as keypoints
         std::vector<Point3D> keypoints;
         grid_sampling(frame, keypoints, sample_voxel_size);
 
         auto num_keypoints = (int) keypoints.size();
-        summary.sample_size = num_keypoints;
+        registration_summary.sample_size = num_keypoints;
 
         {
 
             //CT ICP
-            ICPSummary _summary;
+            ICPSummary icp_summary;
             if (options_.ct_icp_options.solver == CT_ICP_SOLVER::GN) {
 
-                _summary = CT_ICP_GN(options, voxel_map_, keypoints, trajectory_, index_frame);
+                icp_summary = CT_ICP_GN(options, voxel_map_, keypoints, trajectory_, index_frame);
             } else {
-                _summary = CT_ICP_CERES(options, voxel_map_, keypoints, trajectory_, index_frame);
+                icp_summary = CT_ICP_CERES(options, voxel_map_, keypoints, trajectory_, index_frame);
             }
-            summary.success = _summary.success;
-            summary.number_of_residuals = _summary.num_residuals_used;
+            registration_summary.success = icp_summary.success;
+            registration_summary.number_of_residuals = icp_summary.num_residuals_used;
 
-            if (!summary.success) {
-                summary.success = false;
-                return summary;
+            if (!registration_summary.success) {
+                registration_summary.success = false;
+                return registration_summary;
             }
 
             //Update frame
-            Eigen::Quaterniond q_begin = Eigen::Quaterniond(trajectory_[index_frame].begin_R);
-            Eigen::Quaterniond q_end = Eigen::Quaterniond(trajectory_[index_frame].end_R);
+            auto q_begin = Eigen::Quaterniond(trajectory_[index_frame].begin_R);
+            auto q_end = Eigen::Quaterniond(trajectory_[index_frame].end_R);
             Eigen::Vector3d t_begin = trajectory_[index_frame].begin_t;
             Eigen::Vector3d t_end = trajectory_[index_frame].end_t;
             for (auto &point: frame) {
@@ -600,9 +612,9 @@ namespace ct_icp {
                 TransformPoint(options_.motion_compensation, point, q_begin, q_end, t_begin, t_end);
             }
         }
-        summary.keypoints = keypoints;
-        summary.frame = trajectory_[index_frame];
-        return summary;
+        registration_summary.keypoints = keypoints;
+        registration_summary.frame = trajectory_[index_frame];
+        return registration_summary;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */

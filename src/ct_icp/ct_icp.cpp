@@ -508,7 +508,6 @@ namespace ct_icp {
         const int kMinNumNeighbors = options.min_number_neighbors;
         const int kThresholdCapacity = index_frame < options.init_num_frames ? 1 : options.threshold_voxel_occupancy;
 
-
         ceres::Solver::Options ceres_options;
         ceres_options.max_num_iterations = options.ls_max_num_iters;
         ceres_options.num_threads = options.ls_num_threads;
@@ -520,7 +519,6 @@ namespace ct_icp {
         if (index_frame > 0) {
             previous_estimate = &trajectory[index_frame - 1];
             previous_velocity = previous_estimate->end_t - previous_estimate->begin_t;
-
             previous_orientation = Eigen::Quaterniond(previous_estimate->end_R);
         }
 
@@ -537,7 +535,8 @@ namespace ct_icp {
             builder.DistortFrame(begin_quat, end_quat, begin_t, end_t);
         }
 
-        int num_iter_icp = index_frame < options.init_num_frames ? 15 : options.num_iters_icp;
+        int num_iter_icp = index_frame < options.init_num_frames ? std::max(15, options.num_iters_icp) :
+                           options.num_iters_icp;
 
         auto transform_keypoints = [&]() {
             // Elastically distorts the frame to improve on Neighbor estimation
@@ -557,7 +556,6 @@ namespace ct_icp {
 
                 keypoint.pt = R * keypoint.raw_pt + t;
             }
-
         };
 
         auto estimate_point_neighborhood = [&](ArrayVector3d &vector_neighbors,
@@ -605,11 +603,10 @@ namespace ct_icp {
                 if (vector_neighbors.size() < kMinNumNeighbors)
                     continue;
 
-                // TODO : Add multiple neighbors ?
                 double weight;
                 auto neighborhood = estimate_point_neighborhood(vector_neighbors,
-                                                               raw_point,
-                                                               weight);
+                                                                raw_point,
+                                                                weight);
 
                 weight = lambda_weight * weight +
                          lambda_neighborhood * std::exp(-(vector_neighbors[0] -
@@ -617,7 +614,6 @@ namespace ct_icp {
 
                 double point_to_plane_dist;
                 std::set<Voxel> neighbor_voxels;
-                int next_neighbor_id = 0;
                 for (int i(0); i < options.num_closest_neighbors; ++i) {
                     point_to_plane_dist = std::abs(
                             (keypoint.pt - vector_neighbors[i]).transpose() * neighborhood.normal);

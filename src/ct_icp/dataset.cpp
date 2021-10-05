@@ -165,13 +165,22 @@ namespace ct_icp {
         return "frame_" + ss.str() + ".ply";
     }
 
-    inline int CountNumFilesInDirectory(const std::string &dir_path) {
+    int CountNumFilesInDirectory(const std::string &dir_path, std::vector<std::string> *out_frames = nullptr) {
 #ifdef WITH_STD_FILESYSTEM
         auto dirIter = std::filesystem::directory_iterator(dir_path);
+        if (out_frames)
+            out_frames->clear();
         int size = std::count_if(
                 begin(dirIter),
                 end(dirIter),
-                [](auto &entry) { return entry.is_regular_file(); });
+                [out_frames](auto &entry) {
+                    std::string extension = entry.path().extension();
+                    bool is_ply_file = extension == ".PLY" || extension == ".ply";
+                    is_ply_file &= entry.is_regular_file();
+                    if (is_ply_file && out_frames)
+                        out_frames->push_back(entry.path().string());
+                    return is_ply_file;
+                });
         return size;
 #endif
         return -1;
@@ -282,12 +291,12 @@ namespace ct_icp {
                 return read_kitti_carla_pointcloud(options, frame_path);
             case KITTI:
                 return read_kitti_pointcloud(options, frame_path);
-            case PLY_DIRECTORY:
-                frame_path = frames_dir_path + frame_file_name_kitti_360(frame_id);
-                return read_ply_pointcloud(options, frame_path);
             case KITTI_360:
                 frame_path = frames_dir_path + frame_file_name_kitti_360(frame_id);
                 return read_kitti_raw_pointcloud(options, frame_path);
+            case PLY_DIRECTORY:
+                throw std::runtime_error(
+                        "PLY Directory is not supported by read_pointcloud. See the DirectoryIterator.");
             case NCLT:
                 throw std::runtime_error(
                         "PointClouds from the NCLT Dataset do not allow random access (reading velodyne_hits.bin for timestamps)");
@@ -315,11 +324,11 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    std::vector<Point3D> read_ply_pointcloud(const DatasetOptions& options, const std::string& path) {
+    std::vector<Point3D> read_ply_pointcloud(const DatasetOptions &options, const std::string &path) {
         std::vector<Point3D> frame;
         //read ply frame file
         PlyFile plyFileIn(path, fileOpenMode_IN);
-        char* dataIn = nullptr;
+        char *dataIn = nullptr;
         int sizeOfPointsIn = 0;
         int numPointsIn = 0;
         plyFileIn.readFile(dataIn, sizeOfPointsIn, numPointsIn);
@@ -329,16 +338,16 @@ namespace ct_icp {
         frame.reserve(numPointsIn);
         for (int i(0); i < numPointsIn; i++) {
             unsigned long long int offset =
-                (unsigned long long int) i * (unsigned long long int) sizeOfPointsIn;
+                    (unsigned long long int) i * (unsigned long long int) sizeOfPointsIn;
             Point3D new_point;
-            new_point.raw_pt[0] = *((float*)(dataIn + offset));
+            new_point.raw_pt[0] = *((float *) (dataIn + offset));
             offset += sizeof(float);
-            new_point.raw_pt[1] = *((float*)(dataIn + offset));
+            new_point.raw_pt[1] = *((float *) (dataIn + offset));
             offset += sizeof(float);
-            new_point.raw_pt[2] = *((float*)(dataIn + offset));
+            new_point.raw_pt[2] = *((float *) (dataIn + offset));
             offset += sizeof(float);
             new_point.pt = new_point.raw_pt;
-            new_point.alpha_timestamp = *((float*)(dataIn + offset));
+            new_point.alpha_timestamp = *((float *) (dataIn + offset));
             offset += sizeof(float);
 
             if (new_point.alpha_timestamp < frame_first_timestamp) {
@@ -356,9 +365,9 @@ namespace ct_icp {
         }
         frame.shrink_to_fit();
 
-        for (int i(0); i < (int)frame.size(); i++) {
+        for (int i(0); i < (int) frame.size(); i++) {
             frame[i].alpha_timestamp = min(1.0, max(0.0, 1 - (frame_last_timestamp - frame[i].alpha_timestamp) /
-                (frame_last_timestamp - frame_first_timestamp))); //1.0
+                                                             (frame_last_timestamp - frame_first_timestamp))); //1.0
         }
         delete[] dataIn;
 
@@ -776,7 +785,9 @@ namespace ct_icp {
                     num_frames_ = LENGTH_SEQUENCE_KITTI_360[sequence_id] + 1;
                     break;
                 case PLY_DIRECTORY:
-                    num_frames_ = CountNumFilesInDirectory(pointclouds_dir_path(options, options.root_path));
+                    num_frames_ = CountNumFilesInDirectory(pointclouds_dir_path(options, options.root_path),
+                                                           &filenames_);
+                    std::sort(filenames_.begin(), filenames_.end());
                     break;
                 default:
                     num_frames_ = -1;
@@ -788,7 +799,12 @@ namespace ct_icp {
 
         std::vector<Point3D> Next() override {
             int frame_id = frame_id_++;
-            auto pc = read_pointcloud(options_, sequence_id_, frame_id);
+            std::vector<Point3D> pc;
+            if (!filenames_.empty()) {
+                auto filename = filenames_[frame_id];
+                pc = read_ply_pointcloud(options_, filename);
+            } else
+                pc = read_pointcloud(options_, sequence_id_, frame_id);
             for (auto &point: pc)
                 point.timestamp = frame_id + point.alpha_timestamp;
             return pc;
@@ -820,6 +836,8 @@ namespace ct_icp {
         }
 
     private:
+
+        std::vector<std::string> filenames_; // Vector of file names (only possible for directory of .PLY files)
         DatasetOptions options_;
         int sequence_id_;
         int frame_id_ = 0;

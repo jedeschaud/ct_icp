@@ -243,6 +243,12 @@ PYBIND11_MODULE(pyct_icp, m) {
             .def("RegisterFrame", [](ct_icp::Odometry &odometry, const LiDARFrame &frame) {
                 return PyRegistrationSummary(odometry.RegisterFrame(frame.points));
             })
+            .def("RegisterFrameWithEstimate", [](ct_icp::Odometry &odometry,
+                                                 const LiDARFrame &frame,
+                                                 const ct_icp::TrajectoryFrame &initial_estimate) {
+                return PyRegistrationSummary(odometry.RegisterFrameWithEstimate(frame.points,
+                                                                                initial_estimate));
+            })
             .def("MapSize", &ct_icp::Odometry::MapSize)
             .def("Trajectory", &ct_icp::Odometry::Trajectory)
             .def("GetLocalMap", [](const ct_icp::Odometry &self) {

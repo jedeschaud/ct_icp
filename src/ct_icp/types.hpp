@@ -43,6 +43,9 @@ namespace ct_icp {
     struct TrajectoryFrame {
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
+        bool success = true;
+        double begin_timestamp = 0.0;
+        double end_timestamp = 1.0;
         Eigen::Matrix3d begin_R;
         Eigen::Vector3d begin_t;
         Eigen::Matrix3d end_R;

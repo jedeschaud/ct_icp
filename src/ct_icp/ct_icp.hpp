@@ -48,6 +48,12 @@ namespace ct_icp {
         NORMAL
     };
 
+    enum WEIGHTING_SCHEME {
+        PLANARITY,      // Weighs residuals by their planarity coefficient
+        NEIGHBORHOOD,   // Weighs residuals by the distance to their neares neighbors
+        ALL             // Combines all weighting schemes with different coefficients
+    };
+
     // Options for the Elastic_ICP
     struct CTICPOptions {
 
@@ -65,7 +71,7 @@ namespace ct_icp {
 
         short voxel_neighborhood = 1; // Visits the (3 * voxel_neighborhood)^3 neighboring voxels
 
-        double power_planarity = 2.0; // The power of planarity defined in a weight
+        double power_planarity = 2.0; // The power of planarity defined in the weighting scheme
 
         // Whether to estimate the normal of the key point or the closest neighbor
         bool estimate_normal_from_neighborhood = true;
@@ -97,12 +103,13 @@ namespace ct_icp {
 
         double beta_orientation_consistency = 0.0; // Constraint on the orientation consistency
 
-        double weight_alpha = 1.0;
+        WEIGHTING_SCHEME weighting_scheme = ALL;
 
-        double weight_neighborhood = 0.0;
+        double weight_alpha = 0.9;
+
+        double weight_neighborhood = 0.1;
 
         CT_ICP_SOLVER solver = GN;
-
 
         /* ---------------------------------------------------------------------------------------------------------- */
         /* LEAST SQUARE OPTIMIZATION PARAMETERS                                                                       */

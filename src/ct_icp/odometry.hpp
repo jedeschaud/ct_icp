@@ -190,7 +190,7 @@ namespace ct_icp {
         RegistrationSummary TryRegister(std::vector<Point3D> &frame,
                                         int frame_index,
                                         const CTICPOptions &options,
-                                        RegistrationSummary &summary,
+                                        RegistrationSummary &registration_summary,
                                         double sample_voxel_size);
 
         // Insert a New Trajectory Frame, and initializes the motion for this new frame
