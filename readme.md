@@ -83,7 +83,7 @@ The dataset available are the following:
 
 ## Running the SLAM
 
-###Usage
+### Usage
 ``` 
 > chmod+x ./env.sh    # Set permission on unix to run env.sh
 > ./env.sh            # Setup environment variables 
