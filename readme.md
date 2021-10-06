@@ -1,4 +1,4 @@
-# CT-ICP: Elastic SLAM for moving sensors
+# CT-ICP: Elastic SLAM for LiDAR sensors
 
 ![LUCO_GIF](./doc/aggregated.GIF)
 ![NCLT_GIF](./doc/keypoints_gif.GIF)
