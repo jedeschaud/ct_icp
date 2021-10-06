@@ -73,7 +73,7 @@ The dataset available are the following:
   - Challenging motions (abrupt orientation changes)
   - **NOTE**: For this dataset, directly download the *Velodyne* links (e.g. [2012-01-08_vel.tar](http://robots.engin.umich.edu/nclt/velodyne_data/2012-01-08_vel.tar.gz)).
     Our code directly reads the *velodyne_hits.bin* file.
-- *KITTI-CARLA_v3*: (see and cite [KITTI-CARLA](https://arxiv.org/abs/2109.00892)):
+- *KITTI-CARLA*: (see and cite [KITTI-CARLA](https://arxiv.org/abs/2109.00892)):
   - 7 sequences of 5000 frames generated using the [CARLA](https://carla.readthedocs.io/en/0.9.10/) simulator
   - Imitates the KITTI sensor configuration (64 channel rotating LiDAR)
   - Simulated motion with very abrupt rotations
