@@ -32,7 +32,7 @@ if (NOT tclap_POPULATED)
 endif ()
 
 
-# Find Ceres
+# Find yaml-cpp
 if (NOT YAML_CPP_DIR)
     set(YAML_CPP_DIR ${EXT_INSTALL_ROOT}/yaml-cpp/lib/cmake)
 endif ()

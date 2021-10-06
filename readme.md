@@ -144,13 +144,14 @@ If you use our work in your research project, please consider citing:
 
 ## TODO
 - [x] Make a first version of the documentation 
-- [ ] Save both poses for each TrajectoryFrame
+- [x] Save both poses for each TrajectoryFrame
 - [ ] Fix bugs / Improve code quality (doc/comments/etc...)
-- [ ] Add point-to-distribution cost 
 - [ ] Add a wiki (documentation on the code)
+- [ ] Add point-to-distribution cost
 - [ ] Improve the robust regime (go faster and find parameters for robust and fast driving profile)
-- [ ] Increase speed (find bottleneck)
+- [ ] Increase speed
 - [ ] Add Unit Tests
+- [ ] Github CI 
 - [ ] Improve visualization / Interaction for the OpenGL Window
 - [ ] Improve the python binding (reduce the overhead)
 - [ ] Write ROS packaging
