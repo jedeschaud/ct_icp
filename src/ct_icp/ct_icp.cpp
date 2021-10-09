@@ -781,8 +781,8 @@ namespace ct_icp {
                 elapsed_select_closest_neighbors += _elapsed_neighbors_selection.count() * 1000.0;
 
                 // Compute normals from neighbors
-                double planarity_weight; // The planarity coefficient
                 auto neighborhood = compute_neighborhood_distribution(vector_neighbors);
+                double planarity_weight = neighborhood.a2D;
                 auto &normal = neighborhood.normal;
 
                 if (normal.dot(trajectory[index_frame].begin_t - pt_keypoint) < 0) {
