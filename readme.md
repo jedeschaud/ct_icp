@@ -27,6 +27,11 @@ source env.sh                                     # Setup the environment (.so l
 
 To modify options (for viz3d support, or python binding) for the windows script, you can directly modify the `ct_icp_build.bat` file.
 
+### Visualization
+
+> As a debugging/visualization tool (and until we provide a ROS support `rosviz`) we use a home-made/experimental lightweight OpenGL-based pointcloud visualizer **[viz3d](https://github.com/pierdell/viz3d)** designed for our SLAM use case. 
+
+
 # Python binding
 
 > The steps below will install a python package named `pyct_icp`:
