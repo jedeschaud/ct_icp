@@ -31,7 +31,7 @@ To modify options (for viz3d support, or python binding) for the windows script,
 
 > The steps below will install a python package named `pyct_icp`:
 
-- Generate the cmake project with the following arguments (**Modify ct_build.sh**):
+- Generate the cmake project with the following arguments (**Modify ct_icp_build.sh**):
    
   - `-DWITH_PYTHON_BINDING=ON`: Activate the option to build the python binding
   - `-DPYTHON_EXECUTABLE=<path-to-target-python-exe>`: Path to the target python executable
