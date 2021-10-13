@@ -14,7 +14,7 @@ It is integrated with the python project **[pyLiDAR-SLAM](https://github.com/Kit
 
 ```bash
 .\ct_icp_build.sh Release "Unix Makefiles" ON ON  # Builds the project in "Release" mode, with "Unix Makefiles" cmake generator, with python binding and with the visualization activated
-.\env.sh                                          # Setup the environment (.so locations) 
+source env.sh                                     # Setup the environment (.so locations) 
 .\slam -c default_config.yaml                     # Launches the SLAM
  ```
 
