@@ -16,7 +16,7 @@ dataset_options:
   min_dist_lidar_center: 0.5 # Suppress points too close to the center of the sensor
   max_dist_lidar_center: 100.0 # Suppress points to far from the center of the sensor
   nclt_num_aggregated_pc: 220 #
-e
+
 
 # ODOMETRY OPTIONS ----
 odometry_options:

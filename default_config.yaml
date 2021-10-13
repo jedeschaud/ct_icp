@@ -4,6 +4,8 @@ suspend_on_failure: false
 output_dir: .outputs
 max_frames: -1 # For negative values, all frames are computed
 display_debug: true
+with_viz3d: true
+viz_mode: AGGREGATED
 
 # DATASET OPTIONS ----
 dataset_options:
