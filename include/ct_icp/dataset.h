@@ -1,6 +1,7 @@
 #ifndef CT_ICP_DATASET_HPP
 #define CT_ICP_DATASET_HPP
 
+#include <memory>
 #include "types.h"
 
 
