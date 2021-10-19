@@ -92,7 +92,7 @@ The dataset available are the following:
 ### Usage
 ``` 
 > chmod+x ./env.sh    # Set permission on unix to run env.sh
-> ./env.sh            # Setup environment variables 
+> source env.sh            # Setup environment variables 
 > ./slam -h           # Display help for the executable 
 
 USAGE:
