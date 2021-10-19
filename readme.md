@@ -49,7 +49,7 @@ To modify options (for viz3d support, or python binding) for the windows script,
 
 The Datasets are publicly available at:
 https://cloud.mines-paristech.fr/index.php/s/UwgVFtiTOmrgKp5
-The folder is protected by a password: send an email to jean-emmanuel.deschaud@mines-paristech.fr to get the password.
+The folder is protected by a password (you can find it in an answer in the issues).
 
 Each dataset is a .zip archive containing the PLY scan file with the relative timestamps for each point in the frame, and if available, the ground truth poses.
 
