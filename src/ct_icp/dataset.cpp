@@ -3,10 +3,10 @@
 #include <fstream>
 
 
-#include "dataset.hpp"
-#include "Utilities/PlyFile.h"
-#include "io.hpp"
-#include "utils.hpp"
+#include <ct_icp/dataset.h>
+#include <ct_icp/Utilities/PlyFile.h>
+#include <ct_icp/io.h>
+#include <ct_icp/utils.h>
 
 #ifdef CT_ICP_IS_WINDOWS
 #define _USE_MATH_DEFINES

@@ -1,5 +1,4 @@
-#include <ceres/ceres.h>
-#include "cost_functions.h"
+#include <ct_icp/cost_functions.h>
 
 namespace ct_icp {
 

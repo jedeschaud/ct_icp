@@ -1,8 +1,8 @@
 #include <omp.h>
 #include <chrono>
-#include "odometry.hpp"
-#include "Utilities/PersoTimer.h"
-#include "utils.hpp"
+#include <ct_icp/odometry.h>
+#include <ct_icp/Utilities/PersoTimer.h>
+#include <ct_icp/utils.h>
 #include <iostream>
 #include <fstream>
 

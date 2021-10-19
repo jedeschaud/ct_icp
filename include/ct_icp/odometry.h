@@ -1,7 +1,7 @@
 #ifndef CT_ICP_ODOMETRY_H
 #define CT_ICP_ODOMETRY_H
 
-#include "ct_icp.hpp"
+#include "ct_icp.h"
 #include <map>
 
 namespace ct_icp {

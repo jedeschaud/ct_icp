@@ -11,7 +11,7 @@
 #include <Eigen/StdVector>
 #include <glog/logging.h>
 
-#include "utils.hpp"
+#include "utils.h"
 
 #define _USE_MATH_DEFINES
 

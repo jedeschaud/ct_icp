@@ -1,4 +1,4 @@
-#include "evaluate_slam.hpp"
+#include <ct_icp/evaluate_slam.h>
 
 namespace ct_icp {
 

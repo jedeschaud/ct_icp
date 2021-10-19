@@ -1,0 +1,9 @@
+add_library(Slam::CT_ICP SHARED IMPORTED)
+set_target_properties(Slam::CT_ICP PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES  @CT_ICP_INSTALL_DIR@/include
+    INTERFACE_LINK_LIBRARIES "glog::glog;Eigen3::Eigen;Ceres::ceres")
+
+set_target_properties(Slam::CT_ICP PROPERTIES
+    IMPORTED_LOCATION "@CT_ICP_INSTALL_DIR@/lib/libCT_ICP.so")
+
+set(CT_ICP_FOUND TRUE)

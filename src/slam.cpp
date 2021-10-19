@@ -11,12 +11,12 @@
 #include <yaml-cpp/yaml.h>
 #include <tclap/CmdLine.h>
 
+#include <ct_icp/odometry.h>
+#include <ct_icp/dataset.h>
+#include <ct_icp/io.h>
+#include <ct_icp/evaluate_slam.h>
+#include <ct_icp/utils.h>
 
-#include "ct_icp/odometry.hpp"
-#include "ct_icp/dataset.hpp"
-#include "ct_icp/io.hpp"
-#include "evaluate_slam.hpp"
-#include "ct_icp/utils.hpp"
 
 #ifdef CT_ICP_WITH_VIZ
 

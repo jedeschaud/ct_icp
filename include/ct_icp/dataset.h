@@ -1,7 +1,7 @@
 #ifndef CT_ICP_DATASET_HPP
 #define CT_ICP_DATASET_HPP
 
-#include "types.hpp"
+#include "types.h"
 
 
 namespace ct_icp {

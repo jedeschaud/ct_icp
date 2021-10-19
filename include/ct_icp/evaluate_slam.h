@@ -17,8 +17,8 @@
 
 #include "yaml-cpp/yaml.h"
 
-#include "io.hpp"
-#include "types.hpp"
+#include "io.h"
+#include "types.h"
 
 namespace ct_icp {
 

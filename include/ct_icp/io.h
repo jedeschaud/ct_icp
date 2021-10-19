@@ -1,7 +1,7 @@
 #ifndef CT_ICP_IO_H
 #define CT_ICP_IO_H
 
-#include "types.hpp"
+#include "types.h"
 
 namespace ct_icp {
 

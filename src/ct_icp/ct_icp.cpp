@@ -7,8 +7,8 @@
 #include <ceres/ceres.h>
 #include <glog/logging.h>
 
-#include "ct_icp.hpp"
-#include "cost_functions.h"
+#include <ct_icp/ct_icp.h>
+#include <ct_icp/cost_functions.h>
 
 #ifdef CT_ICP_WITH_VIZ
 

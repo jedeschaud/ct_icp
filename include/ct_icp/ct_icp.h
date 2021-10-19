@@ -16,7 +16,7 @@
 
 #include <Eigen/Dense>
 
-#include "types.hpp"
+#include "types.h"
 #include "cost_functions.h"
 
 
