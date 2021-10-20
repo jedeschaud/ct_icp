@@ -1043,7 +1043,6 @@ namespace ct_icp {
             default:
                 throw std::runtime_error("Unsupported");
         }
-        return std::string();
     }
 
 
