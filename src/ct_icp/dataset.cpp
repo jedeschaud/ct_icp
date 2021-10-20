@@ -1025,5 +1025,26 @@ namespace ct_icp {
 
     }
 
+    /* -------------------------------------------------------------------------------------------------------------- */
+    std::string DATASETEnumToString(DATASET dataset) {
+        switch (dataset) {
+            case KITTI_CARLA:
+                return "KIITI_CARLA";
+            case KITTI:
+                return "KITTI";
+            case KITTI_raw:
+                return "KITTI_raw";
+            case NCLT:
+                return "NCLT";
+            case KITTI_360:
+                return "KITTI_360";
+            case PLY_DIRECTORY:
+                return "PLY_DIRECTORY";
+            default:
+                throw std::runtime_error("Unsupported");
+        }
+        return std::string();
+    }
+
 
 } // namespace ct_icp

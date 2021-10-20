@@ -18,6 +18,8 @@ namespace ct_icp {
 
     DATASET DATASETFromString(const std::string&);
 
+    std::string DATASETEnumToString(DATASET dataset);
+
     class DatasetSequence {
     public:
         virtual ~DatasetSequence() = 0;
