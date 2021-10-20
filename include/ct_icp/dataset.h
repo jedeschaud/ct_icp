@@ -16,6 +16,8 @@ namespace ct_icp {
         PLY_DIRECTORY = 5
     };
 
+    DATASET DATASETFromString(const std::string&);
+
     class DatasetSequence {
     public:
         virtual ~DatasetSequence() = 0;

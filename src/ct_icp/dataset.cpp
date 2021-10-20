@@ -1001,5 +1001,29 @@ namespace ct_icp {
         }
     }
 
+    /* -------------------------------------------------------------------------------------------------------------- */
+    DATASET DATASETFromString(const string &dataset) {
+        std::string lc_string = dataset;
+        std::transform(lc_string.begin(), lc_string.end(), lc_string.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        if (lc_string == "kitti_carla")
+            return KITTI_CARLA;
+        else if (lc_string == "kitti_360")
+            return KITTI_360;
+        else if (lc_string == "kitti")
+            return KITTI;
+        else if (lc_string == "kitti_raw")
+            return KITTI_raw;
+        else if (lc_string == "nclt")
+            return NCLT;
+        else if (lc_string == "ply_directory")
+            return PLY_DIRECTORY;
+        else {
+            LOG(ERROR) << "[Dataset] Unrecognised Dataset option " << dataset << std::endl;
+            throw std::runtime_error("Unrecognised DATASET option '" + dataset + "'");
+        }
+
+    }
+
 
 } // namespace ct_icp
