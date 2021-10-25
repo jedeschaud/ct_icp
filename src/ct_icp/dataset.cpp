@@ -1029,7 +1029,7 @@ namespace ct_icp {
     std::string DATASETEnumToString(DATASET dataset) {
         switch (dataset) {
             case KITTI_CARLA:
-                return "KIITI_CARLA";
+                return "KITTI_CARLA";
             case KITTI:
                 return "KITTI";
             case KITTI_raw:
