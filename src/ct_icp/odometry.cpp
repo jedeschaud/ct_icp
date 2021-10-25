@@ -12,7 +12,8 @@
 
 #ifdef CT_ICP_WITH_VIZ
 
-#include <viz3d/engine.hpp>
+#include <viz3d/engine.h>
+#include <ct_icp/viz3d_utils.h>
 
 #endif
 
@@ -529,11 +530,18 @@ namespace ct_icp {
             auto &instance = viz::ExplorationEngine::Instance();
             auto model_ptr = std::make_shared<viz::PointCloudModel>();
             auto &model_data = model_ptr->ModelData();
-            model_data.xyz.reserve(MapSize());
+            auto map_size = MapSize();
+            model_data.xyz.reserve(map_size);
+            std::vector<double> scalars;
+            scalars.reserve(map_size);
             for (auto &voxel: voxel_map_) {
-                for (int i(0); i < voxel.second.NumPoints(); ++i)
-                    model_data.xyz.push_back(voxel.second.points[i].cast<float>());
+                for (int i(0); i < voxel.second.NumPoints(); ++i) {
+                    auto &point = voxel.second.points[i];
+                    model_data.xyz.push_back(point.cast<float>());
+                    scalars.push_back(point.z());
+                }
             }
+            model_data.rgb = get_viz3d_color(scalars, true, VIRIDIS);
             model_data.point_size = 1;
             model_data.default_color = Eigen::Vector3f::Zero();
             instance.AddModel(-3, model_ptr);
@@ -577,7 +585,7 @@ namespace ct_icp {
 
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    Odometry::RegistrationSummary Odometry::TryRegister(vector<Point3D> &frame, int index_frame,
+    Odometry::RegistrationSummary Odometry::TryRegister(vector <Point3D> &frame, int index_frame,
                                                         const CTICPOptions &options,
                                                         RegistrationSummary &registration_summary,
                                                         double sample_voxel_size) {
@@ -622,7 +630,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    bool Odometry::AssessRegistration(const vector<Point3D> &points,
+    bool Odometry::AssessRegistration(const vector <Point3D> &points,
                                       RegistrationSummary &summary, std::ostream *log_stream) const {
 
         bool success = summary.success;
@@ -813,7 +821,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    void AddPointsToMap(VoxelHashMap &map, const vector<Point3D> &points, double voxel_size,
+    void AddPointsToMap(VoxelHashMap &map, const vector <Point3D> &points, double voxel_size,
                         int max_num_points_in_voxel, double min_distance_points, int min_num_points) {
         //Update Voxel Map
         for (const auto &point: points) {

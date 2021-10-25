@@ -26,8 +26,8 @@ namespace ct_icp {
     void sub_sample_frame(std::vector<Point3D> &frame, double size_voxel);
 
     // Samples Keypoints randomly in a voxel grid
-    void
-    grid_sampling(const std::vector<Point3D> &frame, std::vector<Point3D> &keypoints, double size_voxel_subsampling);
+    void grid_sampling(const std::vector<Point3D> &frame, std::vector<Point3D> &keypoints,
+                       double size_voxel_subsampling);
 
     enum CT_ICP_SOLVER {
         GN,

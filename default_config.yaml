@@ -5,7 +5,7 @@ output_dir: .outputs
 max_frames: -1 # For negative values, all frames are computed
 display_debug: true
 with_viz3d: true
-viz_mode: AGGREGATED
+viz_mode: KEYPOINTS
 
 # DATASET OPTIONS ----
 dataset_options:

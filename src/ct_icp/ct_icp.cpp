@@ -11,10 +11,9 @@
 #include <ct_icp/cost_functions.h>
 
 #ifdef CT_ICP_WITH_VIZ
+#include <ct_icp/utils.h>
 
-#include "utils.hpp"
-
-#include <viz3d/engine.hpp>
+#include <viz3d/engine.h>
 #include <colormap/colormap.hpp>
 #include <colormap/color.hpp>
 

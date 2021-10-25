@@ -1,9 +1,6 @@
-add_library(Slam::CT_ICP SHARED IMPORTED)
-set_target_properties(Slam::CT_ICP PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES  @CT_ICP_INSTALL_DIR@/include
-    INTERFACE_LINK_LIBRARIES "glog::glog;Eigen3::Eigen;Ceres::ceres")
+@PACKAGE_INIT@
 
-set_target_properties(Slam::CT_ICP PROPERTIES
-    IMPORTED_LOCATION "@CT_ICP_INSTALL_DIR@/lib/libCT_ICP.so")
-
-set(CT_ICP_FOUND TRUE)
+if(NOT TARGET Slam::CT_ICP)
+  include("${CMAKE_CURRENT_LIST_DIR}/CT_ICPTargets.cmake")
+  get_target_property(sqlite3_INCLUDE_DIRS sqlite3::sqlite3 INTERFACE_INCLUDE_DIRECTORIES)
+endif()

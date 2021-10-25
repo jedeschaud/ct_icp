@@ -10,14 +10,14 @@ option(WITH_PYTHON_BINDING "Install Python bindings" OFF)
 
 if (NOT INSTALL_ROOT)
     set(INSTALL_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
-endif()
+endif ()
+set(CT_ICP_INSTALL_DIR ${INSTALL_ROOT}/CT_ICP)
 
 if (NOT RUNTIME_DESTINATION)
     set(RUNTIME_DESTINATION ${INSTALL_ROOT})
 endif ()
 
-set(CMAKE_INSTALL_PREFIX ${RUNTIME_DESTINATION})
-set(CT_ICP_RUNTIME_DESTINATION ${RUNTIME_DESTINATION})
+set(CMAKE_INSTALL_PREFIX ${CT_ICP_INSTALL_DIR})
 
 include(cmake/external.cmake)
 include(cmake/test.cmake)
@@ -32,14 +32,32 @@ target_compile_definitions(CT_ICP PUBLIC CT_ICP_CPP_STANDARD=${CMAKE_CXX_STANDAR
 
 # ---------------------
 # Install Target
-
+include(CMakePackageConfigHelpers)
 set(CONFIG_BINARY_FILE ${CMAKE_CURRENT_BINARY_DIR}/CT_ICPConfig.cmake)
-set(CT_ICP_INSTALL_DIR ${INSTALL_ROOT}/CT_ICP)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/project_config.cmake.in
-        ${CONFIG_BINARY_FILE} @ONLY)
-install(FILES ${CONFIG_BINARY_FILE} DESTINATION ${CT_ICP_INSTALL_DIR})
-install(TARGETS CT_ICP CONFIGURATIONS Release
-        DESTINATION ${CT_ICP_INSTALL_DIR}/lib)
-install(DIRECTORY include DESTINATION ${CT_ICP_INSTALL_DIR})
+configure_package_config_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/project_config.cmake.in
+        ${CONFIG_BINARY_FILE}
+        INSTALL_DESTINATION ${CT_ICP_INSTALL_DIR}/lib/cmake)
+
+install(FILES ${CONFIG_BINARY_FILE} DESTINATION ${CT_ICP_INSTALL_DIR}/lib/cmake)
+if (WITH_SUPERBUILD)
+    install(TARGETS CT_ICP DESTINATION ${CT_ICP_INSTALL_DIR}/lib EXPORT CT_ICPTargets)
+    install(EXPORT CT_ICPTargets NAMESPACE Slam:: DESTINATION "${CT_ICP_INSTALL_DIR}/lib/cmake")
+else ()
+
+    install(TARGETS CT_ICP robin_map DESTINATION ${CT_ICP_INSTALL_DIR}/lib EXPORT CT_ICPTargets)
+    install(EXPORT CT_ICPTargets DESTINATION "${CT_ICP_INSTALL_DIR}/lib/cmake")
+endif ()
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include DESTINATION ${CT_ICP_INSTALL_DIR})
+
+
+#include()
+#configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/project_config.cmake.in
+#        ${CONFIG_BINARY_FILE} @ONLY)
+#install(FILES ${CONFIG_BINARY_FILE} DESTINATION ${CT_ICP_INSTALL_DIR})
+#install(TARGETS CT_ICP CONFIGURATIONS Release
+#        DESTINATION ${CT_ICP_INSTALL_DIR}/lib)
+#install(DIRECTORY include DESTINATION ${CT_ICP_INSTALL_DIR})
 
 

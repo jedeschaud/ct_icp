@@ -1,4 +1,5 @@
 set(CT_ICP_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../include)
+get_filename_component(CT_ICP_INCLUDE_DIR ${CT_ICP_INCLUDE_DIR} ABSOLUTE)
 
 macro(ADD_CT_ICP_SOURCES)
     set(SOURCES "${ARGN}")
@@ -16,6 +17,7 @@ endmacro(ADD_CT_ICP_SOURCES)
 
 ADD_CT_ICP_SOURCES(
         ct_icp
+        config
         dataset
         odometry
         cost_function
@@ -25,10 +27,16 @@ ADD_CT_ICP_SOURCES(
         Utilities/File
         Utilities/PersoTimer
         Utilities/PlyFile)
+if (WITH_VIZ3D)
+    ADD_CT_ICP_SOURCES(viz3d_utils)
+endif ()
 
 add_library(CT_ICP SHARED ${CT_ICP_SOURCES})
 
-target_include_directories(CT_ICP PUBLIC ${CT_ICP_INCLUDE_DIR})
+target_include_directories(CT_ICP PUBLIC
+        "$<BUILD_INTERFACE:${CT_ICP_INCLUDE_DIR}>"
+        "$<INSTALL_INTERFACE:include>")
+
 target_link_libraries(CT_ICP PUBLIC Eigen3::Eigen Ceres::ceres glog::glog tsl::robin_map yaml-cpp OpenMP::OpenMP_CXX)
 
 if (WITH_VIZ3D)
