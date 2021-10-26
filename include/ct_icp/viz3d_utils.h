@@ -35,6 +35,11 @@ namespace ct_icp {
      */
     viz::ArrayV3f get_field_color(const std::vector<ct_icp::Point3D> &points,
                                   COLOR_SCHEME cmap = JET, COLOR_FIELD cfield = T);
+
+    /*!
+     * Returns an array of poses from a trajectory
+     */
+    viz::ArrayM4f ct_icp_to_viz3d_poses(const std::vector<TrajectoryFrame>& trajectory);
 }
 
 #endif

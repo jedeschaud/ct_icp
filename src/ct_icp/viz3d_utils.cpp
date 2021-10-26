@@ -1,5 +1,6 @@
 #include <ct_icp/viz3d_utils.h>
 #include <colormap/colormap.hpp>
+#include "../../include/ct_icp/viz3d_utils.h"
 
 
 namespace ct_icp {
@@ -84,6 +85,23 @@ namespace ct_icp {
         }
 
         return get_viz3d_color(scalars, true, cmap);
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    viz::ArrayM4f ct_icp_to_viz3d_poses(const std::vector<TrajectoryFrame> &trajectory) {
+        viz::ArrayM4f poses;
+        poses.reserve(trajectory.size() * 2);
+        viz::glMatrix4f new_pose = viz::glMatrix4f::Identity();
+        for (auto &old_pose: trajectory) {
+            new_pose.block<3, 3>(0, 0) = old_pose.begin_R.cast<float>();
+            new_pose.block<3, 1>(0, 3) = old_pose.begin_t.cast<float>();
+            poses.push_back(new_pose);
+
+            new_pose.block<3, 3>(0, 0) = old_pose.end_R.cast<float>();
+            new_pose.block<3, 1>(0, 3) = old_pose.end_t.cast<float>();
+            poses.push_back(new_pose);
+        }
+        return poses;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */

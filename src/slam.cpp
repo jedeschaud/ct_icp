@@ -140,6 +140,8 @@ SLAMOptions read_config(const std::string &config_path) {
 
             if (viz_mode_str == "AGGREGATED") {
                 options.viz_mode = AGGREGATED;
+                options.odometry_options.debug_viz = false;
+                options.odometry_options.ct_icp_options.debug_viz= false;
             }
             if (viz_mode_str == "KEYPOINTS") {
                 options.odometry_options.debug_viz = true;
