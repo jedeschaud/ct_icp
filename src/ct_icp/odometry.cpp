@@ -127,14 +127,24 @@ namespace ct_icp {
             trajectory_[index_frame].end_t = Eigen::Vector3d(0., 0., 0.);
         } else {
             if (options_.initialization == INIT_CONSTANT_VELOCITY) {
-                Eigen::Matrix3d R_next_begin =
-                        trajectory_[index_frame - 1].begin_R * trajectory_[index_frame - 2].begin_R.inverse() *
-                        trajectory_[index_frame - 1].begin_R;
-                Eigen::Vector3d t_next_begin = trajectory_[index_frame - 1].begin_t +
-                                               trajectory_[index_frame - 1].begin_R *
-                                               trajectory_[index_frame - 2].begin_R.inverse() *
-                                               (trajectory_[index_frame - 1].begin_t -
-                                                trajectory_[index_frame - 2].begin_t);
+                if (options_.motion_compensation == CONTINUOUS) {
+                    Eigen::Matrix3d R_next_begin =
+                            trajectory_[index_frame - 1].begin_R * trajectory_[index_frame - 2].begin_R.inverse() *
+                            trajectory_[index_frame - 1].begin_R;
+                    Eigen::Vector3d t_next_begin = trajectory_[index_frame - 1].begin_t +
+                                                   trajectory_[index_frame - 1].begin_R *
+                                                   trajectory_[index_frame - 2].begin_R.inverse() *
+                                                   (trajectory_[index_frame - 1].begin_t -
+                                                    trajectory_[index_frame - 2].begin_t);
+                    trajectory_[index_frame].begin_R = R_next_begin; //trajectory_[index_frame - 1].end_R;
+                    trajectory_[index_frame].begin_t = t_next_begin; //trajectory_[index_frame - 1].end_t;
+                }
+                else
+                {
+                    trajectory_[index_frame].begin_R = trajectory_[index_frame - 1].end_R;
+                    trajectory_[index_frame].begin_t = trajectory_[index_frame - 1].end_t;
+                }
+
 
                 Eigen::Matrix3d R_next_end =
                         trajectory_[index_frame - 1].end_R * trajectory_[index_frame - 2].end_R.inverse() *
@@ -145,8 +155,7 @@ namespace ct_icp {
                                              (trajectory_[index_frame - 1].end_t -
                                               trajectory_[index_frame - 2].end_t);
 
-                trajectory_[index_frame].begin_R = R_next_begin;; //trajectory_[index_frame - 1].end_R;
-                trajectory_[index_frame].begin_t = t_next_begin;; //trajectory_[index_frame - 1].end_t;
+
                 trajectory_[index_frame].end_R = R_next_end;
                 trajectory_[index_frame].end_t = t_next_end;
             } else {
