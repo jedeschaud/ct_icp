@@ -1,7 +1,7 @@
 # External projects
 include(FetchContent)
 
-option(SSH_GIT "Option to clone git project using ssh (instead of HTTPS)" ON)
+option(SSH_GIT "Option to clone git project using ssh (instead of HTTPS)" OFF)
 if (WIN32)
     set(SSH_GIT OFF)
 endif ()
