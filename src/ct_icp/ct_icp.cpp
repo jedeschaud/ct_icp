@@ -975,7 +975,10 @@ namespace ct_icp {
 
 
             if ((index_frame > 1) && (x_bundle.norm() < options.threshold_orientation_norm)) {
-                break;
+                summary.success = true;
+                summary.num_residuals_used = number_keypoints_used;
+
+                return summary;
             }
         }
 

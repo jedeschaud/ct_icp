@@ -238,8 +238,8 @@ namespace ct_icp {
                                                    (trajectory_[index_frame - 1].begin_t -
                                                     trajectory_[index_frame - 2].begin_t);
 
-                    trajectory_[index_frame].begin_R = R_next_begin;; //trajectory_[index_frame - 1].end_R;
-                    trajectory_[index_frame].begin_t = t_next_begin;; //trajectory_[index_frame - 1].end_t;
+                    trajectory_[index_frame].begin_R = trajectory_[index_frame - 1].end_R; //R_next_begin;
+                    trajectory_[index_frame].begin_t = trajectory_[index_frame - 1].end_t; //t_next_begin;
                 } else {
                     // When not continuous: set the new begin and previous end pose to be consistent
                     trajectory_[index_frame].begin_R = trajectory_[index_frame - 1].end_R;
@@ -466,9 +466,9 @@ namespace ct_icp {
             }
         }
 
-        if (index_frame == 0) {
+        /*if (index_frame == 0) {
             voxel_map_.clear();
-        }
+        }*/
 
         bool add_points = true;
 

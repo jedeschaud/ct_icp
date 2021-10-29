@@ -145,7 +145,7 @@ SLAMOptions read_config(const std::string &config_path) {
         OPTION_CLAUSE(dataset_node, dataset_options, root_path, std::string);
         OPTION_CLAUSE(dataset_node, dataset_options, fail_if_incomplete, bool);
         OPTION_CLAUSE(dataset_node, dataset_options, min_dist_lidar_center, float);
-        OPTION_CLAUSE(dataset_node, dataset_options, nclt_num_aggregated_pc, int);
+        //OPTION_CLAUSE(dataset_node, dataset_options, nclt_num_aggregated_pc, int);
         OPTION_CLAUSE(dataset_node, dataset_options, max_dist_lidar_center, float);
 
         if (slam_node["odometry_options"]) {
@@ -396,6 +396,7 @@ int main(int argc, char **argv) {
     double average_rpe_on_seq = 0.0;
     int nb_seq_with_gt = 0;
 
+//#pragma omp parallel for num_threads(options.max_num_threads)
     for (int i = 0; i < num_sequences; ++i) { //num_sequences
 
         int sequence_id = sequences[i].sequence_id;
@@ -485,7 +486,7 @@ int main(int argc, char **argv) {
             all_seq_num_frames++;
         }
 
-        avg_number_of_attempts /= frame_id;
+        avg_number_of_attempts /= (frame_id-1);
 
         auto trajectory = ct_icp_odometry.Trajectory();
         auto trajectory_absolute_poses = transform_trajectory_frame(options.dataset_options, trajectory, sequence_id);

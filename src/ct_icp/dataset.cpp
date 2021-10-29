@@ -76,11 +76,12 @@ namespace ct_icp {
     const int LENGTH_SEQUENCE_KITTI_360[] = {11500, 19230, 1029, 11399, 6722, 9697, 3160, 13954, 3742};
 
     // Calibration
-    const double R_Tr_data_KITTI_360[] = {0.04307104361, -0.999004371, -0.01162548558,
-                                          -0.08829286498, 0.007784614041, -0.9960641394,
-                                          0.995162929, 0.04392796942, -0.08786966659};
+    const double R_Tr_data_KITTI_360[] = { 9.999290633685804508e-01, 5.805355888196038310e-03, 1.040029024212630118e-02,
+                                           5.774300279226996999e-03, -9.999787876452227442e-01, 3.013573682642321436e-03,
+                                            1.041756443854582707e-02, -2.953305511449066945e-03, -9.999413744330052367e-01 };
+
     const Eigen::Matrix3d R_Tr_KITTI_360(R_Tr_data_KITTI_360);
-    Eigen::Vector3d T_Tr_KITTI_360 = Eigen::Vector3d(0.26234696, -0.10763414, -0.82920525);
+    Eigen::Vector3d T_Tr_KITTI_360 = Eigen::Vector3d(-7.640302229235816922e-01, 2.966030253893782165e-01, -8.433819635885287935e-01);
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// HARD CODED VALUES FOR KITTI-CARLA
@@ -166,7 +167,7 @@ namespace ct_icp {
     }
 
     int CountNumFilesInDirectory(const std::string &dir_path, std::vector<std::string> *out_frames = nullptr) {
-#ifdef WITH_STD_FILESYSTEM
+/*#ifdef WITH_STD_FILESYSTEM
         auto dirIter = std::filesystem::directory_iterator(dir_path);
         if (out_frames)
             out_frames->clear();
@@ -181,6 +182,14 @@ namespace ct_icp {
                         out_frames->push_back(entry.path().string());
                     return is_ply_file;
                 });
+        return size;
+#endif*/
+#ifdef WITH_STD_FILESYSTEM
+        auto dirIter = std::filesystem::directory_iterator(dir_path);
+        int size = std::count_if(
+            begin(dirIter),
+            end(dirIter),
+            [](auto& entry) { return entry.is_regular_file(); });
         return size;
 #endif
         return -1;
@@ -604,9 +613,12 @@ namespace ct_icp {
         ArrayPoses poses;
         Eigen::Matrix3d R_Tr = R_Tr_KITTI_360.transpose(); //denoting the rigid transformation from the first camera (image_00) to the Velodyne.
         Eigen::Vector3d T_Tr = T_Tr_KITTI_360; //denoting the rigid transformation from the first camera (image_00) to the Velodyne.
+        Eigen::Matrix4d Tr = Eigen::Matrix4d::Identity();
+        Tr.block<3, 3>(0, 0) = R_Tr;
+        Tr.block<3, 1>(0, 3) = T_Tr;
 
         poses.reserve(trajectory.size());
-        for (auto &frame: trajectory) {
+        for (auto& frame : trajectory) {
             Eigen::Matrix3d center_R;
             Eigen::Vector3d center_t;
             Eigen::Quaterniond q_begin = Eigen::Quaterniond(frame.begin_R);
@@ -618,13 +630,13 @@ namespace ct_icp {
             center_R = q.toRotationMatrix();
             center_t = 0.5 * t_begin + 0.5 * t_end;
 
-            //Transform the data into the left camera reference frame (left camera) and evaluate SLAM
-            center_R = R_Tr * center_R * R_Tr.transpose();
-            center_t = -center_R * T_Tr + T_Tr + R_Tr * center_t;
-
             Eigen::Matrix4d pose = Eigen::Matrix4d::Identity();
             pose.block<3, 3>(0, 0) = center_R;
             pose.block<3, 1>(0, 3) = center_t;
+
+            //Transform the data into the left camera reference frame (left camera) and evaluate SLAM
+            pose = Tr.inverse() * pose * Tr;
+
             poses.push_back(pose);
         }
         return poses;
@@ -699,8 +711,9 @@ namespace ct_icp {
                                           int sequence_id) {
         switch (options.dataset) {
             case PLY_DIRECTORY:
-            case KITTI_raw:
             case KITTI:
+                return kitti_transform_trajectory_frame(trajectory, sequence_id);
+            case KITTI_raw:
                 return kitti_raw_transform_trajectory_frame(trajectory, sequence_id);
             case KITTI_CARLA:
                 return kitti_carla_transform_trajectory_frame(trajectory);
