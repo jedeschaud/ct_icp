@@ -1,6 +1,0 @@
-@PACKAGE_INIT@
-
-if(NOT TARGET Slam::CT_ICP)
-  include("${CMAKE_CURRENT_LIST_DIR}/CT_ICPTargets.cmake")
-  get_target_property(sqlite3_INCLUDE_DIRS sqlite3::sqlite3 INTERFACE_INCLUDE_DIRECTORIES)
-endif()

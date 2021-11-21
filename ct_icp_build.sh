@@ -28,7 +28,6 @@ fi
 
 # Setting variables
 SRC_DIR=$(pwd)
-EXT_SRC_DIR="${SRC_DIR}/external"
 BUILD_DIR="${SRC_DIR}/cmake-build-${BUILD_TYPE}"
 EXT_BUILD_DIR=$BUILD_DIR/external
 
@@ -43,17 +42,6 @@ check_status_code() {
 	exit 1
    fi
 }
-
-echo "[CT_ICP] -- [EXTERNAL DEPENDENCIES] -- Generating the cmake project"
-cd ${EXT_BUILD_DIR}
-cmake -G "$GENERATOR" -S $EXT_SRC_DIR -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DWITH_VIZ3D=$WITH_VIZ
-check_status_code $?
-
-echo "[CT_ICP] -- [EXTERNAL DEPENDENCIES] -- building CMake Project"
-cmake --build . --config $BUILD_TYPE
-check_status_code $?
-
-
 
 echo "[CT_ICP] -- [MAIN PROJECT] -- Generating the cmake project"
 cd $BUILD_DIR
