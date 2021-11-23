@@ -50,6 +50,14 @@ if (WITH_VIZ3D)
 endif ()
 
 # ----------------------------------------------------------------------------------------------------------------------
+macro(LINK_WITH_VIZ3D)
+    set(on_value_args TARGET)
+    cmake_parse_arguments(SLAM "" "${on_value_args}" "" ${ARGN})
+    if (WITH_VIZ3D)
+        target_compile_definitions(${SLAM_TARGET} PUBLIC CT_ICP_WITH_VIZ=1)
+        target_link_libraries(${SLAM_TARGET} PUBLIC viz3d)
+    endif ()
+endmacro(LINK_WITH_VIZ3D)
 
 add_subdirectory(src)
 target_compile_definitions(CT_ICP PUBLIC CT_ICP_CPP_STANDARD=${CMAKE_CXX_STANDARD})
@@ -64,3 +72,5 @@ SLAM_INSTALL_TARGET(
         CONFIG_TEMPLATE ${SLAM_CMAKE_SCRIPTS_PATH}/project_config.cmake.in
         INSTALL_DIR ${CT_ICP_INSTALL_DIR}
         INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+add_subdirectory(test)

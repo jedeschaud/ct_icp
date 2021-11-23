@@ -10,6 +10,7 @@
 #include <Eigen/Dense>
 #include <Eigen/StdVector>
 #include <glog/logging.h>
+#include <SlamUtils/types.h>
 
 #include "utils.h"
 
@@ -22,7 +23,6 @@ namespace ct_icp {
     // A Point3D
     struct Point3D {
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
         Eigen::Vector3d raw_pt; // Raw point read from the sensor
         Eigen::Vector3d pt; // Corrected point taking into account the motion of the sensor during frame acquisition
         double alpha_timestamp = 0.0; // Relative timestamp in the frame in [0.0, 1.0]
@@ -31,6 +31,45 @@ namespace ct_icp {
 
         Point3D() = default;
     };
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// PURELY FOR REFACTORING PURPOSES
+    inline std::vector<slam::WPoint3D> ct_icp_to_slam(const std::vector<ct_icp::Point3D> &points) {
+        std::vector<slam::WPoint3D> result(points.size());
+        std::transform(points.begin(), points.end(), result.begin(), [](const auto &point) {
+            slam::WPoint3D new_point;
+            new_point.raw_point.point = point.raw_pt;
+            new_point.raw_point.timestamp = point.timestamp;
+            new_point.index_frame = point.index_frame;
+            new_point.world_point = point.pt;
+            return new_point;
+        });
+        return result;
+    };
+
+    inline std::vector<ct_icp::Point3D> slam_to_ct_icp(const std::vector<slam::WPoint3D> &points) {
+        std::vector<ct_icp::Point3D> result(points.size());
+        auto min_max_it = std::minmax_element(points.begin(), points.end(), [](const auto &lhs, const auto rhs) {
+            return lhs.raw_point.timestamp < rhs.raw_point.timestamp;
+        });
+        double min_timestamp = min_max_it.first->raw_point.timestamp;
+        double max_timestamp = min_max_it.second->raw_point.timestamp;
+
+        std::transform(points.begin(), points.end(), result.begin(), [min_timestamp,
+                max_timestamp](const auto &point) {
+            ct_icp::Point3D new_point;
+            new_point.raw_pt = point.raw_point.point;
+            new_point.timestamp = point.raw_point.timestamp;
+            new_point.alpha_timestamp = min_timestamp != max_timestamp ? (point.raw_point.timestamp - min_timestamp)
+                                                                         / (max_timestamp - min_timestamp) : 1.0;
+            new_point.index_frame = point.index_frame;
+            new_point.pt = point.world_point;
+            return new_point;
+        });
+
+        return result;
+    };
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     inline double AngularDistance(const Eigen::Matrix3d &rota,
                                   const Eigen::Matrix3d &rotb) {
