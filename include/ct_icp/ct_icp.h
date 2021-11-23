@@ -61,8 +61,6 @@ namespace ct_icp {
         // To be considered in the neighbor search, a voxel must have at least threshold_voxel_occupancy points
         int threshold_voxel_occupancy = 1;
 
-        int init_num_frames = 20; // The number of frames defining the initialization of the map
-
         double size_voxel_map = 1.0; //Max Voxel : -32767 to 32767 then 32km map for SIZE_VOXEL_MAP = 1m
 
         int num_iters_icp = 5; // The Maximum number of ICP iterations performed
@@ -162,11 +160,13 @@ namespace ct_icp {
     // Note: CT_ICP_CERES will modify the last TrajectoryFrame of the trajectory vector
     ICPSummary CT_ICP_CERES(const CTICPOptions &options,
                             const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-                            std::vector<TrajectoryFrame> &trajectory, int index_frame);
+                            TrajectoryFrame &trajectory_frame,
+                            const TrajectoryFrame *const previous_frame = nullptr);
 
     ICPSummary CT_ICP_GN(const CTICPOptions &options,
                          const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-                         std::vector<TrajectoryFrame> &trajectory, int index_frame);
+                         TrajectoryFrame &trajectory_frame,
+                         const TrajectoryFrame *const previous_frame = nullptr);
 
 } // namespace Elastic_ICP
 

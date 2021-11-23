@@ -189,7 +189,7 @@ namespace ct_icp {
         // Tries to register a frame given a set of options
         RegistrationSummary TryRegister(std::vector<Point3D> &frame,
                                         int frame_index,
-                                        const CTICPOptions &options,
+                                        CTICPOptions &options,
                                         RegistrationSummary &registration_summary,
                                         double sample_voxel_size);
 

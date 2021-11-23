@@ -48,10 +48,10 @@ namespace ct_icp {
         default_options.robust_max_voxel_neighborhood = 4;
         default_options.robust_threshold_relative_orientation = 5;
         default_options.robust_threshold_ego_orientation = 5;
+        default_options.init_num_frames = 40;
 
         auto &ct_icp_options = default_options.ct_icp_options;
         ct_icp_options.debug_print = false;
-        ct_icp_options.init_num_frames = 40;
         ct_icp_options.max_number_neighbors = 20;
         ct_icp_options.min_number_neighbors = 20;
         ct_icp_options.num_iters_icp = 15;
@@ -95,6 +95,7 @@ namespace ct_icp {
         default_options.robust_max_voxel_neighborhood = 4;
         default_options.robust_threshold_relative_orientation = 2;
         default_options.robust_threshold_ego_orientation = 2;
+        default_options.init_num_frames = 20;
 
         auto &ct_icp_options = default_options.ct_icp_options;
         ct_icp_options.size_voxel_map = 0.8;
@@ -103,7 +104,6 @@ namespace ct_icp {
         ct_icp_options.min_number_neighbors = 20;
         ct_icp_options.voxel_neighborhood = 1;
 
-        ct_icp_options.init_num_frames = 20;
         ct_icp_options.max_number_neighbors = 20;
         ct_icp_options.min_number_neighbors = 20;
         ct_icp_options.max_dist_to_plane_ct_icp = 0.5;
@@ -585,8 +585,8 @@ namespace ct_icp {
 
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    Odometry::RegistrationSummary Odometry::TryRegister(vector <Point3D> &frame, int index_frame,
-                                                        const CTICPOptions &options,
+    Odometry::RegistrationSummary Odometry::TryRegister(vector<Point3D> &frame, int index_frame,
+                                                        CTICPOptions &options,
                                                         RegistrationSummary &registration_summary,
                                                         double sample_voxel_size) {
         // Use new sub_sample frame as keypoints
@@ -597,14 +597,22 @@ namespace ct_icp {
         registration_summary.sample_size = num_keypoints;
 
         {
+            TrajectoryFrame *previous_frame_ptr = index_frame >= 1 ? &trajectory_[index_frame - 1] : nullptr;
+            if (index_frame < options_.init_num_frames) {
+                // Initialization regimen
+                options.voxel_neighborhood = std::max(static_cast<short>(2), options.voxel_neighborhood);
+                options.threshold_voxel_occupancy = 1;
+                options.num_iters_icp = std::max(options.num_iters_icp, 15);
+            }
 
             //CT ICP
             ICPSummary icp_summary;
             if (options_.ct_icp_options.solver == CT_ICP_SOLVER::GN) {
-
-                icp_summary = CT_ICP_GN(options, voxel_map_, keypoints, trajectory_, index_frame);
+                icp_summary = CT_ICP_GN(options, voxel_map_, keypoints,
+                                        trajectory_[index_frame], previous_frame_ptr);
             } else {
-                icp_summary = CT_ICP_CERES(options, voxel_map_, keypoints, trajectory_, index_frame);
+                icp_summary = CT_ICP_CERES(options, voxel_map_, keypoints,
+                                           trajectory_[index_frame], previous_frame_ptr);
             }
             registration_summary.success = icp_summary.success;
             registration_summary.number_of_residuals = icp_summary.num_residuals_used;
@@ -630,7 +638,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    bool Odometry::AssessRegistration(const vector <Point3D> &points,
+    bool Odometry::AssessRegistration(const vector<Point3D> &points,
                                       RegistrationSummary &summary, std::ostream *log_stream) const {
 
         bool success = summary.success;
@@ -717,7 +725,6 @@ namespace ct_icp {
     Odometry::Odometry(
             const OdometryOptions &options) {
         options_ = options;
-        options_.ct_icp_options.init_num_frames = options_.init_num_frames;
         // Update the motion compensation
         switch (options_.motion_compensation) {
             case MOTION_COMPENSATION::NONE:
@@ -821,7 +828,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    void AddPointsToMap(VoxelHashMap &map, const vector <Point3D> &points, double voxel_size,
+    void AddPointsToMap(VoxelHashMap &map, const vector<Point3D> &points, double voxel_size,
                         int max_num_points_in_voxel, double min_distance_points, int min_num_points) {
         //Update Voxel Map
         for (const auto &point: points) {

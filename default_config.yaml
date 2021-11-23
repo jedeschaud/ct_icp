@@ -9,8 +9,8 @@ viz_mode: AGGREGATED
 
 # DATASET OPTIONS ----
 dataset_options:
-  dataset: KITTI # Options: [KITTI_raw / KITTI_CARLA / KITTI]
-  root_path: /media/pdell/SSD_1/DATASETS/KITTI_PLY/KITTI # Set to the root path of kitti's directory
+  dataset: KITTI_raw # Options: [KITTI_raw / KITTI_CARLA / KITTI]
+  root_path: /media/pdell/SSD_1/DATASETS/KITTI_raw # Set to the root path of kitti's directory
   fail_if_incomplete: false
   min_dist_lidar_center: 3.0 # Suppresses points to close to the center of the sensor
   max_dist_lidar_center: 100.0 # Suppresses points to far from the center of the sensor

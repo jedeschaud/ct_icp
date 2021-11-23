@@ -11,6 +11,7 @@
 #include <ct_icp/cost_functions.h>
 
 #ifdef CT_ICP_WITH_VIZ
+
 #include <ct_icp/utils.h>
 
 #include <viz3d/engine.h>
@@ -501,31 +502,29 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     ICPSummary CT_ICP_CERES(const CTICPOptions &options,
                             const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-                            std::vector<TrajectoryFrame> &trajectory, int index_frame) {
+                            TrajectoryFrame &trajectory_frame,
+                            const TrajectoryFrame *const previous_frame) {
 
-        const short nb_voxels_visited = index_frame < options.init_num_frames ? 2 : options.voxel_neighborhood;
+        const short nb_voxels_visited = options.voxel_neighborhood;
         const int kMinNumNeighbors = options.min_number_neighbors;
-        const int kThresholdCapacity = index_frame < options.init_num_frames ? 1 : options.threshold_voxel_occupancy;
+        const int kThresholdCapacity = options.threshold_voxel_occupancy;
 
         ceres::Solver::Options ceres_options;
         ceres_options.max_num_iterations = options.ls_max_num_iters;
         ceres_options.num_threads = options.ls_num_threads;
         ceres_options.trust_region_strategy_type = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
 
-        TrajectoryFrame *previous_estimate = nullptr;
         Eigen::Vector3d previous_velocity = Eigen::Vector3d::Zero();
         Eigen::Quaterniond previous_orientation = Eigen::Quaterniond::Identity();
-        if (index_frame > 0) {
-            previous_estimate = &trajectory[index_frame - 1];
-            previous_velocity = previous_estimate->end_t - previous_estimate->begin_t;
-            previous_orientation = Eigen::Quaterniond(previous_estimate->end_R);
+        if (previous_frame) {
+            previous_velocity = previous_frame->end_t - previous_frame->begin_t;
+            previous_orientation = Eigen::Quaterniond(previous_frame->end_R);
         }
 
-        TrajectoryFrame &current_estimate = trajectory[index_frame];
-        Eigen::Quaterniond begin_quat = Eigen::Quaterniond(current_estimate.begin_R);
-        Eigen::Quaterniond end_quat = Eigen::Quaterniond(current_estimate.end_R);
-        Eigen::Vector3d begin_t = current_estimate.begin_t;
-        Eigen::Vector3d end_t = current_estimate.end_t;
+        Eigen::Quaterniond begin_quat = Eigen::Quaterniond(trajectory_frame.begin_R);
+        Eigen::Quaterniond end_quat = Eigen::Quaterniond(trajectory_frame.end_R);
+        Eigen::Vector3d begin_t = trajectory_frame.begin_t;
+        Eigen::Vector3d end_t = trajectory_frame.end_t;
 
         int number_of_residuals;
 
@@ -533,9 +532,6 @@ namespace ct_icp {
         if (options.point_to_plane_with_distortion) {
             builder.DistortFrame(begin_quat, end_quat, begin_t, end_t);
         }
-
-        int num_iter_icp = index_frame < options.init_num_frames ? std::max(15, options.num_iters_icp) :
-                           options.num_iters_icp;
 
         auto transform_keypoints = [&]() {
             // Elastically distorts the frame to improve on Neighbor estimation
@@ -564,7 +560,7 @@ namespace ct_icp {
             auto neighborhood = compute_neighborhood_distribution(vector_neighbors);
             planarity_weight = std::pow(neighborhood.a2D, options.power_planarity);
 
-            if (neighborhood.normal.dot(trajectory[index_frame].begin_t - location) < 0) {
+            if (neighborhood.normal.dot(trajectory_frame.begin_t - location) < 0) {
                 neighborhood.normal = -1.0 * neighborhood.normal;
             }
             return neighborhood;
@@ -579,7 +575,7 @@ namespace ct_icp {
         lambda_weight /= sum;
         lambda_neighborhood /= sum;
 
-        for (int iter(0); iter < num_iter_icp; iter++) {
+        for (int iter(0); iter < options.num_iters_icp; iter++) {
             transform_keypoints();
 
             builder.InitProblem(keypoints.size() * options.num_closest_neighbors);
@@ -626,40 +622,38 @@ namespace ct_icp {
 
             auto problem = builder.GetProblem(number_of_residuals);
 
-            if (index_frame > 1) {
-                if (options.distance == CT_POINT_TO_PLANE) {
-                    // Add Regularisation residuals
-                    problem->AddResidualBlock(new ceres::AutoDiffCostFunction<LocationConsistencyFunctor,
-                                                      LocationConsistencyFunctor::NumResiduals(), 3>(
-                                                      new LocationConsistencyFunctor(previous_estimate->end_t,
-                                                                                     sqrt(number_of_residuals *
-                                                                                          options.beta_location_consistency))),
-                                              nullptr,
-                                              &begin_t.x());
-                    problem->AddResidualBlock(new ceres::AutoDiffCostFunction<ConstantVelocityFunctor,
-                                                      ConstantVelocityFunctor::NumResiduals(), 3, 3>(
-                                                      new ConstantVelocityFunctor(previous_velocity,
-                                                                                  sqrt(number_of_residuals * options.beta_constant_velocity))),
-                                              nullptr,
-                                              &begin_t.x(),
-                                              &end_t.x());
+            if (previous_frame && options.distance == CT_POINT_TO_PLANE) {
+                // Add Regularisation residuals
+                problem->AddResidualBlock(new ceres::AutoDiffCostFunction<LocationConsistencyFunctor,
+                                                  LocationConsistencyFunctor::NumResiduals(), 3>(
+                                                  new LocationConsistencyFunctor(previous_frame->end_t,
+                                                                                 sqrt(number_of_residuals *
+                                                                                      options.beta_location_consistency))),
+                                          nullptr,
+                                          &begin_t.x());
+                problem->AddResidualBlock(new ceres::AutoDiffCostFunction<ConstantVelocityFunctor,
+                                                  ConstantVelocityFunctor::NumResiduals(), 3, 3>(
+                                                  new ConstantVelocityFunctor(previous_velocity,
+                                                                              sqrt(number_of_residuals * options.beta_constant_velocity))),
+                                          nullptr,
+                                          &begin_t.x(),
+                                          &end_t.x());
 
-                    // SMALL VELOCITY
-                    problem->AddResidualBlock(new ceres::AutoDiffCostFunction<SmallVelocityFunctor,
-                                                      SmallVelocityFunctor::NumResiduals(), 3, 3>(
-                                                      new SmallVelocityFunctor(sqrt(number_of_residuals * options.beta_small_velocity))),
-                                              nullptr,
-                                              &begin_t.x(), &end_t.x());
+                // SMALL VELOCITY
+                problem->AddResidualBlock(new ceres::AutoDiffCostFunction<SmallVelocityFunctor,
+                                                  SmallVelocityFunctor::NumResiduals(), 3, 3>(
+                                                  new SmallVelocityFunctor(sqrt(number_of_residuals * options.beta_small_velocity))),
+                                          nullptr,
+                                          &begin_t.x(), &end_t.x());
 
-                    // ORIENTATION CONSISTENCY
-                    problem->AddResidualBlock(new ceres::AutoDiffCostFunction<OrientationConsistencyFunctor,
-                                                      OrientationConsistencyFunctor::NumResiduals(), 4>(
-                                                      new OrientationConsistencyFunctor(previous_orientation,
-                                                                                        sqrt(number_of_residuals *
-                                                                                             options.beta_orientation_consistency))),
-                                              nullptr,
-                                              &begin_quat.x());
-                }
+                // ORIENTATION CONSISTENCY
+                problem->AddResidualBlock(new ceres::AutoDiffCostFunction<OrientationConsistencyFunctor,
+                                                  OrientationConsistencyFunctor::NumResiduals(), 4>(
+                                                  new OrientationConsistencyFunctor(previous_orientation,
+                                                                                    sqrt(number_of_residuals *
+                                                                                         options.beta_orientation_consistency))),
+                                          nullptr,
+                                          &begin_quat.x());
             }
             if (number_of_residuals < options.min_number_neighbors) {
                 std::stringstream ss_out;
@@ -688,22 +682,20 @@ namespace ct_icp {
             begin_quat.normalize();
             end_quat.normalize();
 
-            double diff_trans = (current_estimate.begin_t - begin_t).norm() + (current_estimate.end_t - end_t).norm();
-            double diff_rot = AngularDistance(current_estimate.begin_R, begin_quat.toRotationMatrix()) +
-                              AngularDistance(current_estimate.end_R, end_quat.toRotationMatrix());
+            double diff_trans = (trajectory_frame.begin_t - begin_t).norm() + (trajectory_frame.end_t - end_t).norm();
+            double diff_rot = AngularDistance(trajectory_frame.begin_R, begin_quat.toRotationMatrix()) +
+                              AngularDistance(trajectory_frame.end_R, end_quat.toRotationMatrix());
 
-            current_estimate.begin_t = begin_t;
-            current_estimate.end_t = end_t;
-            current_estimate.begin_R = begin_quat.toRotationMatrix();
-            current_estimate.end_R = end_quat.toRotationMatrix();
+            trajectory_frame.begin_t = begin_t;
+            trajectory_frame.end_t = end_t;
+            trajectory_frame.begin_R = begin_quat.toRotationMatrix();
+            trajectory_frame.end_R = end_quat.toRotationMatrix();
 
             if (options.point_to_plane_with_distortion) {
                 builder.DistortFrame(begin_quat, end_quat, begin_t, end_t);
             }
 
-            if ((index_frame > 1) &&
-                (diff_rot < options.threshold_orientation_norm &&
-                 diff_trans < options.threshold_translation_norm)) {
+            if ((diff_rot < options.threshold_orientation_norm && diff_trans < options.threshold_translation_norm)) {
 
                 if (options.debug_print) {
                     std::cout << "CT_ICP: Finished with N=" << iter << " ICP iterations" << std::endl;
@@ -723,14 +715,15 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     ICPSummary CT_ICP_GN(const CTICPOptions &options,
                          const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-                         std::vector<TrajectoryFrame> &trajectory, int index_frame) {
+                         TrajectoryFrame &trajectory_frame,
+                         const TrajectoryFrame *const previous_frame) {
 
         //Optimization with Traj constraints
         double ALPHA_C = options.beta_location_consistency; // 0.001;
         double ALPHA_E = options.beta_constant_velocity; // 0.001; //no ego (0.0) is not working
 
         // For the 50 first frames, visit 2 voxels
-        const short nb_voxels_visited = index_frame < options.init_num_frames ? 2 : 1;
+        const short nb_voxels_visited = options.voxel_neighborhood;
         int number_keypoints_used = 0;
         const int kMinNumNeighbors = options.min_number_neighbors;
 
@@ -749,7 +742,7 @@ namespace ct_icp {
 
         ICPSummary summary;
 
-        int num_iter_icp = index_frame < options.init_num_frames ? 15 : options.num_iters_icp;
+        int num_iter_icp = options.num_iters_icp;
         for (int iter(0); iter < num_iter_icp; iter++) {
             A = Eigen::MatrixXd::Zero(12, 12);
             b = Eigen::VectorXd::Zero(12);
@@ -784,7 +777,7 @@ namespace ct_icp {
                 double planarity_weight = neighborhood.a2D;
                 auto &normal = neighborhood.normal;
 
-                if (normal.dot(trajectory[index_frame].begin_t - pt_keypoint) < 0) {
+                if (normal.dot(trajectory_frame.begin_t - pt_keypoint) < 0) {
                     normal = -1.0 * normal;
                 }
 
@@ -816,9 +809,9 @@ namespace ct_icp {
 
 
                     Eigen::Vector3d frame_idx_previous_origin_begin =
-                            trajectory[index_frame].begin_R * keypoint.raw_pt;
+                            trajectory_frame.begin_R * keypoint.raw_pt;
                     Eigen::Vector3d frame_idx_previous_origin_end =
-                            trajectory[index_frame].end_R * keypoint.raw_pt;
+                            trajectory_frame.end_R * keypoint.raw_pt;
 
                     double cbx =
                             (1 - alpha_timestamp) * (frame_idx_previous_origin_begin[1] * closest_pt_normal[2] -
@@ -887,9 +880,9 @@ namespace ct_icp {
             }
 
             //Add constraints in trajectory
-            if (index_frame > 1) //no constraints for frame_index == 1
+            if (previous_frame) //no constraints for frame_index == 1
             {
-                Eigen::Vector3d diff_traj = trajectory[index_frame].begin_t - trajectory[index_frame - 1].end_t;
+                Eigen::Vector3d diff_traj = trajectory_frame.begin_t - trajectory_frame.end_t;
                 A(3, 3) = A(3, 3) + ALPHA_C;
                 A(4, 4) = A(4, 4) + ALPHA_C;
                 A(5, 5) = A(5, 5) + ALPHA_C;
@@ -897,8 +890,8 @@ namespace ct_icp {
                 b(4) = b(4) - ALPHA_C * diff_traj(1);
                 b(5) = b(5) - ALPHA_C * diff_traj(2);
 
-                Eigen::Vector3d diff_ego = trajectory[index_frame].end_t - trajectory[index_frame].begin_t -
-                                           trajectory[index_frame - 1].end_t + trajectory[index_frame - 1].begin_t;
+                Eigen::Vector3d diff_ego = trajectory_frame.end_t - trajectory_frame.begin_t -
+                                           previous_frame->end_t + previous_frame->begin_t;
                 A(9, 9) = A(9, 9) + ALPHA_E;
                 A(10, 10) = A(10, 10) + ALPHA_E;
                 A(11, 11) = A(11, 11) + ALPHA_E;
@@ -945,10 +938,10 @@ namespace ct_icp {
             rotation_end(2, 2) = cos(beta_end) * cos(alpha_end);
             Eigen::Vector3d translation_end = Eigen::Vector3d(x_bundle(9), x_bundle(10), x_bundle(11));
 
-            trajectory[index_frame].begin_R = rotation_begin * trajectory[index_frame].begin_R;
-            trajectory[index_frame].begin_t = trajectory[index_frame].begin_t + translation_begin;
-            trajectory[index_frame].end_R = rotation_end * trajectory[index_frame].end_R;
-            trajectory[index_frame].end_t = trajectory[index_frame].end_t + translation_end;
+            trajectory_frame.begin_R = rotation_begin * trajectory_frame.begin_R;
+            trajectory_frame.begin_t = trajectory_frame.begin_t + translation_begin;
+            trajectory_frame.end_R = rotation_end * trajectory_frame.end_R;
+            trajectory_frame.end_t = trajectory_frame.end_t + translation_end;
 
             auto solve_step = std::chrono::steady_clock::now();
             std::chrono::duration<double> _elapsed_solve = solve_step - start;
@@ -957,10 +950,10 @@ namespace ct_icp {
 
             //Update keypoints
             for (auto &keypoint: keypoints) {
-                Eigen::Quaterniond q_begin = Eigen::Quaterniond(trajectory[index_frame].begin_R);
-                Eigen::Quaterniond q_end = Eigen::Quaterniond(trajectory[index_frame].end_R);
-                Eigen::Vector3d t_begin = trajectory[index_frame].begin_t;
-                Eigen::Vector3d t_end = trajectory[index_frame].end_t;
+                Eigen::Quaterniond q_begin = Eigen::Quaterniond(trajectory_frame.begin_R);
+                Eigen::Quaterniond q_end = Eigen::Quaterniond(trajectory_frame.end_R);
+                Eigen::Vector3d t_begin = trajectory_frame.begin_t;
+                Eigen::Vector3d t_end = trajectory_frame.end_t;
                 double alpha_timestamp = keypoint.alpha_timestamp;
                 Eigen::Quaterniond q = q_begin.slerp(alpha_timestamp, q_end);
                 q.normalize();
@@ -973,7 +966,7 @@ namespace ct_icp {
             elapsed_update += _elapsed_update.count() * 1000.0;
 
 
-            if ((index_frame > 1) && (x_bundle.norm() < options.threshold_orientation_norm)) {
+            if ((x_bundle.norm() < options.threshold_orientation_norm)) {
                 break;
             }
         }
