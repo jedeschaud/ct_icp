@@ -82,7 +82,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    bool SaveTrajectoryFrame(const std::string &file_path, const std::vector<TrajectoryFrame> &trajectory) {
+    bool SaveTrajectoryFrame(const std::string &file_path, const std::vector<TrajectoryFrameV1> &trajectory) {
 #ifdef CT_ICP_WITH_FS
         auto parent_path = fs::path(file_path).parent_path();
         if (!exists(parent_path))
@@ -112,8 +112,8 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    std::vector<TrajectoryFrame> LoadTrajectory(const std::string &file_path) {
-        std::vector<TrajectoryFrame> frames;
+    std::vector<TrajectoryFrameV1> LoadTrajectory(const std::string &file_path) {
+        std::vector<TrajectoryFrameV1> frames;
 
         std::ifstream pFile(file_path);
         if (pFile.is_open()) {
@@ -123,7 +123,7 @@ namespace ct_icp {
                 std::getline(pFile, line);
                 if (line.empty()) continue;
                 std::stringstream ss(line);
-                TrajectoryFrame frame;
+                TrajectoryFrameV1 frame;
                 ss >> frame.success >> frame.begin_timestamp >> frame.end_timestamp >>
                    begin_quat.x() >> begin_quat.y() >> begin_quat.z() >> begin_quat.w() >>
                    frame.begin_t.x() >> frame.begin_t.y() >> frame.begin_t.z() >>

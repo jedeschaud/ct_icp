@@ -88,7 +88,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    viz::ArrayM4f ct_icp_to_viz3d_poses(const std::vector<TrajectoryFrame> &trajectory) {
+    viz::ArrayM4f ct_icp_to_viz3d_poses(const std::vector<TrajectoryFrameV1> &trajectory) {
         viz::ArrayM4f poses;
         poses.reserve(trajectory.size() * 2);
         viz::glMatrix4f new_pose = viz::glMatrix4f::Identity();

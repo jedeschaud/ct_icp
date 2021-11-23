@@ -175,7 +175,7 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     Odometry::RegistrationSummary Odometry::RegisterFrameWithEstimate(const std::vector<Point3D> &frame,
-                                                                      const TrajectoryFrame &initial_estimate) {
+                                                                      const TrajectoryFrameV1 &initial_estimate) {
         auto frame_index = InitializeMotion(&initial_estimate);
         return DoRegister(frame, frame_index);
     }
@@ -187,7 +187,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    int Odometry::InitializeMotion(const TrajectoryFrame *initial_estimate) {
+    int Odometry::InitializeMotion(const TrajectoryFrameV1 *initial_estimate) {
         int index_frame = registered_frames_++;
         if (initial_estimate != nullptr) {
             // Insert previous estimate
@@ -196,7 +196,7 @@ namespace ct_icp {
         }
 
         // Initial Trajectory Estimate
-        trajectory_.emplace_back(TrajectoryFrame());
+        trajectory_.emplace_back(TrajectoryFrameV1());
 
         if (index_frame <= 1) {
             // Initialize first pose at Identity
@@ -597,7 +597,7 @@ namespace ct_icp {
         registration_summary.sample_size = num_keypoints;
 
         {
-            TrajectoryFrame *previous_frame_ptr = index_frame >= 1 ? &trajectory_[index_frame - 1] : nullptr;
+            TrajectoryFrameV1 *previous_frame_ptr = index_frame >= 1 ? &trajectory_[index_frame - 1] : nullptr;
             if (index_frame < options_.init_num_frames) {
                 // Initialization regimen
                 options.voxel_neighborhood = std::max(static_cast<short>(2), options.voxel_neighborhood);
@@ -712,7 +712,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    std::vector<TrajectoryFrame> Odometry::Trajectory() const {
+    std::vector<TrajectoryFrameV1> Odometry::Trajectory() const {
         return trajectory_;
     }
 

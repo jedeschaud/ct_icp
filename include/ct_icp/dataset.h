@@ -94,7 +94,7 @@ namespace ct_icp {
 
     // Converts A Trajectory Frame to the format of the ground truth
     // Note: This format depends on the dataset, and its evaluation protocol
-    ArrayPoses transform_trajectory_frame(const DatasetOptions &, const std::vector<TrajectoryFrame> &,
+    ArrayPoses transform_trajectory_frame(const DatasetOptions &, const std::vector<TrajectoryFrameV1> &,
                                           int sequence_id);
 
     // Returns the Sequence Name as a string given its id

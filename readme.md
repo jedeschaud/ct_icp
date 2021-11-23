@@ -150,7 +150,7 @@ If you use our work in your research project, please consider citing:
 
 ## TODO
 - [x] Make a first version of the documentation 
-- [x] Save both poses for each TrajectoryFrame
+- [x] Save both poses for each TrajectoryFrameV1
 - [ ] Fix bugs / Improve code quality (doc/comments/etc...)
 - [ ] Add a wiki (documentation on the code)
 - [ ] Add point-to-distribution cost

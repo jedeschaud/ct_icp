@@ -566,7 +566,7 @@ namespace ct_icp {
 
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses kitti_raw_transform_trajectory_frame(const vector<TrajectoryFrame> &trajectory, int sequence_id) {
+    ArrayPoses kitti_raw_transform_trajectory_frame(const vector<TrajectoryFrameV1> &trajectory, int sequence_id) {
         // For KITTI_raw the evaluation counts the middle of the frame as the pose which is compared to the ground truth
         ArrayPoses poses;
         Eigen::Matrix3d R_Tr = R_Tr_array_KITTI[sequence_id].transpose();
@@ -599,7 +599,7 @@ namespace ct_icp {
 
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses kitti_360_transform_trajectory_frame(const vector<TrajectoryFrame> &trajectory, int sequence_id) {
+    ArrayPoses kitti_360_transform_trajectory_frame(const vector<TrajectoryFrameV1> &trajectory, int sequence_id) {
         // For KITTI_raw the evaluation counts the middle of the frame as the pose which is compared to the ground truth
         ArrayPoses poses;
         Eigen::Matrix3d R_Tr = R_Tr_KITTI_360.transpose(); //denoting the rigid transformation from the first camera (image_00) to the Velodyne.
@@ -631,7 +631,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses kitti_carla_transform_trajectory_frame(const vector<TrajectoryFrame> &trajectory) {
+    ArrayPoses kitti_carla_transform_trajectory_frame(const vector<TrajectoryFrameV1> &trajectory) {
         // For KITTI_CARLA the evaluation counts the beginning of the frame to compare to ground truth
         ArrayPoses poses;
         poses.reserve(trajectory.size());
@@ -661,7 +661,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses kitti_transform_trajectory_frame(const vector<TrajectoryFrame> &trajectory, int sequence_id) {
+    ArrayPoses kitti_transform_trajectory_frame(const vector<TrajectoryFrameV1> &trajectory, int sequence_id) {
         // For KITTI the evaluation uses the end pose of the frame as the pose which is compared to the ground truth
         ArrayPoses poses;
         Eigen::Matrix3d R_Tr = R_Tr_array_KITTI[sequence_id].transpose();
@@ -685,7 +685,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses nclt_transform_trajectory_frame(const vector<TrajectoryFrame> &trajectory) {
+    ArrayPoses nclt_transform_trajectory_frame(const vector<TrajectoryFrameV1> &trajectory) {
         ArrayPoses poses(trajectory.size());
         for (auto i(0); i < trajectory.size(); ++i) {
             poses[i] = trajectory[i].MidPose();
@@ -695,7 +695,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses transform_trajectory_frame(const DatasetOptions &options, const vector<TrajectoryFrame> &trajectory,
+    ArrayPoses transform_trajectory_frame(const DatasetOptions &options, const vector<TrajectoryFrameV1> &trajectory,
                                           int sequence_id) {
         switch (options.dataset) {
             case PLY_DIRECTORY:

@@ -79,11 +79,7 @@ auto GeneratePointCloud(slam::Pose &pose_b,
     return all_points;
 }
 
-
-int main(int argc, char **argv) {
-#ifdef CT_ICP_WITH_VIZ
-    std::thread gui_thread{viz::ExplorationEngine::LaunchMainLoop};
-#endif
+bool TestCT_ICP(const ct_icp::CTICPOptions &options) {
     slam::Pose init_pose(slam::SE3(), 0., 0);
     slam::Pose gt_pose(slam::SE3(Eigen::Quaterniond::UnitRandom(),
                                  Eigen::Vector3d::Random()), 1., 1);
@@ -115,23 +111,27 @@ int main(int argc, char **argv) {
     add_model(0, all_points);
     add_model(1, keypoints, 5, Eigen::Vector3f(1.0, 0.0, 0.0));
 
-    ct_icp::CTICPOptions options;
-    options.ls_max_num_iters = 30;
-    options.num_iters_icp = 100;
     ct_icp::VoxelHashMap map;
     auto ct_icp_points = ct_icp::slam_to_ct_icp(all_points);
     auto ct_icp_keypoints = ct_icp::slam_to_ct_icp(keypoints);
     ct_icp::AddPointsToMap(map, ct_icp_points,
                            options.size_voxel_map, 20, 0.1);
 
-    ct_icp::TrajectoryFrame frame;
+    ct_icp::TrajectoryFrameV1 frame;
     frame.begin_R = init_pose.pose.quat.toRotationMatrix();
     frame.begin_t = init_pose.pose.tr;
     frame.begin_timestamp = init_pose.dest_timestamp;
     frame.end_R = gt_noisy_pose.pose.quat.toRotationMatrix();
     frame.end_t = gt_noisy_pose.pose.tr;
     frame.end_timestamp = gt_noisy_pose.dest_timestamp;
-    ct_icp::CT_ICP_GN(options, map, ct_icp_keypoints, frame);
+    switch (options.solver) {
+        case ct_icp::CERES:
+            ct_icp::CT_ICP_CERES(options, map, ct_icp_keypoints, frame);
+            break;
+        case ct_icp::GN:
+            ct_icp::CT_ICP_GN(options, map, ct_icp_keypoints, frame);
+            break;
+    }
 
     auto corrected_keypoints = ct_icp::ct_icp_to_slam(ct_icp_keypoints);
     add_model(2, corrected_keypoints, 6, Eigen::Vector3f(0.f, 1.0f, 0.0f));
@@ -149,14 +149,12 @@ int main(int argc, char **argv) {
         rc = 0;
     }
 
-#ifdef CT_ICP_WITH_VIZ
-    gui_thread.join();
-#endif
     const auto prefix = "[TEST][INTEGRATION][CT-ICP] ";
     auto stream = [&prefix] {
         auto &ostream = (std::cout << prefix);
         return &ostream;
     };
+
     if (rc == 0)
         *stream() << "Success. " << std::endl;
     else {
@@ -165,5 +163,25 @@ int main(int argc, char **argv) {
         *stream() << "Final Location distance (m): " << rot_distance << std::endl;
     }
 
-    return rc;
+    return rc == 0;
+}
+
+
+int main(int argc, char **argv) {
+#ifdef CT_ICP_WITH_VIZ
+    std::thread gui_thread{viz::ExplorationEngine::LaunchMainLoop};
+#endif
+
+    ct_icp::CTICPOptions options;
+    options.num_iters_icp = 100;
+    options.solver = ct_icp::GN;
+    CHECK(TestCT_ICP(options)) << "GN Solver failed" << std::endl;
+    options.solver = ct_icp::CERES;
+    options.ls_max_num_iters = 10;
+    CHECK(TestCT_ICP(options)) << "CERES Solver failed" << std::endl;
+
+#ifdef CT_ICP_WITH_VIZ
+    gui_thread.join();
+#endif
+
 }

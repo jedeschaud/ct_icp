@@ -115,7 +115,7 @@ namespace ct_icp {
         // The Output of a registration, including metrics,
         struct RegistrationSummary {
 
-            TrajectoryFrame frame;
+            TrajectoryFrameV1 frame;
 
             int sample_size = 0; // The number of points sampled
 
@@ -154,10 +154,10 @@ namespace ct_icp {
 
         // Registers a new Frame to the Map with an initial estimate
         RegistrationSummary RegisterFrameWithEstimate(const std::vector<Point3D> &frame,
-                                                      const TrajectoryFrame &initial_estimate);
+                                                      const TrajectoryFrameV1 &initial_estimate);
 
         // Returns the currently registered trajectory
-        [[nodiscard]] std::vector<TrajectoryFrame> Trajectory() const;
+        [[nodiscard]] std::vector<TrajectoryFrameV1> Trajectory() const;
 
         // Returns the Aggregated PointCloud of the Local Map
         [[nodiscard]] ArrayVector3d GetLocalMap() const;
@@ -167,7 +167,7 @@ namespace ct_icp {
         [[nodiscard]] size_t MapSize() const;
 
     private:
-        std::vector<TrajectoryFrame> trajectory_;
+        std::vector<TrajectoryFrameV1> trajectory_;
         VoxelHashMap voxel_map_;
         int registered_frames_ = 0;
         int robust_num_consecutive_failures_ = 0;
@@ -194,7 +194,7 @@ namespace ct_icp {
                                         double sample_voxel_size);
 
         // Insert a New Trajectory Frame, and initializes the motion for this new frame
-        int InitializeMotion(const TrajectoryFrame *initial_estimate = nullptr);
+        int InitializeMotion(const TrajectoryFrameV1 *initial_estimate = nullptr);
 
         // Try to insert Points to the map
         // Returns false if it fails
