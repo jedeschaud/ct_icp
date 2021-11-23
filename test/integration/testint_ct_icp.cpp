@@ -117,7 +117,7 @@ int main(int argc, char **argv) {
 
     ct_icp::CTICPOptions options;
     options.ls_max_num_iters = 30;
-    options.num_iters_icp = 15;
+    options.num_iters_icp = 100;
     ct_icp::VoxelHashMap map;
     auto ct_icp_points = ct_icp::slam_to_ct_icp(all_points);
     auto ct_icp_keypoints = ct_icp::slam_to_ct_icp(keypoints);
@@ -131,7 +131,7 @@ int main(int argc, char **argv) {
     frame.end_R = gt_noisy_pose.pose.quat.toRotationMatrix();
     frame.end_t = gt_noisy_pose.pose.tr;
     frame.end_timestamp = gt_noisy_pose.dest_timestamp;
-    ct_icp::CT_ICP_CERES(options, map, ct_icp_keypoints, frame);
+    ct_icp::CT_ICP_GN(options, map, ct_icp_keypoints, frame);
 
     auto corrected_keypoints = ct_icp::ct_icp_to_slam(ct_icp_keypoints);
     add_model(2, corrected_keypoints, 6, Eigen::Vector3f(0.f, 1.0f, 0.0f));
@@ -145,7 +145,7 @@ int main(int argc, char **argv) {
     auto loc_distance = gt_pose.LocationDistance(corrected_pose);
 
     int rc = 1;
-    if (rot_distance < 1.e-6 && loc_distance < 1.e-6) {
+    if (rot_distance < 0.01 && loc_distance < 0.01) {
         rc = 0;
     }
 
@@ -161,8 +161,8 @@ int main(int argc, char **argv) {
         *stream() << "Success. " << std::endl;
     else {
         *stream() << "Test failed with error code: " << rc << std::endl;
-        *stream() << "Final Rotation distance (deg): " << rot_distance;
-        *stream() << "Final Location distance (m): " << rot_distance;
+        *stream() << "Final Rotation distance (deg): " << rot_distance << std::endl;
+        *stream() << "Final Location distance (m): " << rot_distance << std::endl;
     }
 
     return rc;
