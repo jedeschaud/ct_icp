@@ -278,7 +278,7 @@ namespace ct_icp {
 
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    std::vector<Point3D> read_pointcloud(const DatasetOptions &options, int sequence_id, int frame_id) {
+    std::vector<WPoint3D> read_pointcloud(const DatasetOptions &options, int sequence_id, int frame_id) {
 
         std::string frames_dir_path = pointclouds_dir_path(options, sequence_name(options, sequence_id));
         std::string frame_path = frames_dir_path + frame_file_name(frame_id);
@@ -324,8 +324,8 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    std::vector<Point3D> read_ply_pointcloud(const DatasetOptions &options, const std::string &path) {
-        std::vector<Point3D> frame;
+    std::vector<WPoint3D> read_ply_pointcloud(const DatasetOptions &options, const std::string &path) {
+        std::vector<WPoint3D> frame;
         //read ply frame file
         PlyFile plyFileIn(path, fileOpenMode_IN);
         char *dataIn = nullptr;
@@ -339,26 +339,26 @@ namespace ct_icp {
         for (int i(0); i < numPointsIn; i++) {
             unsigned long long int offset =
                     (unsigned long long int) i * (unsigned long long int) sizeOfPointsIn;
-            Point3D new_point;
-            new_point.raw_pt[0] = *((float *) (dataIn + offset));
+            WPoint3D new_point;
+            new_point.RawPoint()[0] = *((float *) (dataIn + offset));
             offset += sizeof(float);
-            new_point.raw_pt[1] = *((float *) (dataIn + offset));
+            new_point.RawPoint()[1] = *((float *) (dataIn + offset));
             offset += sizeof(float);
-            new_point.raw_pt[2] = *((float *) (dataIn + offset));
+            new_point.RawPoint()[2] = *((float *) (dataIn + offset));
             offset += sizeof(float);
-            new_point.pt = new_point.raw_pt;
-            new_point.alpha_timestamp = *((float *) (dataIn + offset));
+            new_point.WorldPoint() = new_point.RawPoint();
+            new_point.Timestamp() = *((float *) (dataIn + offset));
             offset += sizeof(float);
 
-            if (new_point.alpha_timestamp < frame_first_timestamp) {
-                frame_first_timestamp = new_point.alpha_timestamp;
+            if (new_point.Timestamp() < frame_first_timestamp) {
+                frame_first_timestamp = new_point.Timestamp();
             }
 
-            if (new_point.alpha_timestamp > frame_last_timestamp) {
-                frame_last_timestamp = new_point.alpha_timestamp;
+            if (new_point.Timestamp() > frame_last_timestamp) {
+                frame_last_timestamp = new_point.Timestamp();
             }
 
-            double r = new_point.raw_pt.norm();
+            double r = new_point.RawPoint().norm();
             if ((r > options.min_dist_lidar_center) && (r < options.max_dist_lidar_center)) {
                 frame.push_back(new_point);
             }
@@ -366,8 +366,8 @@ namespace ct_icp {
         frame.shrink_to_fit();
 
         for (int i(0); i < (int) frame.size(); i++) {
-            frame[i].alpha_timestamp = min(1.0, max(0.0, 1 - (frame_last_timestamp - frame[i].alpha_timestamp) /
-                                                             (frame_last_timestamp - frame_first_timestamp))); //1.0
+            frame[i].Timestamp() = min(1.0, max(0.0, 1 - (frame_last_timestamp - frame[i].Timestamp()) /
+                                                         (frame_last_timestamp - frame_first_timestamp))); //1.0
         }
         delete[] dataIn;
 
@@ -375,8 +375,8 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    std::vector<Point3D> read_kitti_raw_pointcloud(const DatasetOptions &options, const std::string &path) {
-        std::vector<Point3D> frame;
+    std::vector<WPoint3D> read_kitti_raw_pointcloud(const DatasetOptions &options, const std::string &path) {
+        std::vector<WPoint3D> frame;
         //read ply frame file
         PlyFile plyFileIn(path, fileOpenMode_IN);
         char *dataIn = nullptr;
@@ -394,55 +394,55 @@ namespace ct_icp {
         for (int i(0); i < numPointsIn; i++) {
             unsigned long long int offset =
                     (unsigned long long int) i * (unsigned long long int) sizeOfPointsIn;
-            Point3D new_point;
-            new_point.raw_pt[0] = *((float *) (dataIn + offset));
+            WPoint3D new_point;
+            new_point.RawPoint()[0] = *((float *) (dataIn + offset));
             offset += sizeof(float);
-            new_point.raw_pt[1] = *((float *) (dataIn + offset));
+            new_point.RawPoint()[1] = *((float *) (dataIn + offset));
             offset += sizeof(float);
-            new_point.raw_pt[2] = *((float *) (dataIn + offset));
+            new_point.RawPoint()[2] = *((float *) (dataIn + offset));
             offset += sizeof(float);
-            new_point.pt = new_point.raw_pt;
-            new_point.alpha_timestamp = *((float *) (dataIn + offset));
+            new_point.WorldPoint() = new_point.RawPoint();
+            new_point.Timestamp() = *((float *) (dataIn + offset));
             offset += sizeof(float);
 
-            if (new_point.alpha_timestamp < frame_first_timestamp) {
-                frame_first_timestamp = new_point.alpha_timestamp;
+            if (new_point.Timestamp() < frame_first_timestamp) {
+                frame_first_timestamp = new_point.Timestamp();
             }
 
-            if (new_point.alpha_timestamp > frame_last_timestamp) {
-                frame_last_timestamp = new_point.alpha_timestamp;
+            if (new_point.Timestamp() > frame_last_timestamp) {
+                frame_last_timestamp = new_point.Timestamp();
             }
 
-            double r = new_point.raw_pt.norm();
+            double r = new_point.RawPoint().norm();
             if ((r > options.min_dist_lidar_center) && (r < options.max_dist_lidar_center) &&
-                (new_point.raw_pt[2] > KITTI_MIN_Z)) {
+                (new_point.RawPoint()[2] > KITTI_MIN_Z)) {
                 frame.push_back(new_point);
             }
         }
         frame.shrink_to_fit();
 
         for (int i(0); i < (int) frame.size(); i++) {
-            frame[i].alpha_timestamp = min(1.0, max(0.0, 1 - (frame_last_timestamp - frame[i].alpha_timestamp) /
-                                                             (frame_last_timestamp - frame_first_timestamp))); //1.0
+            frame[i].Timestamp() = min(1.0, max(0.0, 1 - (frame_last_timestamp - frame[i].Timestamp()) /
+                                                         (frame_last_timestamp - frame_first_timestamp))); //1.0
         }
         delete[] dataIn;
 
         //Intrinsic calibration of the vertical angle of laser fibers (take the same correction for all lasers)
         for (int i = 0; i < (int) frame.size(); i++) {
-            Eigen::Vector3d rotationVector = frame[i].pt.cross(Eigen::Vector3d(0., 0., 1.));
+            Eigen::Vector3d rotationVector = frame[i].WorldPoint().cross(Eigen::Vector3d(0., 0., 1.));
             rotationVector.normalize();
             Eigen::Matrix3d rotationScan;
             rotationScan = Eigen::AngleAxisd(KITTI_GLOBAL_VERTICAL_ANGLE_OFFSET * M_PI / 180.0, rotationVector);
-            frame[i].raw_pt = rotationScan * frame[i].raw_pt;
-            frame[i].pt = rotationScan * frame[i].pt;
+            frame[i].RawPoint() = rotationScan * frame[i].RawPoint();
+            frame[i].WorldPoint() = rotationScan * frame[i].WorldPoint();
         }
         return frame;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
 
-    std::vector<Point3D> read_kitti_carla_pointcloud(const DatasetOptions &options, const std::string &path) {
-        std::vector<Point3D> frame;
+    std::vector<WPoint3D> read_kitti_carla_pointcloud(const DatasetOptions &options, const std::string &path) {
+        std::vector<WPoint3D> frame;
 
         PlyFile plyFileIn(path, fileOpenMode_IN);
         char *dataIn = nullptr;
@@ -457,41 +457,41 @@ namespace ct_icp {
 
             unsigned long long int offset =
                     (unsigned long long int) i * (unsigned long long int) sizeOfPointsIn;
-            Point3D new_point;
-            new_point.raw_pt[0] = *((float *) (dataIn + offset));
+            WPoint3D new_point;
+            new_point.RawPoint()[0] = *((float *) (dataIn + offset));
             offset += sizeof(float);
-            new_point.raw_pt[1] = *((float *) (dataIn + offset));
+            new_point.RawPoint()[1] = *((float *) (dataIn + offset));
             offset += sizeof(float);
-            new_point.raw_pt[2] = *((float *) (dataIn + offset));
+            new_point.RawPoint()[2] = *((float *) (dataIn + offset));
             offset += sizeof(float);
 
 
-            new_point.pt = new_point.raw_pt;
+            new_point.WorldPoint() = new_point.RawPoint();
             double cos = *((float *) (dataIn + offset));
             offset += sizeof(float);
-            new_point.alpha_timestamp = *((float *) (dataIn + offset));
+            new_point.Timestamp() = *((float *) (dataIn + offset));
             offset += sizeof(float);
             uint32_t index = *((uint32_t *) (dataIn + offset));
             offset += sizeof(uint32_t);
             uint32_t label = *((uint32_t *) (dataIn + offset));
             offset += sizeof(uint32_t);
 
-            if (new_point.alpha_timestamp < frame_first_timestamp) {
-                frame_first_timestamp = new_point.alpha_timestamp;
+            if (new_point.Timestamp() < frame_first_timestamp) {
+                frame_first_timestamp = new_point.Timestamp();
             }
 
-            if (new_point.alpha_timestamp > frame_last_timestamp) {
-                frame_last_timestamp = new_point.alpha_timestamp;
+            if (new_point.Timestamp() > frame_last_timestamp) {
+                frame_last_timestamp = new_point.Timestamp();
             }
 
-            double r = new_point.raw_pt.norm();
+            double r = new_point.RawPoint().norm();
             if ((r > options.min_dist_lidar_center) && (r < options.max_dist_lidar_center))
                 frame.push_back(new_point);
         }
 
         for (int i(0); i < (int) frame.size(); i++) {
-            frame[i].alpha_timestamp = min(1.0, max(0.0, 1 - (frame_last_timestamp - frame[i].alpha_timestamp) /
-                                                             (frame_last_timestamp - frame_first_timestamp)));
+            frame[i].Timestamp() = min(1.0, max(0.0, 1 - (frame_last_timestamp - frame[i].Timestamp()) /
+                                                         (frame_last_timestamp - frame_first_timestamp)));
         }
         frame.shrink_to_fit();
 
@@ -501,8 +501,8 @@ namespace ct_icp {
 
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    std::vector<Point3D> read_kitti_pointcloud(const DatasetOptions &options, const std::string &path) {
-        std::vector<Point3D> frame;
+    std::vector<WPoint3D> read_kitti_pointcloud(const DatasetOptions &options, const std::string &path) {
+        std::vector<WPoint3D> frame;
         //read ply frame file
         PlyFile plyFileIn(path, fileOpenMode_IN);
         char *dataIn = nullptr;
@@ -520,172 +520,106 @@ namespace ct_icp {
         for (int i(0); i < numPointsIn; i++) {
             unsigned long long int offset =
                     (unsigned long long int) i * (unsigned long long int) sizeOfPointsIn;
-            Point3D new_point;
-            new_point.raw_pt[0] = *((float *) (dataIn + offset));
+            WPoint3D new_point;
+            new_point.RawPoint()[0] = *((float *) (dataIn + offset));
             offset += sizeof(float);
-            new_point.raw_pt[1] = *((float *) (dataIn + offset));
+            new_point.RawPoint()[1] = *((float *) (dataIn + offset));
             offset += sizeof(float);
-            new_point.raw_pt[2] = *((float *) (dataIn + offset));
+            new_point.RawPoint()[2] = *((float *) (dataIn + offset));
             offset += sizeof(float);
-            new_point.pt = new_point.raw_pt;
-            new_point.alpha_timestamp = *((float *) (dataIn + offset));
+            new_point.WorldPoint() = new_point.RawPoint();
+            new_point.Timestamp() = *((float *) (dataIn + offset));
             offset += sizeof(float);
 
-            if (new_point.alpha_timestamp < frame_first_timestamp) {
-                frame_first_timestamp = new_point.alpha_timestamp;
+            if (new_point.Timestamp() < frame_first_timestamp) {
+                frame_first_timestamp = new_point.Timestamp();
             }
 
-            if (new_point.alpha_timestamp > frame_last_timestamp) {
-                frame_last_timestamp = new_point.alpha_timestamp;
+            if (new_point.Timestamp() > frame_last_timestamp) {
+                frame_last_timestamp = new_point.Timestamp();
             }
 
-            double r = new_point.raw_pt.norm();
+            double r = new_point.RawPoint().norm();
             if ((r > options.min_dist_lidar_center) && (r < options.max_dist_lidar_center) &&
-                (new_point.raw_pt[2] > KITTI_MIN_Z)) {
+                (new_point.RawPoint()[2] > KITTI_MIN_Z)) {
                 frame.push_back(new_point);
             }
         }
         frame.shrink_to_fit();
 
         for (int i(0); i < (int) frame.size(); i++) {
-            frame[i].alpha_timestamp = 1.0; // KITTI frames are already corrected by the camera, then timestamp of points is the same for all points
+            frame[i].Timestamp() = 1.0; // KITTI frames are already corrected by the camera, then timestamp of points is the same for all points
         }
         delete[] dataIn;
 
         //Intrinsic calibration of the vertical angle of laser fibers (take the same correction for all lasers)
         for (int i = 0; i < (int) frame.size(); i++) {
-            Eigen::Vector3d rotationVector = frame[i].pt.cross(Eigen::Vector3d(0., 0., 1.));
+            Eigen::Vector3d rotationVector = frame[i].WorldPoint().cross(Eigen::Vector3d(0., 0., 1.));
             rotationVector.normalize();
             Eigen::Matrix3d rotationScan;
             rotationScan = Eigen::AngleAxisd(KITTI_GLOBAL_VERTICAL_ANGLE_OFFSET * M_PI / 180.0, rotationVector);
-            frame[i].raw_pt = rotationScan * frame[i].raw_pt;
-            frame[i].pt = rotationScan * frame[i].pt;
+            frame[i].RawPoint() = rotationScan * frame[i].RawPoint();
+            frame[i].WorldPoint() = rotationScan * frame[i].WorldPoint();
         }
         return frame;
     }
 
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses kitti_raw_transform_trajectory_frame(const vector<TrajectoryFrameV1> &trajectory, int sequence_id) {
+    ArrayPoses kitti_raw_transform_trajectory_frame(const vector<TrajectoryFrame> &trajectory, int sequence_id) {
         // For KITTI_raw the evaluation counts the middle of the frame as the pose which is compared to the ground truth
         ArrayPoses poses;
-        Eigen::Matrix3d R_Tr = R_Tr_array_KITTI[sequence_id].transpose();
+        Eigen::Matrix3d R_Tr = R_Tr_array_KITTI[sequence_id];
         Eigen::Vector3d T_Tr = T_Tr_array_KITTI[sequence_id];
 
+        slam::SE3 Tr_pose(Eigen::Quaterniond(R_Tr), T_Tr);
         poses.reserve(trajectory.size());
         for (auto &frame: trajectory) {
-            Eigen::Matrix3d center_R;
-            Eigen::Vector3d center_t;
-            Eigen::Quaterniond q_begin = Eigen::Quaterniond(frame.begin_R);
-            Eigen::Quaterniond q_end = Eigen::Quaterniond(frame.end_R);
-            Eigen::Vector3d t_begin = frame.begin_t;
-            Eigen::Vector3d t_end = frame.end_t;
-            Eigen::Quaterniond q = q_begin.slerp(0.5, q_end);
-            q.normalize();
-            center_R = q.toRotationMatrix();
-            center_t = 0.5 * t_begin + 0.5 * t_end;
-
-            //Transform the data into the left camera reference frame (left camera) and evaluate SLAM
-            center_R = R_Tr * center_R * R_Tr.transpose();
-            center_t = -center_R * T_Tr + T_Tr + R_Tr * center_t;
-
-            Eigen::Matrix4d pose = Eigen::Matrix4d::Identity();
-            pose.block<3, 3>(0, 0) = center_R;
-            pose.block<3, 1>(0, 3) = center_t;
-            poses.push_back(pose);
+            auto mid_pose = frame.begin_pose.InterpolatePoseAlpha(frame.end_pose, 0.5).pose;
+            auto mid_pose_left_camera = Tr_pose.Inverse() * mid_pose * Tr_pose;
+            poses.push_back(mid_pose_left_camera.Matrix());
         }
         return poses;
     }
 
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses kitti_360_transform_trajectory_frame(const vector<TrajectoryFrameV1> &trajectory, int sequence_id) {
+    ArrayPoses kitti_360_transform_trajectory_frame(const vector<TrajectoryFrame> &trajectory, int sequence_id) {
         // For KITTI_raw the evaluation counts the middle of the frame as the pose which is compared to the ground truth
         ArrayPoses poses;
-        Eigen::Matrix3d R_Tr = R_Tr_KITTI_360.transpose(); //denoting the rigid transformation from the first camera (image_00) to the Velodyne.
+        Eigen::Matrix3d R_Tr = R_Tr_KITTI_360; //denoting the rigid transformation from the first camera (image_00) to the Velodyne.
         Eigen::Vector3d T_Tr = T_Tr_KITTI_360; //denoting the rigid transformation from the first camera (image_00) to the Velodyne.
-
+        slam::SE3 Tr_pose(Eigen::Quaterniond(R_Tr), T_Tr);
         poses.reserve(trajectory.size());
+
         for (auto &frame: trajectory) {
-            Eigen::Matrix3d center_R;
-            Eigen::Vector3d center_t;
-            Eigen::Quaterniond q_begin = Eigen::Quaterniond(frame.begin_R);
-            Eigen::Quaterniond q_end = Eigen::Quaterniond(frame.end_R);
-            Eigen::Vector3d t_begin = frame.begin_t;
-            Eigen::Vector3d t_end = frame.end_t;
-            Eigen::Quaterniond q = q_begin.slerp(0.5, q_end);
-            q.normalize();
-            center_R = q.toRotationMatrix();
-            center_t = 0.5 * t_begin + 0.5 * t_end;
-
-            //Transform the data into the left camera reference frame (left camera) and evaluate SLAM
-            center_R = R_Tr * center_R * R_Tr.transpose();
-            center_t = -center_R * T_Tr + T_Tr + R_Tr * center_t;
-
-            Eigen::Matrix4d pose = Eigen::Matrix4d::Identity();
-            pose.block<3, 3>(0, 0) = center_R;
-            pose.block<3, 1>(0, 3) = center_t;
-            poses.push_back(pose);
+            auto mid_frame = frame.begin_pose.InterpolatePoseAlpha(frame.end_pose, 0.5).pose;
+            auto mid_frame_left_camera = Tr_pose * mid_frame * Tr_pose;
+            poses.push_back(mid_frame_left_camera.Matrix());
         }
         return poses;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses kitti_carla_transform_trajectory_frame(const vector<TrajectoryFrameV1> &trajectory) {
+    ArrayPoses kitti_carla_transform_trajectory_frame(const vector<TrajectoryFrame> &trajectory) {
         // For KITTI_CARLA the evaluation counts the beginning of the frame to compare to ground truth
         ArrayPoses poses;
         poses.reserve(trajectory.size());
 
-        Eigen::Matrix4d init = Eigen::Matrix4d::Identity();
-        init.block<3, 3>(0, 0) = trajectory[0].begin_R;
-        init.block<3, 1>(0, 3) = trajectory[0].begin_t;
+        Eigen::Matrix4d init = trajectory.front().begin_pose.Matrix();
         poses.push_back(init);
 
         for (auto i(0); i < trajectory.size() - 1; ++i) {
-            Eigen::Quaterniond q_begin = Eigen::Quaterniond(trajectory[i].end_R);
-            Eigen::Quaterniond q_end = Eigen::Quaterniond(trajectory[i + 1].begin_R);
-            Eigen::Vector3d t_begin = trajectory[i].end_t;
-            Eigen::Vector3d t_end = trajectory[i + 1].begin_t;
-            Eigen::Quaterniond q = q_begin.slerp(0.5, q_end);
-            q.normalize();
-            Eigen::Matrix3d R = q.toRotationMatrix();
-            Eigen::Vector3d t = 0.5 * t_begin + 0.5 * t_end;
-
-            Eigen::Matrix4d pose = Eigen::Matrix4d::Identity();
-            pose.block<3, 3>(0, 0) = R;
-            pose.block<3, 1>(0, 3) = t;
-            poses.push_back(pose);
+            auto mid_pose = trajectory[i].end_pose.InterpolatePoseAlpha(trajectory[i + 1].begin_pose,
+                                                                        0.5).Matrix();
+            poses.push_back(mid_pose);
         }
 
         return poses;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses kitti_transform_trajectory_frame(const vector<TrajectoryFrameV1> &trajectory, int sequence_id) {
-        // For KITTI the evaluation uses the end pose of the frame as the pose which is compared to the ground truth
-        ArrayPoses poses;
-        Eigen::Matrix3d R_Tr = R_Tr_array_KITTI[sequence_id].transpose();
-        Eigen::Vector3d T_Tr = T_Tr_array_KITTI[sequence_id];
-
-        poses.reserve(trajectory.size());
-        for (auto &frame: trajectory) {
-            Eigen::Matrix3d center_R;
-            Eigen::Vector3d center_t;
-
-            //Transform the data into the left camera reference frame (left camera) and evaluate SLAM
-            center_R = R_Tr * frame.end_R * R_Tr.transpose();
-            center_t = -center_R * T_Tr + T_Tr + R_Tr * frame.end_t;
-
-            Eigen::Matrix4d pose = Eigen::Matrix4d::Identity();
-            pose.block<3, 3>(0, 0) = center_R;
-            pose.block<3, 1>(0, 3) = center_t;
-            poses.push_back(pose);
-        }
-        return poses;
-    }
-
-    /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses nclt_transform_trajectory_frame(const vector<TrajectoryFrameV1> &trajectory) {
+    ArrayPoses nclt_transform_trajectory_frame(const vector<TrajectoryFrame> &trajectory) {
         ArrayPoses poses(trajectory.size());
         for (auto i(0); i < trajectory.size(); ++i) {
             poses[i] = trajectory[i].MidPose();
@@ -695,7 +629,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses transform_trajectory_frame(const DatasetOptions &options, const vector<TrajectoryFrameV1> &trajectory,
+    ArrayPoses transform_trajectory_frame(const DatasetOptions &options, const vector<TrajectoryFrame> &trajectory,
                                           int sequence_id) {
         switch (options.dataset) {
             case PLY_DIRECTORY:
@@ -768,9 +702,9 @@ namespace ct_icp {
     /// DirectoryIterator for KITTI_raw and KITTI_CARLA and KITTI
     class DirectoryIterator : public DatasetSequence {
     public:
-        explicit DirectoryIterator(const DatasetOptions &options, int sequence_id = -1) : options_(options),
-                                                                                          sequence_id_(
-                                                                                                  sequence_id) {
+        explicit DirectoryIterator(const DatasetOptions &options,
+                                   int sequence_id = -1) : options_(options),
+                                                           sequence_id_(sequence_id) {
             switch (options.dataset) {
                 case KITTI_raw:
                     num_frames_ = LENGTH_SEQUENCE_KITTI[sequence_id] + 1;
@@ -797,16 +731,15 @@ namespace ct_icp {
 
         ~DirectoryIterator() = default;
 
-        std::vector<Point3D> Next() override {
+        std::vector<WPoint3D> Next() override {
             int frame_id = frame_id_++;
-            std::vector<Point3D> pc;
+            std::vector<WPoint3D> pc;
             if (!filenames_.empty()) {
                 auto filename = filenames_[frame_id];
                 pc = read_ply_pointcloud(options_, filename);
             } else
                 pc = read_pointcloud(options_, sequence_id_, frame_id);
-            for (auto &point: pc)
-                point.timestamp = frame_id + point.alpha_timestamp;
+            AdjustTimestamps(pc, frame_id);
             return pc;
         }
 
@@ -824,15 +757,19 @@ namespace ct_icp {
 
         size_t NumFrames() const override { return num_frames_ - init_frame_id_; }
 
-        std::vector<Point3D> Frame(size_t index) const override {
+        std::vector<WPoint3D> Frame(size_t index) const override {
             int frame_id = index;
             auto pc = read_pointcloud(options_, sequence_id_, frame_id);
+            AdjustTimestamps(pc, frame_id);
+            return pc;
+        }
+
+        void AdjustTimestamps(std::vector<WPoint3D> &pc, int frame_id) const {
             if (options_.dataset == KITTI_raw || options_.dataset == KITTI_CARLA || options_.dataset == KITTI) {
                 for (auto &point: pc) {
-                    point.timestamp = frame_id + point.alpha_timestamp;
+                    point.Timestamp() = frame_id + point.Timestamp();
                 }
             }
-            return pc;
         }
 
     private:
@@ -842,6 +779,7 @@ namespace ct_icp {
         int sequence_id_;
         int frame_id_ = 0;
         int num_frames_;
+        bool is_relative_timestamps_ = false;
     };
 
     /// NCLT Iterator for NCLT
@@ -870,8 +808,8 @@ namespace ct_icp {
             }
         }
 
-        std::vector<ct_icp::Point3D> DoNext(bool jump_frame = false) {
-            std::vector<ct_icp::Point3D> points;
+        std::vector<WPoint3D> DoNext(bool jump_frame = false) {
+            std::vector<WPoint3D> points;
             // Normalize timestamps
             double min_timestamp = std::numeric_limits<double>::infinity(), max_timestamp = std::numeric_limits<double>::lowest();
             for (int iter(0); iter < num_aggregated_pc_; ++iter) {
@@ -886,7 +824,7 @@ namespace ct_icp {
                 auto old_size = points.size();
 
                 if (!next_batch.empty()) {
-                    auto timestamp = next_batch[0].timestamp;
+                    auto timestamp = next_batch[0].Timestamp();
                     if (timestamp < min_timestamp)
                         min_timestamp = timestamp;
                     if (timestamp > max_timestamp)
@@ -897,18 +835,18 @@ namespace ct_icp {
                 std::copy(next_batch.begin(), next_batch.end(), points.begin() + old_size);
             }
             for (auto &point: points)
-                point.alpha_timestamp = (point.timestamp - min_timestamp) / (max_timestamp - min_timestamp);
+                point.Timestamp() = (point.Timestamp() - min_timestamp) / (max_timestamp - min_timestamp);
             return points;
         }
 
-        std::vector<ct_icp::Point3D> Next() override {
+        std::vector<WPoint3D> Next() override {
             return DoNext();
 
         }
 
-        std::vector<ct_icp::Point3D> NextBatch(bool jump_batch) {
+        std::vector<WPoint3D> NextBatch(bool jump_batch) {
             CHECK(HasNext()) << "No more points to read" << std::endl;
-            std::vector<ct_icp::Point3D> points;
+            std::vector<WPoint3D> points;
 
             unsigned short magic[4];
             const unsigned short magic_number = 44444;
@@ -932,7 +870,7 @@ namespace ct_icp {
             }
             points.resize(num_hits);
 
-            Point3D point;
+            WPoint3D point;
             double _x, _y, _z;
             for (int pid(0); pid < num_hits; pid++) {
                 file->read(reinterpret_cast<char *>(xyz), sizeof(xyz));
@@ -943,9 +881,9 @@ namespace ct_icp {
                 _z = ((double) xyz[2]) * 0.005 - 100.0;
 
                 auto &point_3d = points[pid];
-                point_3d.raw_pt = Eigen::Vector3d(_x, _y, _z);
-                point_3d.timestamp = (double) utime;
-                point_3d.pt = point_3d.raw_pt;
+                point_3d.RawPoint() = Eigen::Vector3d(_x, _y, _z);
+                point_3d.Timestamp() = (double) utime;
+                point_3d.WorldPoint() = point_3d.RawPoint();
             }
             return points;
         }

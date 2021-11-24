@@ -23,10 +23,10 @@
 namespace ct_icp {
 
     // Subsample to keep one random point in every voxel of the current frame
-    void sub_sample_frame(std::vector<Point3D> &frame, double size_voxel);
+    void sub_sample_frame(std::vector<slam::WPoint3D> &frame, double size_voxel);
 
     // Samples Keypoints randomly in a voxel grid
-    void grid_sampling(const std::vector<Point3D> &frame, std::vector<Point3D> &keypoints,
+    void grid_sampling(const std::vector<slam::WPoint3D> &frame, std::vector<slam::WPoint3D> &keypoints,
                        double size_voxel_subsampling);
 
     enum CT_ICP_SOLVER {

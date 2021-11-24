@@ -91,7 +91,7 @@ namespace ct_icp {
     };
 
     // Add Points To the Map
-    void AddPointsToMap(VoxelHashMap &map, const std::vector<Point3D> &points,
+    void AddPointsToMap(VoxelHashMap &map, const std::vector<slam::WPoint3D> &points,
                         double voxel_size, int max_num_points_in_voxel,
                         double min_distance_points, int min_num_points = 0);
 
@@ -115,7 +115,7 @@ namespace ct_icp {
         // The Output of a registration, including metrics,
         struct RegistrationSummary {
 
-            TrajectoryFrameV1 frame;
+            TrajectoryFrame frame;
 
             int sample_size = 0; // The number of points sampled
 
@@ -137,12 +137,18 @@ namespace ct_icp {
 
             std::string error_message;
 
-            std::vector<Point3D> corrected_points; // Sampled points expressed in the initial frame
+            std::vector<slam::WPoint3D> corrected_points; // Sampled points expressed in the initial frame
 
-            std::vector<Point3D> all_corrected_points; // Initial points expressed in the initial frame
+            std::vector<slam::WPoint3D> all_corrected_points; // Initial points expressed in the initial frame
 
-            std::vector<Point3D> keypoints; // Last Keypoints selected
+            std::vector<slam::WPoint3D> keypoints; // Last Keypoints selected
 
+        };
+
+        struct FrameInfo {
+            int registered_fid = -1; // The index of the new frame (since the initial insertion of the frame)
+            slam::frame_id_t frame_id = -1; // The frame index
+            double begin_timestamp = -1., end_timestamp = -1.;
         };
 
         explicit Odometry(const OdometryOptions &options);
@@ -150,14 +156,14 @@ namespace ct_icp {
         explicit Odometry(const OdometryOptions *options) : Odometry(*options) {}
 
         // Registers a new Frame to the Map
-        RegistrationSummary RegisterFrame(const std::vector<Point3D> &frame);
+        RegistrationSummary RegisterFrame(const std::vector<slam::WPoint3D> &frame);
 
         // Registers a new Frame to the Map with an initial estimate
-        RegistrationSummary RegisterFrameWithEstimate(const std::vector<Point3D> &frame,
-                                                      const TrajectoryFrameV1 &initial_estimate);
+        RegistrationSummary RegisterFrameWithEstimate(const std::vector<slam::WPoint3D> &frame,
+                                                      const TrajectoryFrame &initial_estimate);
 
         // Returns the currently registered trajectory
-        [[nodiscard]] std::vector<TrajectoryFrameV1> Trajectory() const;
+        [[nodiscard]] std::vector<TrajectoryFrame> Trajectory() const;
 
         // Returns the Aggregated PointCloud of the Local Map
         [[nodiscard]] ArrayVector3d GetMapPointCloud() const;
@@ -169,7 +175,7 @@ namespace ct_icp {
         REF_GETTER(Map, voxel_map_)
 
     private:
-        std::vector<TrajectoryFrameV1> trajectory_;
+        std::vector<TrajectoryFrame> trajectory_;
         VoxelHashMap voxel_map_;
         int registered_frames_ = 0;
         int robust_num_consecutive_failures_ = 0;
@@ -180,27 +186,27 @@ namespace ct_icp {
         std::unique_ptr<std::ofstream> log_file_ = nullptr;
 
         // Initialize the Frame
-        std::vector<Point3D> InitializeFrame(const std::vector<Point3D> &const_frame,
-                                             int index_frame);
+        std::vector<slam::WPoint3D> InitializeFrame(const std::vector<slam::WPoint3D> &const_frame,
+                                                    FrameInfo frame_info);
 
         // Registers a frame after the motion was initialized
         // When the Robust Registration profile is activated, it can call TryRegister
         // Multiple times changing the options in order to increase the chance of registration
-        RegistrationSummary DoRegister(const std::vector<Point3D> &frame, int frame_index);
+        RegistrationSummary DoRegister(const std::vector<slam::WPoint3D> &frame, FrameInfo frame_info);
 
         // Tries to register a frame given a set of options
-        RegistrationSummary TryRegister(std::vector<Point3D> &frame,
-                                        int frame_index,
+        RegistrationSummary TryRegister(std::vector<slam::WPoint3D> &frame,
+                                        FrameInfo frame_info,
                                         CTICPOptions &options,
                                         RegistrationSummary &registration_summary,
                                         double sample_voxel_size);
 
         // Insert a New Trajectory Frame, and initializes the motion for this new frame
-        int InitializeMotion(const TrajectoryFrameV1 *initial_estimate = nullptr);
+        void InitializeMotion( FrameInfo frame_info, const TrajectoryFrame *initial_estimate = nullptr);
 
         // Try to insert Points to the map
         // Returns false if it fails
-        bool AssessRegistration(const std::vector<Point3D> &points, RegistrationSummary &summary,
+        bool AssessRegistration(const std::vector<slam::WPoint3D> &points, RegistrationSummary &summary,
                                 std::ostream *log_stream = nullptr) const;
 
     };

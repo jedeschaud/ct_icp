@@ -82,7 +82,14 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    bool SaveTrajectoryFrame(const std::string &file_path, const std::vector<TrajectoryFrameV1> &trajectory) {
+    void load_array_from_stream(std::istream &os, double *array, int size) {
+        for (int i(0); i < size; ++i) {
+            os >> array[i];
+        }
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    bool SaveTrajectoryFrame(const std::string &file_path, const std::vector<TrajectoryFrame> &trajectory) {
 #ifdef CT_ICP_WITH_FS
         auto parent_path = fs::path(file_path).parent_path();
         if (!exists(parent_path))
@@ -92,14 +99,18 @@ namespace ct_icp {
         if (pFile.is_open()) {
             pFile << std::setprecision(std::numeric_limits<long double>::digits10 + 1);
             Eigen::Quaterniond q_begin, q_end;
-            for (auto &pose: trajectory) {
-                q_begin = Eigen::Quaterniond(pose.begin_R);
-                q_end = Eigen::Quaterniond(pose.end_R);
-                pFile << pose.success << sep << pose.begin_timestamp << sep << pose.end_timestamp << sep;
-                save_array_in_stream(pFile, &q_begin.x(), 4, true);
-                save_array_in_stream(pFile, &(pose.begin_t.x()), 3, true);
-                save_array_in_stream(pFile, &q_end.x(), 4, true);
-                save_array_in_stream(pFile, &(pose.end_t.x()), 3, false);
+            for (auto &frame: trajectory) {
+                auto &pose_begin = frame.begin_pose;
+                auto &pose_end = frame.end_pose;
+
+                const auto save_pose = [&pFile](auto pose, bool sep_to_last = true) {
+                    pFile << pose.dest_frame_id << sep << pose.dest_timestamp << sep <<
+                          pose.ref_frame_id << sep << pose.ref_timestamp;
+                    save_array_in_stream(pFile, &pose.pose.quat.x(), 4, true);
+                    save_array_in_stream(pFile, &pose.pose.tr.x(), 3, sep_to_last);
+                };
+                save_pose(pose_begin);
+                save_pose(pose_end, false);
                 pFile << std::endl;
             }
             pFile.close();
@@ -112,8 +123,8 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    std::vector<TrajectoryFrameV1> LoadTrajectory(const std::string &file_path) {
-        std::vector<TrajectoryFrameV1> frames;
+    std::vector<TrajectoryFrame> LoadTrajectory(const std::string &file_path) {
+        std::vector<TrajectoryFrame> frames;
 
         std::ifstream pFile(file_path);
         if (pFile.is_open()) {
@@ -123,14 +134,17 @@ namespace ct_icp {
                 std::getline(pFile, line);
                 if (line.empty()) continue;
                 std::stringstream ss(line);
-                TrajectoryFrameV1 frame;
-                ss >> frame.success >> frame.begin_timestamp >> frame.end_timestamp >>
-                   begin_quat.x() >> begin_quat.y() >> begin_quat.z() >> begin_quat.w() >>
-                   frame.begin_t.x() >> frame.begin_t.y() >> frame.begin_t.z() >>
-                   end_quat.x() >> end_quat.y() >> end_quat.z() >> end_quat.w() >>
-                   frame.end_t.x() >> frame.end_t.y() >> frame.end_t.z();
-                frame.begin_R = begin_quat.toRotationMatrix();
-                frame.end_R = end_quat.toRotationMatrix();
+                TrajectoryFrame frame;
+
+                const auto load_pose = [&ss]() {
+                    Pose pose;
+                    ss >> pose.dest_frame_id >> pose.dest_timestamp >> pose.ref_frame_id >> pose.ref_timestamp;
+                    load_array_from_stream(ss, &pose.pose.quat.x(), 4);
+                    load_array_from_stream(ss, &pose.pose.tr.x(), 3);
+                    return pose;
+                };
+                frame.begin_pose = load_pose();
+                frame.end_pose = load_pose();
                 frames.push_back(frame);
             }
             pFile.close();

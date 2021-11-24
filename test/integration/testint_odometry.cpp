@@ -41,10 +41,10 @@ auto GenerateWorldPoints(const std::vector<slam::Pose> &all_poses,
                          int num_points_per_frame = 10000) {
 
     struct ReturnType {
-        std::vector<slam::WPoint3D> world_points;
-        std::vector<std::vector<slam::WPoint3D>> all_frames;
+        std::vector<slam::WPoint3D> world_points{};
+        std::vector<std::vector<slam::WPoint3D>> all_frames{};
     } result;
-    result.world_points = GeneratePointCloud(all_poses[0], all_poses[0], num_points_map, 0);
+    // result.world_points = GeneratePointCloud(all_poses[0], all_poses[0], num_points_map, 0);
     for (int i(0); i < all_poses.size() - 1; ++i)
         result.all_frames.push_back(GeneratePointCloud(all_poses[i], all_poses[i + 1], num_points_per_frame, i + 1));
 
@@ -56,13 +56,11 @@ int main(int argc, char **argv) {
     std::thread gui_thread{viz::ExplorationEngine::LaunchMainLoop};
 #endif
 
-    auto poses = GeneratePoses(4, 30);
+    auto poses = GeneratePoses(10, 30);
     auto frames = GenerateWorldPoints(poses);
 
     add_pc_model(0, frames.world_points);
     add_poses_model(1, poses);
-
-    auto ct_icp_world_points = ct_icp::slam_to_ct_icp(frames.world_points);
 
     ct_icp::OdometryOptions options;
     options.debug_viz = true;
@@ -78,29 +76,20 @@ int main(int argc, char **argv) {
 
     for (auto i(0); i < frames.all_frames.size(); ++i) {
         auto &frame_pc = frames.all_frames[i];
-        auto ct_icp_frame = ct_icp::slam_to_ct_icp(frame_pc);
-        auto result = odometry.RegisterFrame(ct_icp_frame);
+        auto result = odometry.RegisterFrame(frame_pc);
         if (!result.success) {
             log_stream << "Odometry failed ! " << std::endl;
             return 1;
         }
-        frame_pc = ct_icp::ct_icp_to_slam(result.all_corrected_points);
+        frame_pc = result.all_corrected_points;
 
         add_pc_model(-42, frame_pc, 4, Eigen::Vector3f(1.0f, 0.f, 0.f));
         auto trajectory = odometry.Trajectory();
         std::vector<slam::Pose> optimized_poses;
         for (auto &frame: trajectory) {
-            slam::Pose begin_pose(Eigen::Quaterniond(frame.begin_R),
-                                  Eigen::Vector3d(frame.begin_t),
-                                  frame.begin_timestamp,
-                                  slam::frame_id_t(frame.begin_timestamp));
-
+            auto begin_pose = frame.begin_pose;
             begin_pose.pose.tr.z() += 10.0;
-
-            slam::Pose end_pose(Eigen::Quaterniond(frame.end_R),
-                                Eigen::Vector3d(frame.end_t),
-                                frame.end_timestamp,
-                                slam::frame_id_t(frame.end_timestamp));
+            auto end_pose = frame.end_pose;
             end_pose.pose.tr.z() += 10.0;
 
             optimized_poses.push_back(begin_pose);

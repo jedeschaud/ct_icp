@@ -23,12 +23,12 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     // Subsample to keep one random point in every voxel of the current frame
-    void sub_sample_frame(std::vector<Point3D> &frame, double size_voxel) {
-        std::unordered_map<Voxel, std::vector<Point3D>> grid;
+    void sub_sample_frame(std::vector<slam::WPoint3D> &frame, double size_voxel) {
+        std::unordered_map<Voxel, std::vector<slam::WPoint3D>> grid;
         for (int i = 0; i < (int) frame.size(); i++) {
-            auto kx = static_cast<short>(frame[i].pt[0] / size_voxel);
-            auto ky = static_cast<short>(frame[i].pt[1] / size_voxel);
-            auto kz = static_cast<short>(frame[i].pt[2] / size_voxel);
+            auto kx = static_cast<short>(frame[i].WorldPoint()[0] / size_voxel);
+            auto ky = static_cast<short>(frame[i].WorldPoint()[1] / size_voxel);
+            auto kz = static_cast<short>(frame[i].WorldPoint()[2] / size_voxel);
             grid[Voxel(kx, ky, kz)].push_back(frame[i]);
         }
         frame.resize(0);
@@ -43,11 +43,12 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    void
-    grid_sampling(const std::vector<Point3D> &frame, std::vector<Point3D> &keypoints, double size_voxel_subsampling) {
+    void grid_sampling(const std::vector<slam::WPoint3D> &frame,
+                       std::vector<slam::WPoint3D> &keypoints,
+                       double size_voxel_subsampling) {
         // TODO Replace std::list by a vector ?
-        keypoints.resize(0);
-        std::vector<Point3D> frame_sub;
+        keypoints.clear();
+        std::vector<slam::WPoint3D> frame_sub;
         frame_sub.resize(frame.size());
         for (int i = 0; i < (int) frame_sub.size(); i++) {
             frame_sub[i] = frame[i];
@@ -499,6 +500,8 @@ namespace ct_icp {
                             TrajectoryFrame &frame_to_optimize,
                             const TrajectoryFrame *const _previous_frame) {
 
+        frame_to_optimize.begin_pose.pose.quat.normalize();
+        frame_to_optimize.end_pose.pose.quat.normalize();
         const short nb_voxels_visited = options.voxel_neighborhood;
         const int kMinNumNeighbors = options.min_number_neighbors;
         const int kThresholdCapacity = options.threshold_voxel_occupancy;
@@ -581,7 +584,7 @@ namespace ct_icp {
                 auto &keypoint = slam_keypoints[k];
                 auto &raw_point = keypoint.raw_point.point;
                 // Neighborhood search
-                std::vector<Voxel> voxels;
+                std::vector <Voxel> voxels;
                 auto vector_neighbors = search_neighbors(voxels_map, keypoint.WorldPoint(),
                                                          nb_voxels_visited, options.size_voxel_map,
                                                          options.max_number_neighbors, kThresholdCapacity,
@@ -601,7 +604,7 @@ namespace ct_icp {
                                                         (kMaxPointToPlane * kMinNumNeighbors));
 
                 double point_to_plane_dist;
-                std::set<Voxel> neighbor_voxels;
+                std::set <Voxel> neighbor_voxels;
                 for (int i(0); i < options.num_closest_neighbors; ++i) {
                     point_to_plane_dist = std::abs(
                             (keypoint.WorldPoint() - vector_neighbors[i]).transpose() * neighborhood.normal);
@@ -665,6 +668,10 @@ namespace ct_icp {
 
             ceres::Solver::Summary summary;
             ceres::Solve(ceres_options, problem.get(), &summary);
+
+            frame_to_optimize.begin_pose.pose.quat.normalize();
+            frame_to_optimize.end_pose.pose.quat.normalize();
+
             if (!summary.IsSolutionUsable()) {
                 std::cout << summary.FullReport() << std::endl;
                 throw std::runtime_error("Error During Optimization");
@@ -703,6 +710,10 @@ namespace ct_icp {
         ICPSummary summary;
         summary.success = true;
         summary.num_residuals_used = number_of_residuals;
+
+        frame_to_optimize.begin_pose.pose.quat.normalize();
+        frame_to_optimize.end_pose.pose.quat.normalize();
+
         return summary;
     }
 
@@ -712,6 +723,8 @@ namespace ct_icp {
                          TrajectoryFrame &frame_to_optimize,
                          const TrajectoryFrame *const _previous_frame) {
 
+        frame_to_optimize.begin_pose.pose.quat.normalize();
+        frame_to_optimize.end_pose.pose.quat.normalize();
         auto &pose_begin = frame_to_optimize.begin_pose;
         auto &pose_end = frame_to_optimize.end_pose;
 
@@ -947,7 +960,8 @@ namespace ct_icp {
             std::chrono::duration<double> _elapsed_solve = solve_step - start;
             elapsed_solve += _elapsed_solve.count() * 1000.0;
 
-
+            frame_to_optimize.begin_pose.pose.quat.normalize();
+            frame_to_optimize.end_pose.pose.quat.normalize();
             //Update keypoints
             for (auto &keypoint: slam_keypoints)
                 keypoint.WorldPoint() = pose_begin.InterpolatePose(pose_end,
@@ -974,6 +988,7 @@ namespace ct_icp {
         }
         summary.success = true;
         summary.num_residuals_used = number_keypoints_used;
+
 
         return summary;
     }

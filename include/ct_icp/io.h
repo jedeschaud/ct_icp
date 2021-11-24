@@ -9,12 +9,12 @@ namespace ct_icp {
     bool SavePoses(const std::string &file_path, const ArrayPoses &);
 
     // Saves Trajectory Frames to disk, and returns whether the writing was successful
-    bool SaveTrajectoryFrame(const std::string &file_path, const std::vector<TrajectoryFrameV1> &);
+    bool SaveTrajectoryFrame(const std::string &file_path, const std::vector<TrajectoryFrame> &);
 
     // Loads Poses from disk. Raises a std::runtime_error if it fails to do so
     ArrayPoses LoadPoses(const std::string &file_path);
 
-    std::vector<TrajectoryFrameV1> LoadTrajectory(const std::string &file_path);
+    std::vector<TrajectoryFrame> LoadTrajectory(const std::string &file_path);
 
 } // namespace ct_icp
 

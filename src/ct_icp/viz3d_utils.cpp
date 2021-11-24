@@ -6,11 +6,11 @@
 namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    viz::ArrayV3f ct_icp_to_viz3d_pc(const std::vector<ct_icp::Point3D> &points, bool world_points) {
+    viz::ArrayV3f ct_icp_to_viz3d_pc(const std::vector<WPoint3D> &points, bool world_points) {
         viz::ArrayV3f output;
         output.reserve(points.size());
         for (auto &point: points)
-            output.push_back((world_points ? point.pt : point.raw_pt).cast<float>());
+            output.push_back((world_points ? point.WorldPointConst() : point.RawPointConst()).cast<float>());
         return output;
     }
 
@@ -61,24 +61,24 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    viz::ArrayV3f get_field_color(const std::vector<ct_icp::Point3D> &points, COLOR_SCHEME cmap, COLOR_FIELD cfield) {
+    viz::ArrayV3f get_field_color(const std::vector<slam::WPoint3D> &points, COLOR_SCHEME cmap, COLOR_FIELD cfield) {
         std::vector<double> scalars(points.size());
         double scalar;
         for (auto i(0); i < points.size(); ++i) {
             auto &point = points[i];
             switch (cfield) {
                 case X:
-                    scalar = point.pt.x();
+                    scalar = point.WorldPointConst().x();
                     break;
                 case Y:
-                    scalar = point.pt.y();
+                    scalar = point.WorldPointConst().y();
                     break;
                 case Z:
-                    scalar = point.pt.z();
+                    scalar = point.WorldPointConst().z();
                     break;
                 case T:
                 default:
-                    scalar = point.timestamp;
+                    scalar = point.TimestampConst();
                     break;
             }
             scalars[i] = scalar;
@@ -88,17 +88,15 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    viz::ArrayM4f ct_icp_to_viz3d_poses(const std::vector<TrajectoryFrameV1> &trajectory) {
+    viz::ArrayM4f ct_icp_to_viz3d_poses(const std::vector<TrajectoryFrame> &trajectory) {
         viz::ArrayM4f poses;
         poses.reserve(trajectory.size() * 2);
         viz::glMatrix4f new_pose = viz::glMatrix4f::Identity();
         for (auto &old_pose: trajectory) {
-            new_pose.block<3, 3>(0, 0) = old_pose.begin_R.cast<float>();
-            new_pose.block<3, 1>(0, 3) = old_pose.begin_t.cast<float>();
+            new_pose = old_pose.begin_pose.Matrix().cast<float>();
             poses.push_back(new_pose);
 
-            new_pose.block<3, 3>(0, 0) = old_pose.end_R.cast<float>();
-            new_pose.block<3, 1>(0, 3) = old_pose.end_t.cast<float>();
+            new_pose = old_pose.end_pose.Matrix().cast<float>();
             poses.push_back(new_pose);
         }
         return poses;

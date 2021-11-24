@@ -263,7 +263,7 @@ int main(int argc, char **argv) {
         }
         while (iterator_ptr->HasNext() && (options.max_frames < 0 || frame_id < options.max_frames)) {
             auto time_start_frame = std::chrono::steady_clock::now();
-            std::vector<Point3D> frame = iterator_ptr->Next();
+            auto frame = iterator_ptr->Next();
 
             auto time_read_pointcloud = std::chrono::steady_clock::now();
 
@@ -280,9 +280,7 @@ int main(int argc, char **argv) {
 #ifdef CT_ICP_WITH_VIZ
             if (options.with_viz3d) {
                 auto &instance = viz::ExplorationEngine::Instance();
-                Eigen::Matrix4d camera_pose = Eigen::Matrix4d::Identity();
-                camera_pose.block<3, 3>(0, 0) = summary.frame.begin_R;
-                camera_pose.block<3, 1>(0, 3) = summary.frame.begin_t;
+                Eigen::Matrix4d camera_pose = summary.frame.MidPose();
                 camera_pose = camera_pose.inverse().eval();
                 instance.SetCameraPose(camera_pose);
 
@@ -303,7 +301,7 @@ int main(int argc, char **argv) {
                         auto &model_data = model_ptr->ModelData();
                         model_data.xyz.resize(summary.all_corrected_points.size());
                         for (size_t i(0); i < summary.all_corrected_points.size(); ++i) {
-                            model_data.xyz[i] = summary.all_corrected_points[i].pt.cast<float>();
+                            model_data.xyz[i] = summary.all_corrected_points[i].WorldPoint().cast<float>();
                         }
                         instance.AddModel(frame_id % 500, model_ptr);
                     }

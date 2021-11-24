@@ -149,15 +149,14 @@ If you use our work in your research project, please consider citing:
 
 
 ## TODO
-- [x] Make a first version of the documentation 
-- [x] Save both poses for each TrajectoryFrameV1
-- [ ] Fix bugs / Improve code quality (doc/comments/etc...)
+- [ ] Refactor CT-ICP for the SlamUtils dependency
+- [ ] Improve the Dataset (use tinyply to read PLY files) 
+- [ ] Add regression / performance tests
+- [ ] Add them to the Github CI
+- [ ] Write ROS packaging
+- [ ] Extract the VoxelMap into SlamUtils
 - [ ] Add a wiki (documentation on the code)
 - [ ] Add point-to-distribution cost
 - [ ] Improve the robust regime (go faster and find parameters for robust and fast driving profile)
-- [ ] Increase speed
-- [ ] Add Unit Tests
-- [ ] Github CI 
 - [ ] Improve visualization / Interaction for the OpenGL Window
 - [ ] Improve the python binding (reduce the overhead)
-- [ ] Write ROS packaging

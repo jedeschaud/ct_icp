@@ -18,6 +18,7 @@
 #endif
 
 namespace ct_icp {
+    using namespace slam;
 
     /* -------------------------------------------------------------------------------------------------------------- */
     OdometryOptions OdometryOptions::DefaultDrivingProfile() {
@@ -137,145 +138,122 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    void DistortFrame(std::vector<Point3D> &points, Eigen::Quaterniond &begin_quat, Eigen::Quaterniond &end_quat,
-                      Eigen::Vector3d &begin_t, Eigen::Vector3d &end_t) {
-        Eigen::Quaterniond end_quat_I = end_quat.inverse(); // Rotation of the inverse pose
-        Eigen::Vector3d end_t_I = -1.0 * (end_quat_I * end_t); // Translation of the inverse pose
+    void DistortFrame(std::vector<slam::WPoint3D> &points, const slam::Pose &begin_pose, const slam::Pose &end_pose) {
+        auto end_pose_I = end_pose.Inverse().pose; // Rotation of the inverse pose
         for (auto &point: points) {
-            double alpha_timestamp = point.alpha_timestamp;
-            Eigen::Quaterniond q_alpha = begin_quat.slerp(alpha_timestamp, end_quat);
-            q_alpha.normalize();
-            Eigen::Vector3d t = (1.0 - alpha_timestamp) * begin_t + alpha_timestamp * end_t;
-
+            auto interpolated_pose = begin_pose.InterpolatePose(end_pose, point.Timestamp()).pose;
             // Distort Raw Keypoints
-            point.raw_pt = end_quat_I * (q_alpha * point.raw_pt + t) + end_t_I;
+            point.RawPoint() = end_pose_I * (interpolated_pose * point.RawPoint());
         }
     }
 
-    inline void TransformPoint(MOTION_COMPENSATION compensation, Point3D &point3D,
-                               Eigen::Quaterniond &q_begin, Eigen::Quaterniond &q_end,
-                               Eigen::Vector3d &t_begin, Eigen::Vector3d &t_end) {
-        Eigen::Vector3d t;
-        Eigen::Matrix3d R;
-        double alpha_timestamp = point3D.alpha_timestamp;
+    inline void TransformPoint(MOTION_COMPENSATION compensation, slam::WPoint3D &point,
+                               const Pose &begin_pose, const Pose &end_pose) {
+        auto pose = end_pose.pose;
         switch (compensation) {
             case MOTION_COMPENSATION::NONE:
             case MOTION_COMPENSATION::CONSTANT_VELOCITY:
-                R = q_end.toRotationMatrix();
-                t = t_end;
                 break;
             case MOTION_COMPENSATION::CONTINUOUS:
             case MOTION_COMPENSATION::ITERATIVE:
-                R = q_begin.slerp(alpha_timestamp, q_end).normalized().toRotationMatrix();
-                t = (1.0 - alpha_timestamp) * t_begin + alpha_timestamp * t_end;
+                pose = begin_pose.InterpolatePose(end_pose, point.Timestamp()).pose;
                 break;
         }
-        point3D.pt = R * point3D.raw_pt + t;
+        point.WorldPoint() = pose * point.RawPoint();
+    }
+
+    const auto compute_frame_info = [](const std::vector<WPoint3D> &points, auto registered_fid) {
+        Odometry::FrameInfo frame_info;
+        CHECK(!points.empty()) << "The registered frame cannot be empty" << std::endl;
+        frame_info.registered_fid = registered_fid;
+        frame_info.frame_id = points.front().index_frame;
+        auto min_max_pair = std::minmax_element(points.begin(), points.end(), [](const auto &lhs, const auto &rhs) {
+            return lhs.TimestampConst() < rhs.TimestampConst();
+        });
+        frame_info.begin_timestamp = min_max_pair.first->TimestampConst();
+        frame_info.end_timestamp = min_max_pair.second->TimestampConst();
+        return frame_info;
+    };
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    Odometry::RegistrationSummary Odometry::RegisterFrameWithEstimate(const std::vector<slam::WPoint3D> &frame,
+                                                                      const TrajectoryFrame &initial_estimate) {
+        auto frame_info = compute_frame_info(frame, registered_frames_++);
+        InitializeMotion(frame_info, &initial_estimate);
+        return DoRegister(frame, frame_info);
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    Odometry::RegistrationSummary Odometry::RegisterFrameWithEstimate(const std::vector<Point3D> &frame,
-                                                                      const TrajectoryFrameV1 &initial_estimate) {
-        auto frame_index = InitializeMotion(&initial_estimate);
-        return DoRegister(frame, frame_index);
+    Odometry::RegistrationSummary Odometry::RegisterFrame(const std::vector<slam::WPoint3D> &frame) {
+        auto frame_info = compute_frame_info(frame, registered_frames_++);
+        InitializeMotion(frame_info, nullptr);
+        return DoRegister(frame, frame_info);
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    Odometry::RegistrationSummary Odometry::RegisterFrame(const std::vector<Point3D> &frame) {
-        auto frame_index = InitializeMotion();
-        return DoRegister(frame, frame_index);
-    }
-
-    /* -------------------------------------------------------------------------------------------------------------- */
-    int Odometry::InitializeMotion(const TrajectoryFrameV1 *initial_estimate) {
-        int index_frame = registered_frames_++;
+    void Odometry::InitializeMotion(FrameInfo frame_info, const TrajectoryFrame *initial_estimate) {
         if (initial_estimate != nullptr) {
             // Insert previous estimate
             trajectory_.emplace_back(*initial_estimate);
-            return index_frame;
+            return;
         }
 
+        const auto kFrameIndex = frame_info.registered_fid;
         // Initial Trajectory Estimate
-        trajectory_.emplace_back(TrajectoryFrameV1());
+        trajectory_.emplace_back(TrajectoryFrame());
+        trajectory_[kFrameIndex].begin_pose = Pose(SE3(), frame_info.begin_timestamp, frame_info.frame_id);
+        trajectory_[kFrameIndex].end_pose = Pose(SE3(), frame_info.end_timestamp, frame_info.frame_id);
 
-        if (index_frame <= 1) {
+        if (kFrameIndex <= 1) {
             // Initialize first pose at Identity
-            trajectory_[index_frame].begin_R = Eigen::MatrixXd::Identity(3, 3);
-            trajectory_[index_frame].begin_t = Eigen::Vector3d(0., 0., 0.);
-            trajectory_[index_frame].end_R = Eigen::MatrixXd::Identity(3, 3);
-            trajectory_[index_frame].end_t = Eigen::Vector3d(0., 0., 0.);
-        } else if (index_frame == 2) {
+
+        } else if (kFrameIndex == 2) {
             if (options_.initialization == INIT_CONSTANT_VELOCITY) {
                 // Different regimen for the second frame due to the bootstrapped elasticity
-                Eigen::Matrix3d R_next_end =
-                        trajectory_[index_frame - 1].end_R * trajectory_[index_frame - 2].end_R.inverse() *
-                        trajectory_[index_frame - 1].end_R;
-                Eigen::Vector3d t_next_end = trajectory_[index_frame - 1].end_t +
-                                             trajectory_[index_frame - 1].end_R *
-                                             trajectory_[index_frame - 2].end_R.inverse() *
-                                             (trajectory_[index_frame - 1].end_t -
-                                              trajectory_[index_frame - 2].end_t);
-
-                trajectory_[index_frame].begin_R = trajectory_[index_frame - 1].end_R;
-                trajectory_[index_frame].begin_t = trajectory_[index_frame - 1].end_t;
-                trajectory_[index_frame].end_R = R_next_end;
-                trajectory_[index_frame].end_t = t_next_end;
+                trajectory_[kFrameIndex].begin_pose.pose = trajectory_[kFrameIndex - 1].end_pose.pose;
+                trajectory_[kFrameIndex].end_pose.pose = trajectory_[kFrameIndex - 1].end_pose.pose *
+                                                         trajectory_[kFrameIndex - 2].end_pose.pose.Inverse() *
+                                                         trajectory_[kFrameIndex - 1].end_pose.pose;
             } else {
                 // Important ! Start with a rigid frame and let the ICP distort it !
-                trajectory_[index_frame] = trajectory_[index_frame - 1];
-                trajectory_[index_frame].end_t = trajectory_[index_frame].begin_t;
-                trajectory_[index_frame].end_R = trajectory_[index_frame].begin_R;
+                // It would make more sense to start
+                trajectory_[kFrameIndex].begin_pose.pose = trajectory_[kFrameIndex - 1].begin_pose.pose;
+                trajectory_[kFrameIndex].end_pose.pose = trajectory_[kFrameIndex].begin_pose.pose;
             }
         } else {
+            const auto &frame_m_1 = trajectory_[kFrameIndex - 1];
+            const auto &frame_m_2 = trajectory_[kFrameIndex - 2];
+
             if (options_.initialization == INIT_CONSTANT_VELOCITY) {
                 if (options_.motion_compensation == CONTINUOUS) {
                     // When continuous: use the previous begin_pose as reference
-                    Eigen::Matrix3d R_next_begin =
-                            trajectory_[index_frame - 1].begin_R * trajectory_[index_frame - 2].begin_R.inverse() *
-                            trajectory_[index_frame - 1].begin_R;
-                    Eigen::Vector3d t_next_begin = trajectory_[index_frame - 1].begin_t +
-                                                   trajectory_[index_frame - 1].begin_R *
-                                                   trajectory_[index_frame - 2].begin_R.inverse() *
-                                                   (trajectory_[index_frame - 1].begin_t -
-                                                    trajectory_[index_frame - 2].begin_t);
-
-                    trajectory_[index_frame].begin_R = R_next_begin;; //trajectory_[index_frame - 1].end_R;
-                    trajectory_[index_frame].begin_t = t_next_begin;; //trajectory_[index_frame - 1].end_t;
+                    auto next_begin = frame_m_1.begin_pose.pose *
+                                      frame_m_2.begin_pose.pose.Inverse() *
+                                      frame_m_1.begin_pose.pose;
+                    trajectory_[kFrameIndex].begin_pose.pose = next_begin;
                 } else {
                     // When not continuous: set the new begin and previous end pose to be consistent
-                    trajectory_[index_frame].begin_R = trajectory_[index_frame - 1].end_R;
-                    trajectory_[index_frame].begin_t = trajectory_[index_frame - 1].end_t;
+                    trajectory_[kFrameIndex].begin_pose.pose = frame_m_1.end_pose.pose;
                 }
-
-                Eigen::Matrix3d R_next_end =
-                        trajectory_[index_frame - 1].end_R * trajectory_[index_frame - 2].end_R.inverse() *
-                        trajectory_[index_frame - 1].end_R;
-                Eigen::Vector3d t_next_end = trajectory_[index_frame - 1].end_t +
-                                             trajectory_[index_frame - 1].end_R *
-                                             trajectory_[index_frame - 2].end_R.inverse() *
-                                             (trajectory_[index_frame - 1].end_t -
-                                              trajectory_[index_frame - 2].end_t);
-
-                trajectory_[index_frame].end_R = R_next_end;
-                trajectory_[index_frame].end_t = t_next_end;
+                trajectory_[kFrameIndex].end_pose.pose = trajectory_[kFrameIndex - 1].end_pose.pose *
+                                                         trajectory_[kFrameIndex - 2].end_pose.pose.Inverse() *
+                                                         trajectory_[kFrameIndex - 1].end_pose.pose;
             } else {
-                trajectory_[index_frame] = trajectory_[index_frame - 1];
-                // Important ! Start with a rigid frame and let the ICP distort it !
-                trajectory_[index_frame] = trajectory_[index_frame - 1];
-                trajectory_[index_frame].end_t = trajectory_[index_frame].begin_t;
-                trajectory_[index_frame].end_R = trajectory_[index_frame].begin_R;
+                trajectory_[kFrameIndex].begin_pose.pose = frame_m_1.begin_pose.pose;
+                trajectory_[kFrameIndex].end_pose.pose = frame_m_1.end_pose.pose;
             }
         }
-        return index_frame;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    std::vector<Point3D> Odometry::InitializeFrame(const std::vector<Point3D> &const_frame,
-                                                   int index_frame) {
+    std::vector<slam::WPoint3D> Odometry::InitializeFrame(const std::vector<slam::WPoint3D> &const_frame,
+                                                          FrameInfo frame_info) {
 
         /// PREPROCESS THE INITIAL FRAME
-        double sample_size = index_frame < options_.init_num_frames ? options_.init_voxel_size : options_.voxel_size;
-        std::vector<Point3D> frame(const_frame);
+        double sample_size = frame_info.registered_fid < options_.init_num_frames ?
+                             options_.init_voxel_size : options_.voxel_size;
+        std::vector<slam::WPoint3D> frame(const_frame);
+        const auto kIndexFrame = frame_info.registered_fid;
 
         std::mt19937_64 g;
         std::shuffle(frame.begin(), frame.end(), g);
@@ -283,51 +261,38 @@ namespace ct_icp {
         sub_sample_frame(frame, sample_size);
 
         // No elastic ICP for first frame because no initialization of ego-motion
-        if (index_frame == 1) {
-            for (auto &point3D: frame) {
-                point3D.alpha_timestamp = 1.0;
+        if (kIndexFrame <= 1) {
+            for (auto &point: frame) {
+                point.Timestamp() = frame_info.end_timestamp;
             }
         }
 
         std::shuffle(frame.begin(), frame.end(), g);
 
-        if (index_frame > 1) {
+        if (kIndexFrame > 1) {
+            const auto &tr_frame = trajectory_[kIndexFrame];
             if (options_.motion_compensation == CONSTANT_VELOCITY) {
                 // The motion compensation of Constant velocity modifies the raw points of the point cloud
-                auto &tr_frame = trajectory_[index_frame];
-                Eigen::Quaterniond begin_quat(tr_frame.begin_R);
-                Eigen::Quaterniond end_quat(tr_frame.end_R);
-                DistortFrame(frame, begin_quat, end_quat, tr_frame.begin_t, tr_frame.end_t);
+                DistortFrame(frame, tr_frame.begin_pose, tr_frame.end_pose);
             }
 
-            auto q_begin = Eigen::Quaterniond(trajectory_[index_frame].begin_R);
-            auto q_end = Eigen::Quaterniond(trajectory_[index_frame].end_R);
-            Eigen::Vector3d t_begin = trajectory_[index_frame].begin_t;
-            Eigen::Vector3d t_end = trajectory_[index_frame].end_t;
-            for (auto &point3D: frame) {
-                TransformPoint(options_.motion_compensation, point3D, q_begin, q_end, t_begin, t_end);
+            for (auto &point: frame) {
+                TransformPoint(options_.motion_compensation, point,
+                               tr_frame.begin_pose,
+                               tr_frame.end_pose);
             }
         }
 
-        double min_timestamp = std::numeric_limits<double>::max();
-        double max_timestamp = std::numeric_limits<double>::min();
         for (auto &point: frame) {
-            point.index_frame = index_frame;
-            if (point.timestamp > max_timestamp)
-                max_timestamp = point.timestamp;
-            if (point.timestamp < min_timestamp)
-                min_timestamp = point.timestamp;
+            point.index_frame = frame_info.frame_id;
         }
-
-        trajectory_[index_frame].begin_timestamp = min_timestamp;
-        trajectory_[index_frame].end_timestamp = max_timestamp;
 
         return frame;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    Odometry::RegistrationSummary Odometry::DoRegister(const std::vector<Point3D> &const_frame,
-                                                       int index_frame) {
+    Odometry::RegistrationSummary Odometry::DoRegister(const std::vector<slam::WPoint3D> &const_frame,
+                                                       FrameInfo frame_info) {
         auto start = std::chrono::steady_clock::now();
         auto &log_out = *log_out_;
         bool kDisplay = options_.debug_print;
@@ -338,19 +303,20 @@ namespace ct_icp {
         const double kMinDistancePoints = options_.min_distance_points;
         const int kMaxNumPointsInVoxel = options_.max_num_points_in_voxel;
 
+        const auto kIndexFrame = frame_info.registered_fid;
         if (kDisplay) {
             log_out << "/* ------------------------------------------------------------------------ */" << std::endl;
             log_out << "/* ------------------------------------------------------------------------ */" << std::endl;
-            log_out << "REGISTRATION OF FRAME number " << index_frame <<
-                    " with " << (options_.ct_icp_options.solver == CERES ? "CERES" : "GN") << " solver" << std::endl;
+            log_out << "REGISTRATION OF FRAME number " << kIndexFrame << " (Fid:" << frame_info.frame_id << ") with "
+                    << (options_.ct_icp_options.solver == CERES ? "CERES" : "GN") << " solver" << std::endl;
         }
 
-        auto frame = InitializeFrame(const_frame, index_frame);
+        auto frame = InitializeFrame(const_frame, frame_info);
         if (kDisplay)
             log_out << "Number of points in sub-sampled frame: " << frame.size() << " / " << const_frame.size()
                     << std::endl;
-        if (index_frame > 0) {
-            Eigen::Vector3d t_diff = trajectory_[index_frame].end_t - trajectory_[index_frame].begin_t;
+        if (kIndexFrame > 0) {
+            Eigen::Vector3d t_diff = trajectory_[kIndexFrame].EndTr() - trajectory_[kIndexFrame].BeginTr();
             if (kDisplay)
                 log_out << "Initial ego-motion distance: " << t_diff.norm() << std::endl;
         }
@@ -358,20 +324,20 @@ namespace ct_icp {
         const auto initial_estimate = trajectory_.back();
         RegistrationSummary summary;
         summary.frame = initial_estimate;
+        auto &current_frame = summary.frame;
         auto previous_frame = initial_estimate;
 
-
-        if (index_frame > 0) {
+        if (kIndexFrame > 0) {
             bool good_enough_registration = false;
             summary.number_of_attempts = 1;
-            double sample_voxel_size = index_frame < options_.init_num_frames ?
+            double sample_voxel_size = kIndexFrame < options_.init_num_frames ?
                                        options_.init_sample_voxel_size : options_.sample_voxel_size;
             double min_voxel_size = std::min(options_.init_voxel_size, options_.voxel_size);
 
             auto increase_robustness_level = [&]() {
-                previous_frame = summary.frame;
+                previous_frame = current_frame;
                 // Handle the failure cases
-                trajectory_[index_frame] = initial_estimate;
+                current_frame = initial_estimate;
                 ct_icp_options.voxel_neighborhood = std::min(++ct_icp_options.voxel_neighborhood,
                                                              options_.robust_max_voxel_neighborhood);
                 ct_icp_options.ls_max_num_iters += 30;
@@ -396,7 +362,7 @@ namespace ct_icp {
                     continue;
                 }
                 auto start_ct_icp = std::chrono::steady_clock::now();
-                TryRegister(frame, index_frame, ct_icp_options, summary, sample_voxel_size);
+                TryRegister(frame, frame_info, ct_icp_options, summary, sample_voxel_size);
                 auto end_ct_icp = std::chrono::steady_clock::now();
                 std::chrono::duration<double> elapsed_icp = (end_ct_icp - start);
                 if (kDisplay) {
@@ -406,18 +372,27 @@ namespace ct_icp {
                 }
 
                 // Compute Modification of trajectory
-                if (index_frame > 0) {
-                    summary.distance_correction = (trajectory_[index_frame].begin_t -
-                                                   trajectory_[index_frame - 1].end_t).norm();
+                if (kIndexFrame > 0) {
+                    summary.distance_correction = (current_frame.BeginTr() -
+                                                   trajectory_[kIndexFrame - 1].EndTr()).norm();
 
-                    Eigen::Matrix3d delta_R = (trajectory_[index_frame - 1].end_R *
-                                               trajectory_[index_frame].begin_R.inverse());
-                    summary.relative_orientation = AngularDistance(trajectory_[index_frame - 1].end_R,
-                                                                   trajectory_[index_frame].end_R);
+                    std::cout << "Hello1" << std::endl;
+                    auto norm = ((trajectory_[kIndexFrame - 1].EndQuat().normalized().toRotationMatrix() *
+                                  current_frame.EndQuat().normalized().toRotationMatrix().transpose()).trace() - 1.) / 2.;
+                    if (std::abs(norm) > 1. + 1.e-8) {
+                        std::cout << "Not a rotation matrix " << norm << std::endl;
+                    }
+
+                    summary.relative_orientation = AngularDistance(trajectory_[kIndexFrame - 1].end_pose.pose,
+                                                                   current_frame.end_pose.pose);
+                    std::cout << "Hello2" << std::endl;
+
+
                     summary.ego_orientation = summary.frame.EgoAngularDistance();
 
                 }
-                summary.relative_distance = (trajectory_[index_frame].end_t - trajectory_[index_frame].begin_t).norm();
+                summary.relative_distance = (current_frame.EndTr() -
+                                             current_frame.BeginTr()).norm();
 
                 good_enough_registration = AssessRegistration(frame, summary,
                                                               kDisplay ? &log_out : nullptr);
@@ -445,8 +420,6 @@ namespace ct_icp {
                 }
             } while (!good_enough_registration);
 
-            trajectory_[index_frame].success = summary.success;
-
             if (!summary.success) {
                 if (kDisplay)
                     log_out << "Failure to register, after " << summary.number_of_attempts << std::endl;
@@ -457,17 +430,19 @@ namespace ct_icp {
                 robust_num_consecutive_failures_++;
             else
                 robust_num_consecutive_failures_ = 0;
+
+            trajectory_[kIndexFrame] = summary.frame;
         }
 
         if (kDisplay) {
-            if (index_frame > 0) {
+            if (kIndexFrame > 0) {
                 log_out << "Trajectory correction [begin(t) - end(t-1)]: "
                         << summary.distance_correction << std::endl;
                 log_out << "Final ego-motion distance: " << summary.relative_distance << std::endl;
             }
         }
 
-        if (index_frame == 0) {
+        if (kIndexFrame == 0) {
             voxel_map_.clear();
         }
 
@@ -551,7 +526,7 @@ namespace ct_icp {
 
         // Remove voxels too far from actual position of the vehicule
         const double kMaxDistance = options_.max_distance;
-        const Eigen::Vector3d location = trajectory_[index_frame].end_t;
+        const Eigen::Vector3d location = trajectory_[kIndexFrame].EndTr();
         RemovePointsFarFromLocation(voxel_map_, location, kMaxDistance);
 
 
@@ -570,14 +545,13 @@ namespace ct_icp {
         summary.corrected_points = frame;
         summary.all_corrected_points = const_frame;
 
-        Eigen::Quaterniond q_begin(summary.frame.begin_R);
-        Eigen::Quaterniond q_end(summary.frame.end_R);
+        const auto &begin_pose = summary.frame.begin_pose;
+        const auto &end_pose = summary.frame.end_pose;
 
-        for (auto &point3D: summary.all_corrected_points) {
-            double timestamp = point3D.alpha_timestamp;
-            Eigen::Quaterniond slerp = q_begin.slerp(timestamp, q_end).normalized();
-            point3D.pt = slerp.toRotationMatrix() * point3D.raw_pt +
-                         summary.frame.begin_t * (1.0 - timestamp) + timestamp * summary.frame.end_t;
+        for (auto &point: summary.all_corrected_points) {
+            point.WorldPoint() = begin_pose.ContinuousTransform(point.RawPoint(),
+                                                                end_pose,
+                                                                point.Timestamp());
         }
 
         return summary;
@@ -585,30 +559,21 @@ namespace ct_icp {
 
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    Odometry::RegistrationSummary Odometry::TryRegister(vector<Point3D> &frame, int index_frame,
+    Odometry::RegistrationSummary Odometry::TryRegister(vector<slam::WPoint3D> &frame, FrameInfo frame_info,
                                                         CTICPOptions &options,
                                                         RegistrationSummary &registration_summary,
                                                         double sample_voxel_size) {
         // Use new sub_sample frame as keypoints
-        std::vector<Point3D> keypoints;
+        std::vector<slam::WPoint3D> keypoints;
         grid_sampling(frame, keypoints, sample_voxel_size);
 
-
+        const auto kIndexFrame = frame_info.registered_fid;
         auto num_keypoints = (int) keypoints.size();
         registration_summary.sample_size = num_keypoints;
 
+        const TrajectoryFrame *previous_frame = kIndexFrame <= 1 ? nullptr : &trajectory_[kIndexFrame - 1];
         {
-
-            /// TODO: Remove refactoring variables
-            TrajectoryFrame _previous_frame, _frame_to_optimize(trajectory_[index_frame], index_frame);
-            TrajectoryFrame *_previous_frame_ptr = nullptr;
-            auto slam_keypoints = ct_icp_to_slam(keypoints);
-            if (index_frame >= 1) {
-                _previous_frame = TrajectoryFrame(trajectory_[index_frame - 1], index_frame - 1);
-                _previous_frame_ptr = &_previous_frame;
-            }
-            ///
-            if (index_frame < options_.init_num_frames) {
+            if (kIndexFrame < options_.init_num_frames) {
                 // Initialization regimen
                 options.voxel_neighborhood = std::max(static_cast<short>(2), options.voxel_neighborhood);
                 options.threshold_voxel_occupancy = 1;
@@ -618,14 +583,13 @@ namespace ct_icp {
             //CT ICP
             ICPSummary icp_summary;
             if (options_.ct_icp_options.solver == CT_ICP_SOLVER::GN) {
-                icp_summary = CT_ICP_GN(options, voxel_map_, slam_keypoints,
-                                        _frame_to_optimize, _previous_frame_ptr);
+                icp_summary = CT_ICP_GN(options, voxel_map_, keypoints,
+                                        registration_summary.frame, previous_frame);
             } else {
-                icp_summary = CT_ICP_CERES(options, voxel_map_, slam_keypoints,
-                                           _frame_to_optimize, _previous_frame_ptr);
+                icp_summary = CT_ICP_CERES(options, voxel_map_, keypoints,
+                                           registration_summary.frame, previous_frame);
             }
 
-            trajectory_[index_frame] = _frame_to_optimize.ConvertFrame();
             registration_summary.success = icp_summary.success;
             registration_summary.number_of_residuals = icp_summary.num_residuals_used;
 
@@ -635,23 +599,20 @@ namespace ct_icp {
             }
 
             //Update frame
-            auto q_begin = Eigen::Quaterniond(trajectory_[index_frame].begin_R);
-            auto q_end = Eigen::Quaterniond(trajectory_[index_frame].end_R);
-            Eigen::Vector3d t_begin = trajectory_[index_frame].begin_t;
-            Eigen::Vector3d t_end = trajectory_[index_frame].end_t;
+            auto pose_begin = registration_summary.frame.begin_pose;
+            auto pose_end = registration_summary.frame.end_pose;
             for (auto &point: frame) {
                 // Modifies the world point of the frame based on the raw_pt
-                TransformPoint(options_.motion_compensation, point, q_begin, q_end, t_begin, t_end);
+                TransformPoint(options_.motion_compensation, point, pose_begin, pose_end);
             }
 
-            registration_summary.keypoints = slam_to_ct_icp(slam_keypoints);
+            registration_summary.keypoints = keypoints;
         }
-        registration_summary.frame = trajectory_[index_frame];
         return registration_summary;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    bool Odometry::AssessRegistration(const vector<Point3D> &points,
+    bool Odometry::AssessRegistration(const vector<slam::WPoint3D> &points,
                                       RegistrationSummary &summary, std::ostream *log_stream) const {
 
         bool success = summary.success;
@@ -683,7 +644,7 @@ namespace ct_icp {
                 double ratio_half_full_voxel = 0;
 
                 for (auto &point: points) {
-                    voxel = Voxel::Coordinates(point.pt, kSizeVoxelMap);
+                    voxel = Voxel::Coordinates(point.world_point, kSizeVoxelMap);
                     if (voxel_map_.find(voxel) == voxel_map_.end())
                         ratio_empty_voxel += 1;
                     if (voxel_map_.find(voxel) != voxel_map_.end() &&
@@ -725,7 +686,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    std::vector<TrajectoryFrameV1> Odometry::Trajectory() const {
+    std::vector<TrajectoryFrame> Odometry::Trajectory() const {
         return trajectory_;
     }
 
@@ -841,11 +802,12 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    void AddPointsToMap(VoxelHashMap &map, const vector<Point3D> &points, double voxel_size,
+    void AddPointsToMap(VoxelHashMap &map, const vector<slam::WPoint3D> &points, double voxel_size,
                         int max_num_points_in_voxel, double min_distance_points, int min_num_points) {
         //Update Voxel Map
         for (const auto &point: points) {
-            AddPointToMap(map, point.pt, voxel_size, max_num_points_in_voxel, min_distance_points, min_num_points);
+            AddPointToMap(map, point.world_point, voxel_size, max_num_points_in_voxel, min_distance_points,
+                          min_num_points);
         }
     }
 

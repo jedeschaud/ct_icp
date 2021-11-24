@@ -26,13 +26,13 @@ namespace ct_icp {
 
         virtual bool HasNext() const = 0;
 
-        virtual std::vector<Point3D> Next() = 0;
+        virtual std::vector<slam::WPoint3D> Next() = 0;
 
         virtual size_t NumFrames() const {
             return -1;
         }
 
-        virtual std::vector<Point3D> Frame(size_t index) const {
+        virtual std::vector<WPoint3D> Frame(size_t index) const {
             throw std::runtime_error("Random Access is not supported");
         }
 
@@ -78,23 +78,23 @@ namespace ct_icp {
     std::vector<SequenceInfo> get_sequences(const DatasetOptions &);
 
     // Reads a PointCloud from the Dataset PLY_DIRECTORY
-    std::vector<Point3D> read_ply_pointcloud(const DatasetOptions&, const std::string& path);
+    std::vector<WPoint3D> read_ply_pointcloud(const DatasetOptions&, const std::string& path);
 
     // Reads a PointCloud from the Dataset KITTI_raw
-    std::vector<Point3D> read_kitti_raw_pointcloud(const DatasetOptions &, const std::string &path);
+    std::vector<WPoint3D> read_kitti_raw_pointcloud(const DatasetOptions &, const std::string &path);
 
     // Reads a PointCloud from the Dataset KITTI_CARLA
-    std::vector<Point3D> read_kitti_carla_pointcloud(const DatasetOptions &, const std::string &path);
+    std::vector<WPoint3D> read_kitti_carla_pointcloud(const DatasetOptions &, const std::string &path);
 
     // Reads a PointCloud from the Dataset KITTI
-    std::vector<Point3D> read_kitti_pointcloud(const DatasetOptions &, const std::string &path);
+    std::vector<WPoint3D> read_kitti_pointcloud(const DatasetOptions &, const std::string &path);
 
     // Reads a PointCloud from the disk
-    std::vector<Point3D> read_pointcloud(const DatasetOptions &, int sequence_id, int frame_id);
+    std::vector<WPoint3D> read_pointcloud(const DatasetOptions &, int sequence_id, int frame_id);
 
     // Converts A Trajectory Frame to the format of the ground truth
     // Note: This format depends on the dataset, and its evaluation protocol
-    ArrayPoses transform_trajectory_frame(const DatasetOptions &, const std::vector<TrajectoryFrameV1> &,
+    ArrayPoses transform_trajectory_frame(const DatasetOptions &, const std::vector<TrajectoryFrame> &,
                                           int sequence_id);
 
     // Returns the Sequence Name as a string given its id

@@ -27,8 +27,7 @@ bool TestCT_ICP(const ct_icp::CTICPOptions &options) {
     add_pc_model(1, keypoints, 5, Eigen::Vector3f(1.0, 0.0, 0.0));
 
     ct_icp::VoxelHashMap map;
-    auto ct_icp_points = ct_icp::slam_to_ct_icp(all_points);
-    ct_icp::AddPointsToMap(map, ct_icp_points,
+    ct_icp::AddPointsToMap(map, all_points,
                            options.size_voxel_map, 20, 0.1);
 
     ct_icp::TrajectoryFrame frame;
