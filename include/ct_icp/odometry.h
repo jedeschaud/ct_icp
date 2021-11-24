@@ -160,11 +160,13 @@ namespace ct_icp {
         [[nodiscard]] std::vector<TrajectoryFrameV1> Trajectory() const;
 
         // Returns the Aggregated PointCloud of the Local Map
-        [[nodiscard]] ArrayVector3d GetLocalMap() const;
+        [[nodiscard]] ArrayVector3d GetMapPointCloud() const;
 
         // Num Points in the Map
         // Note: This requires a traversal of the whole map which is in O(n)
         [[nodiscard]] size_t MapSize() const;
+
+        REF_GETTER(Map, voxel_map_)
 
     private:
         std::vector<TrajectoryFrameV1> trajectory_;

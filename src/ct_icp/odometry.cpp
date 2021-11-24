@@ -717,7 +717,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayVector3d Odometry::GetLocalMap() const {
+    ArrayVector3d Odometry::GetMapPointCloud() const {
         return MapAsPointcloud(voxel_map_);
     }
 
