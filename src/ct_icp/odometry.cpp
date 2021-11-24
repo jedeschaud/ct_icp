@@ -240,7 +240,7 @@ namespace ct_icp {
                                                          trajectory_[kFrameIndex - 1].end_pose.pose;
             } else {
                 trajectory_[kFrameIndex].begin_pose.pose = frame_m_1.begin_pose.pose;
-                trajectory_[kFrameIndex].end_pose.pose = frame_m_1.end_pose.pose;
+                trajectory_[kFrameIndex].end_pose.pose = frame_m_1.begin_pose.pose;
             }
         }
     }
@@ -378,7 +378,8 @@ namespace ct_icp {
 
                     std::cout << "Hello1" << std::endl;
                     auto norm = ((trajectory_[kIndexFrame - 1].EndQuat().normalized().toRotationMatrix() *
-                                  current_frame.EndQuat().normalized().toRotationMatrix().transpose()).trace() - 1.) / 2.;
+                                  current_frame.EndQuat().normalized().toRotationMatrix().transpose()).trace() - 1.) /
+                                2.;
                     if (std::abs(norm) > 1. + 1.e-8) {
                         std::cout << "Not a rotation matrix " << norm << std::endl;
                     }
@@ -442,9 +443,9 @@ namespace ct_icp {
             }
         }
 
-        if (kIndexFrame == 0) {
-            voxel_map_.clear();
-        }
+//        if (kIndexFrame == 0) {
+//            voxel_map_.clear();
+//        }
 
         bool add_points = true;
 

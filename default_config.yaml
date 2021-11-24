@@ -29,7 +29,7 @@ odometry_options:
   # CT_ICP OPTIONS ----
   ct_icp_options:
     size_voxel_map: 1.0 # The voxel size of in the voxel map
-    num_iters_icp: 5 # The number of iterations of the ICP
+    num_iters_icp: 10 # The number of iterations of the ICP
     min_number_neighbors: 20 # The minimum number of neighbor points to define a valid neighborhood
     voxel_neighborhood: 1
     max_number_neighbors: 20
@@ -42,10 +42,10 @@ odometry_options:
     beta_location_consistency: 0.001
     beta_constant_velocity: 0.001
 
-    solver: GN # Options: [GN=Gauss-Newton, CERES]
-    loss_function: HUBER # Options: [STANDARD, CAUCHY, HUBER, TOLERANT, TRUNCATED] (for CERES solver)
-    ls_max_num_iters: 1 # The number of steps performed for each iteration of the ICP (for CERES solver)
-    ls_num_threads:  16 # The number of threads to build and solve the least square system (for CERES solver)
+    solver: CERES # Options: [GN=Gauss-Newton, CERES]
+    loss_function: CAUCHY # Options: [STANDARD, CAUCHY, HUBER, TOLERANT, TRUNCATED] (for CERES solver)
+    ls_max_num_iters: 5 # The number of steps performed for each iteration of the ICP (for CERES solver)
+    ls_num_threads:  8 # The number of threads to build and solve the least square system (for CERES solver)
     ls_sigma: 0.1 # The sigma parameter for loss CAUCHY, HUBER, TOLERANT, TRUNCATED (for CERES solver)
     ls_tolerant_min_threshold: 0.05 # The tolerant parameter for loss TOLERANT (for CERES solver)
 
