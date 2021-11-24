@@ -593,11 +593,21 @@ namespace ct_icp {
         std::vector<Point3D> keypoints;
         grid_sampling(frame, keypoints, sample_voxel_size);
 
+
         auto num_keypoints = (int) keypoints.size();
         registration_summary.sample_size = num_keypoints;
 
         {
-            TrajectoryFrameV1 *previous_frame_ptr = index_frame >= 1 ? &trajectory_[index_frame - 1] : nullptr;
+
+            /// TODO: Remove refactoring variables
+            TrajectoryFrame _previous_frame, _frame_to_optimize(trajectory_[index_frame], index_frame);
+            TrajectoryFrame *_previous_frame_ptr = nullptr;
+            auto slam_keypoints = ct_icp_to_slam(keypoints);
+            if (index_frame >= 1) {
+                _previous_frame = TrajectoryFrame(trajectory_[index_frame - 1], index_frame - 1);
+                _previous_frame_ptr = &_previous_frame;
+            }
+            ///
             if (index_frame < options_.init_num_frames) {
                 // Initialization regimen
                 options.voxel_neighborhood = std::max(static_cast<short>(2), options.voxel_neighborhood);
@@ -608,12 +618,14 @@ namespace ct_icp {
             //CT ICP
             ICPSummary icp_summary;
             if (options_.ct_icp_options.solver == CT_ICP_SOLVER::GN) {
-                icp_summary = CT_ICP_GN(options, voxel_map_, keypoints,
-                                        trajectory_[index_frame], previous_frame_ptr);
+                icp_summary = CT_ICP_GN(options, voxel_map_, slam_keypoints,
+                                        _frame_to_optimize, _previous_frame_ptr);
             } else {
-                icp_summary = CT_ICP_CERES(options, voxel_map_, keypoints,
-                                           trajectory_[index_frame], previous_frame_ptr);
+                icp_summary = CT_ICP_CERES(options, voxel_map_, slam_keypoints,
+                                           _frame_to_optimize, _previous_frame_ptr);
             }
+
+            trajectory_[index_frame] = _frame_to_optimize.ConvertFrame();
             registration_summary.success = icp_summary.success;
             registration_summary.number_of_residuals = icp_summary.num_residuals_used;
 
@@ -631,8 +643,9 @@ namespace ct_icp {
                 // Modifies the world point of the frame based on the raw_pt
                 TransformPoint(options_.motion_compensation, point, q_begin, q_end, t_begin, t_end);
             }
+
+            registration_summary.keypoints = slam_to_ct_icp(slam_keypoints);
         }
-        registration_summary.keypoints = keypoints;
         registration_summary.frame = trajectory_[index_frame];
         return registration_summary;
     }

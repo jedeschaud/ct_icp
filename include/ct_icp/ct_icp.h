@@ -159,14 +159,14 @@ namespace ct_icp {
     //
     // Note: CT_ICP_CERES will modify the last TrajectoryFrame of the trajectory vector
     ICPSummary CT_ICP_CERES(const CTICPOptions &options,
-                            const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-                            TrajectoryFrameV1 &trajectory_frame,
-                            const TrajectoryFrameV1 *const previous_frame = nullptr);
+                            const VoxelHashMap &voxels_map, std::vector<slam::WPoint3D> &keypoints,
+                            TrajectoryFrame &trajectory_frame,
+                            const TrajectoryFrame *const previous_frame = nullptr);
 
     ICPSummary CT_ICP_GN(const CTICPOptions &options,
-                         const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-                         TrajectoryFrameV1 &trajectory_frame,
-                         const TrajectoryFrameV1 *const previous_frame = nullptr);
+                         const VoxelHashMap &voxels_map, std::vector<slam::WPoint3D> &keypoints,
+                         TrajectoryFrame &trajectory_frame,
+                         const TrajectoryFrame *const previous_frame = nullptr);
 
 } // namespace Elastic_ICP
 

@@ -495,23 +495,9 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     ICPSummary CT_ICP_CERES(const CTICPOptions &options,
-                            const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-                            TrajectoryFrameV1 &trajectory_frame,
-                            const TrajectoryFrameV1 *const previous_frame) {
-
-        // TODO: Remove
-        auto slam_keypoints = ct_icp_to_slam(keypoints);
-        slam::frame_id_t frame_id = keypoints.front().index_frame;
-        TrajectoryFrame frame_to_optimize(trajectory_frame, frame_id);
-        TrajectoryFrame __previous_frame;
-        if (previous_frame)
-            __previous_frame = TrajectoryFrame(*previous_frame, frame_id);
-        TrajectoryFrame *_previous_frame = previous_frame ? &__previous_frame : nullptr;
-        auto min_max_pair = std::minmax_element(slam_keypoints.begin(), slam_keypoints.end(),
-                                                [](const auto &lhs, const auto &rhs) {
-                                                    return lhs.TimestampConst() < rhs.TimestampConst();
-                                                });
-        // TODO
+                            const VoxelHashMap &voxels_map, std::vector<slam::WPoint3D> &slam_keypoints,
+                            TrajectoryFrame &frame_to_optimize,
+                            const TrajectoryFrame *const _previous_frame) {
 
         const short nb_voxels_visited = options.voxel_neighborhood;
         const int kMinNumNeighbors = options.min_number_neighbors;
@@ -566,7 +552,7 @@ namespace ct_icp {
             auto neighborhood = compute_neighborhood_distribution(vector_neighbors);
             planarity_weight = std::pow(neighborhood.a2D, options.power_planarity);
 
-            if (neighborhood.normal.dot(trajectory_frame.begin_t - location) < 0) {
+            if (neighborhood.normal.dot(frame_to_optimize.BeginTr() - location) < 0) {
                 neighborhood.normal = -1.0 * neighborhood.normal;
             }
             return neighborhood;
@@ -584,11 +570,11 @@ namespace ct_icp {
         for (int iter(0); iter < options.num_iters_icp; iter++) {
             transform_keypoints();
 
-            builder.InitProblem(keypoints.size() * options.num_closest_neighbors);
+            builder.InitProblem(slam_keypoints.size() * options.num_closest_neighbors);
             builder.AddParameterBlocks(begin_quat, end_quat, begin_t, end_t);
 
             // Add Point-to-plane residuals
-            int num_keypoints = keypoints.size();
+            int num_keypoints = slam_keypoints.size();
             int num_threads = options.ls_num_threads;
 #pragma omp parallel for num_threads(num_threads)
             for (int k = 0; k < num_keypoints; ++k) {
@@ -630,11 +616,11 @@ namespace ct_icp {
 
             auto problem = builder.GetProblem(number_of_residuals);
 
-            if (previous_frame && options.distance == CT_POINT_TO_PLANE) {
+            if (_previous_frame && options.distance == CT_POINT_TO_PLANE) {
                 // Add Regularisation residuals
                 problem->AddResidualBlock(new ceres::AutoDiffCostFunction<LocationConsistencyFunctor,
                                                   LocationConsistencyFunctor::NumResiduals(), 3>(
-                                                  new LocationConsistencyFunctor(previous_frame->end_t,
+                                                  new LocationConsistencyFunctor(_previous_frame->EndTr(),
                                                                                  sqrt(number_of_residuals *
                                                                                       options.beta_location_consistency))),
                                           nullptr,
@@ -714,11 +700,6 @@ namespace ct_icp {
         }
         transform_keypoints();
 
-        /// TODO
-        trajectory_frame = frame_to_optimize.ConvertFrame();
-        keypoints = slam_to_ct_icp(slam_keypoints);
-        ///
-
         ICPSummary summary;
         summary.success = true;
         summary.num_residuals_used = number_of_residuals;
@@ -727,23 +708,10 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     ICPSummary CT_ICP_GN(const CTICPOptions &options,
-                         const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
-                         TrajectoryFrameV1 &trajectory_frame,
-                         const TrajectoryFrameV1 *const previous_frame) {
+                         const VoxelHashMap &voxels_map, std::vector<slam::WPoint3D> &slam_keypoints,
+                         TrajectoryFrame &frame_to_optimize,
+                         const TrajectoryFrame *const _previous_frame) {
 
-        // TODO: Remove
-        auto slam_keypoints = ct_icp_to_slam(keypoints);
-        slam::frame_id_t frame_id = keypoints.front().index_frame;
-        TrajectoryFrame frame_to_optimize(trajectory_frame, frame_id);
-        TrajectoryFrame __previous_frame;
-        if (previous_frame)
-            __previous_frame = TrajectoryFrame(*previous_frame, frame_id);
-        TrajectoryFrame *_previous_frame = previous_frame ? &__previous_frame : nullptr;
-        auto min_max_pair = std::minmax_element(slam_keypoints.begin(), slam_keypoints.end(),
-                                                [](const auto &lhs, const auto &rhs) {
-                                                    return lhs.TimestampConst() < rhs.TimestampConst();
-                                                });
-        // TODO
         auto &pose_begin = frame_to_optimize.begin_pose;
         auto &pose_end = frame_to_optimize.end_pose;
 
@@ -807,7 +775,7 @@ namespace ct_icp {
                 double planarity_weight = neighborhood.a2D;
                 auto &normal = neighborhood.normal;
 
-                if (normal.dot(trajectory_frame.begin_t - pt_keypoint) < 0) {
+                if (normal.dot(frame_to_optimize.BeginTr() - pt_keypoint) < 0) {
                     normal = -1.0 * normal;
                 }
 
@@ -910,7 +878,7 @@ namespace ct_icp {
             }
 
             //Add constraints in trajectory
-            if (previous_frame) //no constraints for frame_index == 1
+            if (_previous_frame) //no constraints for frame_index == 1
             {
                 Eigen::Vector3d diff_traj = frame_to_optimize.BeginTr() - frame_to_optimize.EndTr();
                 A(3, 3) = A(3, 3) + ALPHA_C;
@@ -1006,11 +974,6 @@ namespace ct_icp {
         }
         summary.success = true;
         summary.num_residuals_used = number_keypoints_used;
-
-        /// TODO
-        trajectory_frame = frame_to_optimize.ConvertFrame();
-        keypoints = slam_to_ct_icp(slam_keypoints);
-        //
 
         return summary;
     }
