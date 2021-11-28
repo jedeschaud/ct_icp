@@ -28,7 +28,7 @@ endif ()
 find_package(SlamUtils REQUIRED CONFIG PATHS ${SLAM_UTILS_DIR} NO_DEFAULT_PATH)
 
 # ----------------------------------------------------------------------------------------------------------------------
-# Find package SlamUtils
+# Define Default variables
 
 SLAM_COMPILER_FLAGS()
 SLAM_DEFAULT_VARIABLES()
