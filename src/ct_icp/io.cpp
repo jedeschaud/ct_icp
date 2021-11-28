@@ -20,7 +20,7 @@ namespace ct_icp {
     const char sep = ' ';
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses LoadPoses(const std::string &file_path) {
+    ArrayPoses LoadPosesKITTIFormat(const std::string &file_path) {
         ArrayPoses poses;
         std::ifstream pFile(file_path);
         if (pFile.is_open()) {
@@ -42,7 +42,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    bool SavePoses(const std::string &file_path, const ArrayPoses &trajectory) {
+    bool SavePosesKITTIFormat(const std::string &file_path, const ArrayPoses &trajectory) {
 
 #ifdef CT_ICP_WITH_FS
         auto parent_path = fs::path(file_path).parent_path();

@@ -3,7 +3,12 @@
 
 #include <memory>
 #include "types.h"
+#include <filesystem>
 
+#include "SlamUtils/io.h"
+#include "SlamUtils/trajectory.h"
+
+namespace fs = std::filesystem;
 
 namespace ct_icp {
 
@@ -16,36 +21,127 @@ namespace ct_icp {
         PLY_DIRECTORY = 5
     };
 
-    DATASET DATASETFromString(const std::string&);
+    DATASET DATASETFromString(const std::string &);
 
     std::string DATASETEnumToString(DATASET dataset);
 
-    class DatasetSequence {
+    /**
+     * An ADatasetSequence allows access to the frames for a sequence of a dataset
+     */
+    class ADatasetSequence {
     public:
-        virtual ~DatasetSequence() = 0;
+        virtual ~ADatasetSequence() = 0;
 
-        virtual bool HasNext() const = 0;
+        struct Frame {
 
-        virtual std::vector<slam::WPoint3D> Next() = 0;
+            std::vector<slam::WPoint3D> points;
 
-        virtual size_t NumFrames() const {
+            std::optional<slam::Pose> begin_pose{};
+
+            std::optional<slam::Pose> end_pose{};
+
+            [[nodiscard]] inline bool HasGroundTruth() const {
+                return begin_pose.has_value() && end_pose.has_value();
+            }
+
+        };
+
+        // Whether the sequence contains another frame
+        [[nodiscard]] virtual bool HasNext() const { return false; };
+
+
+        // Returns the number of frames (-1 if the total number of frames is unknown)
+        [[nodiscard]] virtual size_t NumFrames() const {
             return -1;
         }
 
-        virtual std::vector<WPoint3D> Frame(size_t index) const {
-            throw std::runtime_error("Random Access is not supported");
-        }
+        // Returns the next frame (is the sequence contains one)
+        // Applies the eventual filter defined on the frame
+        virtual Frame NextFrame();
+
+        // Returns a frame at `index`. Throws an exception if the dataset does not support Random Access
+        // Applies the eventual filter defined on the frame
+        virtual Frame GetFrame(size_t index) const;
+
+        // Sets a filter on the frame
+        void SetFilter(std::function<void(std::vector<slam::WPoint3D> &)> &&filter);
+
+        // Remove the filter on the frame
+        void ClearFilter();
 
         virtual void SetInitFrame(int frame_index) {
             init_frame_id_ = frame_index;
         };
 
-        virtual bool WithRandomAccess() const {
-            return false;
-        }
+        // Whether the dataset support random access
+        virtual bool WithRandomAccess() const;
+
+        // Returns the ground truth if the dataset has a ground truth
+        virtual std::optional<std::vector<slam::Pose>> GroundTruth() { return {}; };
 
     protected:
+
+        // Returns the next frame (is the sequence contains one)
+        virtual Frame NextUnfilteredFrame() = 0;
+
+        [[nodiscard]] virtual Frame GetUnfilteredFrame(size_t index) const;
+
+
         int init_frame_id_ = 0; // The initial frame index of the sequence
+        std::optional<std::function<void(std::vector<slam::WPoint3D> &)>> filter_{};
+    };
+
+    inline std::string DefaultFilePattern(size_t index_file, int zero_padding = 6) {
+        std::stringstream ss;
+        ss << "frame_" << std::setw(zero_padding) << std::setfill('0') << index_file << ".ply";
+        return ss.str();
+    }
+
+    /**
+     * A Generic Sequence to iterate over a directory consisting of point cloud PLY files
+     */
+    class PLYDirectory : public ADatasetSequence {
+    public:
+        typedef std::function<std::string(size_t)> PatternFunctionType;
+
+        explicit PLYDirectory(fs::path &&root_path, size_t expected_size, PatternFunctionType &&optional_pattern);
+
+        static PLYDirectory FromDirectoryPath(const std::string &dir_path);
+
+        static std::shared_ptr<PLYDirectory> PtrFromDirectoryPath(const std::string &dir_path);
+
+        [[nodiscard]] bool HasNext() const override;
+
+        Frame NextUnfilteredFrame() override;
+
+        void SetGroundTruth(std::vector<Pose> &&poses);
+
+        void SetFilePattern(size_t expected_size, std::function<std::string(size_t)> &&file_pattern);
+
+        // Returns the number of frames (-1 if the total number of frames is unknown)
+        [[nodiscard]] size_t NumFrames() const;
+
+        // Returns a frame at `index`. Throws an exception if the dataset does not support Random Access
+        [[nodiscard]] Frame GetUnfilteredFrame(size_t index) const override;;
+
+        // Whether the dataset support random access
+        [[nodiscard]] bool WithRandomAccess() const override { return true; };
+
+        // Returns the ground truth if the dataset has a ground truth
+        std::optional<std::vector<slam::Pose>> GroundTruth() override;;
+
+        REF_GETTER(Schema, schema_)
+
+        explicit PLYDirectory(fs::path &&root_path,
+                              std::vector<std::string> &&file_names);
+
+    private:
+        std::vector<std::string> file_names_;
+        fs::path root_dir_path_;
+        slam::PointCloudSchema schema_;
+        size_t size_, it_ = 0;
+        std::optional<slam::LinearContinuousTrajectory> ground_truth_;
+        std::optional<PatternFunctionType> file_pattern_;
     };
 
     struct DatasetOptions {
@@ -72,46 +168,55 @@ namespace ct_icp {
 
         int sequence_size = -1;
 
+        bool with_ground_truth = false;
+
     };
 
-    // Returns the Pairs sequence_id, sequence_size found on disk for the provided options
-    std::vector<SequenceInfo> get_sequences(const DatasetOptions &);
+    /**
+     * An ADataset regroups multiple sequences
+     */
+    class Dataset {
+    public:
+        // Returns all detected sequences
+        std::vector<SequenceInfo> AllSequenceInfo() const;
 
-    // Reads a PointCloud from the Dataset PLY_DIRECTORY
-    std::vector<WPoint3D> read_ply_pointcloud(const DatasetOptions&, const std::string& path);
+        // Returns all detected sequences with ground truth
+        std::vector<SequenceInfo> AllSequenceInfoWithGT() const;
 
-    // Reads a PointCloud from the Dataset KITTI_raw
-    std::vector<WPoint3D> read_kitti_raw_pointcloud(const DatasetOptions &, const std::string &path);
+        // Returns all sequences
+        std::vector<std::shared_ptr<ADatasetSequence>> AllSequences() const;
 
-    // Reads a PointCloud from the Dataset KITTI_CARLA
-    std::vector<WPoint3D> read_kitti_carla_pointcloud(const DatasetOptions &, const std::string &path);
+        // Returns all sequences with ground truth
+        std::vector<std::shared_ptr<ADatasetSequence>> AllSequencesWithGroundTruth() const;
 
-    // Reads a PointCloud from the Dataset KITTI
-    std::vector<WPoint3D> read_kitti_pointcloud(const DatasetOptions &, const std::string &path);
+        inline DATASET DatasetType() const { return dataset_; };
 
-    // Reads a PointCloud from the disk
-    std::vector<WPoint3D> read_pointcloud(const DatasetOptions &, int sequence_id, int frame_id);
+        // Returns whether the dataset has a sequence named `sequence_name`
+        bool HasSequence(const std::string &sequence_name) const;
 
-    // Converts A Trajectory Frame to the format of the ground truth
-    // Note: This format depends on the dataset, and its evaluation protocol
-    ArrayPoses transform_trajectory_frame(const DatasetOptions &, const std::vector<TrajectoryFrame> &,
-                                          int sequence_id);
+        // Returns the ground truth poses given a sequence name
+        std::vector<Pose> GetGroundTruth(const std::string &sequence_name) const;
 
-    // Returns the Sequence Name as a string given its id
-    std::string sequence_name(const DatasetOptions &, int sequence_id);
+        static Dataset LoadDataset(const DatasetOptions &options);
 
-    // Returns whether the Sequence has a ground truth file
-    bool has_ground_truth(const DatasetOptions &, int sequence_id);
+    private:
+        Dataset(std::vector<std::shared_ptr<ADatasetSequence>> &&dataset_sequences,
+                std::vector<SequenceInfo> &&sequence_infos) :
+                sequence_infos_(std::move(sequence_infos)),
+                dataset_sequences_(std::move(dataset_sequences)) {
+            int i(0);
+            for (auto &seq_info: sequence_infos_) {
+                map_seq_info_seq_id_[seq_info.sequence_name] = i;
+                seq_info.sequence_id = i++;
+            }
+        }
 
-    // Loads the Ground Truth of a given sequence of a Dataset
-    ArrayPoses load_ground_truth(const DatasetOptions &, int sequence_id);
 
-    // Loads the Ground Truth in the sensor's reference frame
-    ArrayPoses load_sensor_ground_truth(const DatasetOptions &, int sequence_id);
-
-    // Returns a DatasetSequence
-    std::shared_ptr<DatasetSequence> get_dataset_sequence(const DatasetOptions &, int sequence_id = -1);
-
+        DATASET dataset_;
+        std::vector<std::shared_ptr<ADatasetSequence>> dataset_sequences_;
+        std::vector<SequenceInfo> sequence_infos_;
+        std::map<std::string, size_t> map_seq_info_seq_id_;
+    };
 }
 
 

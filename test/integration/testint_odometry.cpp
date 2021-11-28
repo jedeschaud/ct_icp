@@ -100,7 +100,6 @@ int main(int argc, char **argv) {
         add_poses_model(-1000, optimized_poses, 1., &color);
     }
 
-
 #ifdef CT_ICP_WITH_VIZ
     gui_thread.join();
 #endif

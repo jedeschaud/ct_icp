@@ -114,19 +114,10 @@ SLAMOptions read_config(const std::string &config_path) {
         OPTION_CLAUSE(slam_node, options, max_frames, int);
         OPTION_CLAUSE(slam_node, options, with_viz3d, bool);
 
+
         CHECK(slam_node["dataset_options"]) << "The node dataset_options must be specified in the config";
         auto dataset_node = slam_node["dataset_options"];
-        auto &dataset_options = options.dataset_options;
-
-        if (dataset_node["dataset"]) {
-            auto dataset = dataset_node["dataset"].as<std::string>();
-            dataset_options.dataset = DATASETFromString(dataset);
-        }
-        OPTION_CLAUSE(dataset_node, dataset_options, root_path, std::string);
-        OPTION_CLAUSE(dataset_node, dataset_options, fail_if_incomplete, bool);
-        OPTION_CLAUSE(dataset_node, dataset_options, min_dist_lidar_center, float);
-        OPTION_CLAUSE(dataset_node, dataset_options, nclt_num_aggregated_pc, int);
-        OPTION_CLAUSE(dataset_node, dataset_options, max_dist_lidar_center, float);
+        options.dataset_options = yaml_to_dataset_options(dataset_node);
 
         if (slam_node["odometry_options"]) {
             auto odometry_node = slam_node["odometry_options"];
@@ -141,7 +132,7 @@ SLAMOptions read_config(const std::string &config_path) {
             if (viz_mode_str == "AGGREGATED") {
                 options.viz_mode = AGGREGATED;
                 options.odometry_options.debug_viz = false;
-                options.odometry_options.ct_icp_options.debug_viz= false;
+                options.odometry_options.ct_icp_options.debug_viz = false;
             }
             if (viz_mode_str == "KEYPOINTS") {
                 options.odometry_options.debug_viz = true;
@@ -263,7 +254,7 @@ int main(int argc, char **argv) {
         }
         while (iterator_ptr->HasNext() && (options.max_frames < 0 || frame_id < options.max_frames)) {
             auto time_start_frame = std::chrono::steady_clock::now();
-            auto frame = iterator_ptr->Next();
+            auto frame = iterator_ptr->NextUnfilteredFrame();
 
             auto time_read_pointcloud = std::chrono::steady_clock::now();
 
@@ -344,7 +335,7 @@ int main(int argc, char **argv) {
             // Save trajectory to disk
             auto filepath = options.output_dir + _sequence_name + "_poses.txt";
             auto dual_poses_filepath = options.output_dir + _sequence_name + "_dual_poses.txt";
-            if (!SavePoses(filepath, trajectory_absolute_poses) ||
+            if (!SavePosesKITTIFormat(filepath, trajectory_absolute_poses) ||
                 !SaveTrajectoryFrame(dual_poses_filepath, trajectory)) {
                 std::cerr << "Error while saving the poses to " << filepath << std::endl;
                 std::cerr << "Make sure output directory " << options.output_dir << " exists" << std::endl;

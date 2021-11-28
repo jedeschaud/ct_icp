@@ -3,9 +3,11 @@
 ![LUCO_GIF](./doc/aggregated.GIF)
 ![NCLT_GIF](./doc/keypoints_gif.GIF)
 
-This repository implements the SLAM **CT-ICP** (see  [our article](https://arxiv.org/abs/2109.12979)), a lightweight, precise and versatile pure LiDAR odometry.
+This repository implements the SLAM **CT-ICP** (see  [our article](https://arxiv.org/abs/2109.12979)), a lightweight,
+precise and versatile pure LiDAR odometry.
 
-It is integrated with the python project **[pyLiDAR-SLAM](https://github.com/Kitware/pyLiDAR-SLAM)** which gives access to more datasets. 
+It is integrated with the python project **[pyLiDAR-SLAM](https://github.com/Kitware/pyLiDAR-SLAM)** which gives access
+to more datasets.
 **pyLiDAR-SLAM** requires the installation of the python binding for **CT-ICP** (see below).
 
 # Installation
@@ -19,77 +21,84 @@ source env.sh                                     # Setup the environment (.so l
  ```
 
 ##### Windows 10 sous PowerShell
+
 ```bash
 .\ct_icp_build.bat                  # Builds the project
 .\env.bat                           # Setup the environment (.so locations) 
 .\slam.exe -c default_config.yaml   # Launches the SLAM
  ```
 
-To modify options (for viz3d support, or python binding) for the windows script, you can directly modify the `ct_icp_build.bat` file.
+To modify options (for viz3d support, or python binding) for the windows script, you can directly modify
+the `ct_icp_build.bat` file.
 
 ### Visualization
 
-> As a debugging/visualization tool (and until we provide a ROS support `rosviz`) we use a home-made/experimental lightweight OpenGL-based pointcloud visualizer **[viz3d](https://github.com/pierdell/viz3d)** designed for our SLAM use case. 
-
+> As a debugging/visualization tool (and until we provide a ROS support `rosviz`) we use a home-made/experimental lightweight OpenGL-based pointcloud visualizer **[viz3d](https://github.com/pierdell/viz3d)** designed for our SLAM use case.
 
 # Python binding
 
 > The steps below will install a python package named `pyct_icp`:
 
 - Generate the cmake project with the following arguments (**Modify ct_icp_build.sh**):
-   
-  - `-DWITH_PYTHON_BINDING=ON`: Activate the option to build the python binding
-  - `-DPYTHON_EXECUTABLE=<path-to-target-python-exe>`: Path to the target python executable
+
+    - `-DWITH_PYTHON_BINDING=ON`: Activate the option to build the python binding
+    - `-DPYTHON_EXECUTABLE=<path-to-target-python-exe>`: Path to the target python executable
 - Go into the build folder (e.g `cd ./cmake-Release`)
 - Build the target `pyct_icp` with `make pyct_icp -j6`
 - Install the python project `pip install ./src/binding`
 
 > **Note:** This step is required to use **CT-ICP** with **pyLiDAR-SLAM**.
+
 # Install the Datasets
 
 The Datasets are publicly available at:
 https://cloud.mines-paristech.fr/index.php/s/UwgVFtiTOmrgKp5
 The folder is protected by a password (you can find it in an answer in the issues).
 
-Each dataset is a .zip archive containing the PLY scan file with the relative timestamps for each point in the frame, and if available, the ground truth poses.
+Each dataset is a .zip archive containing the PLY scan file with the relative timestamps for each point in the frame,
+and if available, the ground truth poses.
 
-To install each dataset, simply download and extract the archives on disk.
-The datasets are redistributions of existing and copyrighted datasets, we only offer a convenient repackaging of these datasets.
+To install each dataset, simply download and extract the archives on disk. The datasets are redistributions of existing
+and copyrighted datasets, we only offer a convenient repackaging of these datasets.
 
 The dataset available are the following:
 
 **Under Creative Commons Attribution-NonCommercial-ShareAlike LICENCE**
 
-- *KITTI* (see [eval_odometry.php](http://www.cvlibs.net/datasets/kitti/eval_odometry.php)): 
-  - The most popular benchmark for odometry evaluation.
-  - The sensor is a Velodyne HDL-64
-  - The frames are motion-compensated (no relative-timestamps) and the Continuous-Time aspect of CT-ICP will not work on this dataset.
-  - Contains 21 sequences for ~40k frames (11 with ground truth)
-- *KITTI_raw* (see [eval_odometry.php](http://www.cvlibs.net/datasets/kitti/eval_odometry.php)): : 
-  - The same dataset as *KITTI* without the motion-compensation, thus with meaningful timestamps.
-  - The raw data for sequence `03` is not available
+- *KITTI* (see [eval_odometry.php](http://www.cvlibs.net/datasets/kitti/eval_odometry.php)):
+    - The most popular benchmark for odometry evaluation.
+    - The sensor is a Velodyne HDL-64
+    - The frames are motion-compensated (no relative-timestamps) and the Continuous-Time aspect of CT-ICP will not work
+      on this dataset.
+    - Contains 21 sequences for ~40k frames (11 with ground truth)
+- *KITTI_raw* (see [eval_odometry.php](http://www.cvlibs.net/datasets/kitti/eval_odometry.php)): :
+    - The same dataset as *KITTI* without the motion-compensation, thus with meaningful timestamps.
+    - The raw data for sequence `03` is not available
 - *KITTI_360* (see [KITTI-360](http://www.cvlibs.net/datasets/kitti-360/)):
-  - The successor of *KITTI*, contains longer sequences with timestamped point clouds. 
-  - The sensor is also a Velodyne HDL-64
+    - The successor of *KITTI*, contains longer sequences with timestamped point clouds.
+    - The sensor is also a Velodyne HDL-64
 
 **Permissive LICENSE**
+
 - *NCLT*: (see [nclt](http://robots.engin.umich.edu/nclt/))
-  - Velodyne HDL-32 mounted on a segway 
-  - 27 long sequences (up to in the campus of MICHIGAN university over a long 
-  - Challenging motions (abrupt orientation changes)
-  - **NOTE**: For this dataset, directly download the *Velodyne* links (e.g. [2012-01-08_vel.tar](http://robots.engin.umich.edu/nclt/velodyne_data/2012-01-08_vel.tar.gz)).
-    Our code directly reads the *velodyne_hits.bin* file.
+    - Velodyne HDL-32 mounted on a segway
+    - 27 long sequences (up to in the campus of MICHIGAN university over a long
+    - Challenging motions (abrupt orientation changes)
+    - **NOTE**: For this dataset, directly download the *Velodyne* links (
+      e.g. [2012-01-08_vel.tar](http://robots.engin.umich.edu/nclt/velodyne_data/2012-01-08_vel.tar.gz)). Our code
+      directly reads the *velodyne_hits.bin* file.
 - *KITTI-CARLA*: (see and cite [KITTI-CARLA](https://arxiv.org/abs/2109.00892)):
-  - 7 sequences of 5000 frames generated using the [CARLA](https://carla.readthedocs.io/en/0.9.10/) simulator
-  - Imitates the KITTI sensor configuration (64 channel rotating LiDAR)
-  - Simulated motion with very abrupt rotations
-- *ParisLuco* (published with our work **CT-ICP**, cf below to cite us): 
-  - A single sequence taken around the Luxembourg Garden
-  - HDL-32, with numerous dynamic objects 
+    - 7 sequences of 5000 frames generated using the [CARLA](https://carla.readthedocs.io/en/0.9.10/) simulator
+    - Imitates the KITTI sensor configuration (64 channel rotating LiDAR)
+    - Simulated motion with very abrupt rotations
+- *ParisLuco* (published with our work **CT-ICP**, cf below to cite us):
+    - A single sequence taken around the Luxembourg Garden
+    - HDL-32, with numerous dynamic objects
 
 ## Running the SLAM
 
 ### Usage
+
 ``` 
 > chmod+x ./env.sh    # Set permission on unix to run env.sh
 > ./env.sh            # Setup environment variables 
@@ -126,16 +135,19 @@ Displays usage information and exits.
 
 To run the SLAM call (on Unix, adapt for windows), please follow the following steps:
 
-1. Modify/Copy and modify one of the default config (`default_config.yaml`, `robust_high_frequency_config.yaml` or `robust_driving_config.yaml`) to suit your needs.
-   **Notably:** change the dataset and dataset root_path ```dataset_options.dataset``` and ```dataset_options.root_path```.
+1. Modify/Copy and modify one of the default config (`default_config.yaml`, `robust_high_frequency_config.yaml`
+   or `robust_driving_config.yaml`) to suit your needs.
+   **Notably:** change the dataset and dataset root_path ```dataset_options.dataset```
+   and ```dataset_options.root_path```.
 2. Launch the SLAM with command:
-```./slam -c <config file path, e.g. default_config.yaml>  # Launches the SLAM on the default config```
+   ```./slam -c <config file path, e.g. default_config.yaml>  # Launches the SLAM on the default config```
 
 3. Find the trajectory (and optionally metrics if the dataset has a ground truth) in the output directory
 
 ## Citation
 
 If you use our work in your research project, please consider citing:
+
 ```
 @misc{dellenbach2021cticp,
   title={CT-ICP: Real-time Elastic LiDAR Odometry with Loop Closure},
@@ -147,13 +159,17 @@ If you use our work in your research project, please consider citing:
 }
 ```
 
-
 ## TODO
-- [ ] Refactor CT-ICP for the SlamUtils dependency
-- [ ] Improve the Dataset (use tinyply to read PLY files) 
+
+- [x] Refactor CT-ICP for the SlamUtils dependency
+- [x] Add Unit tests and Integration tests
+- [ ] Improve the Dataset (use tinyply to read PLY files)
 - [ ] Add regression / performance tests
-- [ ] Add them to the Github CI
+- [ ] NCLT Ground truth
+- [ ] Fix the binding (which is now broken)
+- [ ] Add tests/automatic build to the Github CI
 - [ ] Write ROS packaging
+ 
 - [ ] Extract the VoxelMap into SlamUtils
 - [ ] Add a wiki (documentation on the code)
 - [ ] Add point-to-distribution cost

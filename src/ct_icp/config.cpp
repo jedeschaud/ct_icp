@@ -22,7 +22,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    ct_icp::CTICPOptions yaml_to_ct_icp_options(YAML::Node &icp_node) {
+    ct_icp::CTICPOptions yaml_to_ct_icp_options(const YAML::Node &icp_node) {
         ct_icp::CTICPOptions icp_options;
 
         OPTION_CLAUSE(icp_node, icp_options, threshold_voxel_occupancy, int);
@@ -82,7 +82,7 @@ namespace ct_icp {
 
         if (icp_node["loss_function"]) {
             auto loss_function = icp_node["loss_function"].as<std::string>();
-            std::vector <std::string> loss_functions{
+            std::vector<std::string> loss_functions{
                     "STANDARD",
                     "CAUCHY",
                     "HUBER",
@@ -114,7 +114,7 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
 
-    ct_icp::OdometryOptions yaml_to_odometry_options(YAML::Node &odometry_node) {
+    ct_icp::OdometryOptions yaml_to_odometry_options(const YAML::Node &odometry_node) {
         ct_icp::OdometryOptions odometry_options;
 
         OPTION_CLAUSE(odometry_node, odometry_options, voxel_size, double);
@@ -189,5 +189,21 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
+    ct_icp::DatasetOptions yaml_to_dataset_options(const YAML::Node &dataset_node) {
+        ct_icp::DatasetOptions dataset_options;
+        if (dataset_node["dataset"]) {
+            auto dataset = dataset_node["dataset"].as<std::string>();
+            dataset_options.dataset = DATASETFromString(dataset);
+        }
+        OPTION_CLAUSE(dataset_node, dataset_options, root_path, std::string);
+        OPTION_CLAUSE(dataset_node, dataset_options, fail_if_incomplete, bool);
+        OPTION_CLAUSE(dataset_node, dataset_options, min_dist_lidar_center, float);
+        OPTION_CLAUSE(dataset_node, dataset_options, nclt_num_aggregated_pc, int);
+        OPTION_CLAUSE(dataset_node, dataset_options, max_dist_lidar_center, float);
+        return dataset_options;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+
 
 }

@@ -78,8 +78,8 @@ namespace ct_icp {
     inline void eval(const std::string &filename_poses_gt, const std::string &filename_poses_result,
                      std::list<seq_errors> &all_seq_errors) {
 
-        ArrayPoses poses_gt = LoadPoses(filename_poses_gt);
-        ArrayPoses poses_result = LoadPoses(filename_poses_result);
+        ArrayPoses poses_gt = LoadPosesKITTIFormat(filename_poses_gt);
+        ArrayPoses poses_result = LoadPosesKITTIFormat(filename_poses_result);
 
         auto seq_err = eval(poses_gt, poses_result);
         // Add to errors of all sequences

@@ -1,10 +1,10 @@
 #include <omp.h>
 #include <chrono>
-#include <ct_icp/odometry.h>
-#include <ct_icp/Utilities/PersoTimer.h>
-#include <ct_icp/utils.h>
 #include <iostream>
 #include <fstream>
+
+#include "ct_icp/odometry.h"
+#include "ct_icp/utils.h"
 
 #define _USE_MATH_DEFINES
 
@@ -13,7 +13,8 @@
 #ifdef CT_ICP_WITH_VIZ
 
 #include <viz3d/engine.h>
-#include <ct_icp/viz3d_utils.h>
+#include <SlamUtils/viz3d_utils.h>
+#include "ct_icp/viz3d_utils.h"
 
 #endif
 
@@ -343,10 +344,10 @@ namespace ct_icp {
                 ct_icp_options.ls_max_num_iters += 30;
                 if (ct_icp_options.max_num_residuals > 0)
                     ct_icp_options.max_num_residuals = ct_icp_options.max_num_residuals * 2;
-                ct_icp_options.num_iters_icp = min(ct_icp_options.num_iters_icp + 20, 50);
-                ct_icp_options.threshold_orientation_norm = max(
+                ct_icp_options.num_iters_icp = std::min(ct_icp_options.num_iters_icp + 20, 50);
+                ct_icp_options.threshold_orientation_norm = std::max(
                         ct_icp_options.threshold_orientation_norm / 10, 1.e-5);
-                ct_icp_options.threshold_translation_norm = max(
+                ct_icp_options.threshold_translation_norm = std::max(
                         ct_icp_options.threshold_orientation_norm / 10, 1.e-4);
                 sample_voxel_size = std::max(sample_voxel_size / 1.5, min_voxel_size);
                 ct_icp_options.ls_sigma *= 1.2;
@@ -517,7 +518,7 @@ namespace ct_icp {
                     scalars.push_back(point.z());
                 }
             }
-            model_data.rgb = get_viz3d_color(scalars, true, VIRIDIS);
+            model_data.rgb = get_viz3d_color(scalars, true, slam::VIRIDIS);
             model_data.point_size = 1;
             model_data.default_color = Eigen::Vector3f::Zero();
             instance.AddModel(-3, model_ptr);
@@ -560,7 +561,7 @@ namespace ct_icp {
 
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    Odometry::RegistrationSummary Odometry::TryRegister(vector<slam::WPoint3D> &frame, FrameInfo frame_info,
+    Odometry::RegistrationSummary Odometry::TryRegister(std::vector<slam::WPoint3D> &frame, FrameInfo frame_info,
                                                         CTICPOptions &options,
                                                         RegistrationSummary &registration_summary,
                                                         double sample_voxel_size) {
@@ -613,7 +614,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    bool Odometry::AssessRegistration(const vector<slam::WPoint3D> &points,
+    bool Odometry::AssessRegistration(const std::vector<slam::WPoint3D> &points,
                                       RegistrationSummary &summary, std::ostream *log_stream) const {
 
         bool success = summary.success;
@@ -803,7 +804,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    void AddPointsToMap(VoxelHashMap &map, const vector<slam::WPoint3D> &points, double voxel_size,
+    void AddPointsToMap(VoxelHashMap &map, const std::vector<slam::WPoint3D> &points, double voxel_size,
                         int max_num_points_in_voxel, double min_distance_points, int min_num_points) {
         //Update Voxel Map
         for (const auto &point: points) {

@@ -1,7 +1,6 @@
 #include <thread>
 #include <viz3d/engine.h>
 #include <SlamUtils/types.h>
-#include <SlamUtils/viz3d_utils.h>
 #include <ct_icp/ct_icp.h>
 #include <ct_icp/odometry.h>
 #include "testint_utils.h"

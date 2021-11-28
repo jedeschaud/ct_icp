@@ -1,0 +1,1 @@
+SLAM_ADD_TEST(test_dataset CT_ICP Slam::SlamUtils tinyply::tinyply)

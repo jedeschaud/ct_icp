@@ -16,10 +16,7 @@ SLAM_ADD_SOURCES(
         cost_function
         utils
         io
-        evaluate_slam
-        Utilities/File
-        Utilities/PersoTimer
-        Utilities/PlyFile)
+        evaluate_slam)
 
 if (WITH_VIZ3D)
     SLAM_ADD_SOURCES(
