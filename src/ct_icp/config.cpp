@@ -204,6 +204,14 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
+    std::vector<ct_icp::DatasetOptions> yaml_to_dataset_options_vector(const YAML::Node &node) {
+        std::vector<ct_icp::DatasetOptions> datasets_option;
+        for (auto &child: node) {
+            ct_icp::DatasetOptions option = ct_icp::yaml_to_dataset_options(child);
+            datasets_option.push_back(option);
+        }
+        return datasets_option;
+    }
 
 
 }

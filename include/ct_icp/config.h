@@ -25,6 +25,9 @@ namespace ct_icp {
     // Returns an DatasetOptions from a YAML::Node
     ct_icp::DatasetOptions yaml_to_dataset_options(const YAML::Node &node);
 
+    // Returns a vector of DatasetOptions from a YAML::Node
+    std::vector<ct_icp::DatasetOptions> yaml_to_dataset_options_vector(const YAML::Node &node);
+
 }
 
 #endif //CT_ICP_CONFIG_H

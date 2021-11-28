@@ -144,6 +144,12 @@ namespace ct_icp {
         std::optional<PatternFunctionType> file_pattern_;
     };
 
+    struct SequenceOptions {
+        std::string sequence_name; // The name of the sequence
+        int start_frame_id = 0; // The first frame of the sequence
+        int max_num_frames = -1; // The maximum number of frames to run for (-1 to run on all frames)
+    };
+
     struct DatasetOptions {
 
         DATASET dataset;
@@ -157,6 +163,10 @@ namespace ct_icp {
         double max_dist_lidar_center = 100.0; // Threshold to filter points too far to the LiDAR center
 
         int nclt_num_aggregated_pc = 220; // The number of hits to aggregate for NCLT Dataset
+
+        bool use_all_datasets = true; // Whether to use all sequences, or only the ones specified in param `sequence_options`
+
+        std::vector<SequenceOptions> sequence_options;
 
     };
 

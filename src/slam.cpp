@@ -18,7 +18,6 @@
 #include <ct_icp/utils.h>
 #include <ct_icp/config.h>
 
-
 #ifdef CT_ICP_WITH_VIZ
 
 #include <viz3d/engine.h>
@@ -44,12 +43,9 @@ struct ControlSlamWindow : viz::ExplorationEngine::GUIWindow {
 
 #endif
 
-
 using namespace ct_icp;
 
-
 namespace ct_icp {
-
 
     enum SLAM_VIZ_MODE {
         AGGREGATED,     // Will display all aggregated frames
@@ -59,7 +55,7 @@ namespace ct_icp {
     // Parameters to run the SLAM
     struct SLAMOptions {
 
-        DatasetOptions dataset_options;
+        std::vector<DatasetOptions> dataset_options_vector;
 
         OdometryOptions odometry_options;
 
@@ -117,7 +113,7 @@ SLAMOptions read_config(const std::string &config_path) {
 
         CHECK(slam_node["dataset_options"]) << "The node dataset_options must be specified in the config";
         auto dataset_node = slam_node["dataset_options"];
-        options.dataset_options = yaml_to_dataset_options(dataset_node);
+        options.dataset_options_vector = yaml_to_dataset_options_vector(dataset_node);
 
         if (slam_node["odometry_options"]) {
             auto odometry_node = slam_node["odometry_options"];
@@ -140,8 +136,6 @@ SLAMOptions read_config(const std::string &config_path) {
                 options.viz_mode = KEYPOINTS;
             }
         }
-
-
     } catch (...) {
         LOG(FATAL) << "Error while reading the config file " << config_path << std::endl;
         throw;
@@ -151,7 +145,6 @@ SLAMOptions read_config(const std::string &config_path) {
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
-
 // Parse Program Arguments
 SLAMOptions read_arguments(int argc, char **argv) {
 
@@ -185,17 +178,28 @@ int main(int argc, char **argv) {
     const auto options = read_arguments(argc, argv);
 
     // Build the Output_dir
-#if WITH_STD_FILESYSTEM
-    CHECK(fs::exists(options.dataset_options.root_path))
-                    << "The directory " << options.dataset_options.root_path << " does not exist";
+    for (auto &dataset_options: options.dataset_options_vector) {
+        CHECK(fs::exists(dataset_options.root_path))
+                        << "The directory " << dataset_options.root_path << " does not exist";
+    }
     LOG(INFO) << "Creating directory " << options.output_dir << std::endl;
     fs::create_directories(options.output_dir);
-#else
-    LOG(INFO) << "std::filesystem not found. Make sure the output directory exists (will raise an error otherwise)"
-              << std::endl;
-#endif
 
-    auto sequences = ct_icp::get_sequences(options.dataset_options);
+    fs::path options_root_path(options.output_dir);
+    for (auto &dataset_option: options.dataset_options_vector) {
+        auto dataset_name = ct_icp::DATASETEnumToString(dataset_option.dataset);
+        LOG(INFO) << "Running the SLAM on dataset " << dataset_name << std::endl;
+        auto dataset_output_dir = options_root_path / dataset_name;
+        LOG(INFO) << "Output dir set to " << dataset_output_dir.string() << std::endl;
+        if (!fs::exists(dataset_output_dir))
+            fs::create_directories(dataset_output_dir);
+
+        auto dataset = ct_icp::Dataset::LoadDataset(dataset_option);
+        auto sequences = dataset.AllSequences();
+
+    }
+
+    auto sequences = ct_icp::get_sequences(options.dataset_options_vector);
 
     if (!options.all_sequences) {
         // Select a specific sequence
@@ -244,7 +248,7 @@ int main(int argc, char **argv) {
 
         double registration_elapsed_ms = 0.0;
 
-        auto iterator_ptr = get_dataset_sequence(options.dataset_options, sequence_id);
+        auto iterator_ptr = get_dataset_sequence(options.dataset_options_vector, sequence_id);
 
         double avg_number_of_attempts = 0.0;
         int frame_id(0);
@@ -327,10 +331,11 @@ int main(int argc, char **argv) {
         avg_number_of_attempts /= frame_id;
 
         auto trajectory = ct_icp_odometry.Trajectory();
-        auto trajectory_absolute_poses = transform_trajectory_frame(options.dataset_options, trajectory, sequence_id);
+        auto trajectory_absolute_poses = transform_trajectory_frame(options.dataset_options_vector, trajectory,
+                                                                    sequence_id);
         // Save Trajectory And Compute metrics for trajectory with ground truths
 
-        std::string _sequence_name = sequence_name(options.dataset_options, sequence_id);
+        std::string _sequence_name = sequence_name(options.dataset_options_vector, sequence_id);
         if (options.save_trajectory) {
             // Save trajectory to disk
             auto filepath = options.output_dir + _sequence_name + "_poses.txt";
@@ -354,11 +359,11 @@ int main(int argc, char **argv) {
 
 
         // Evaluation
-        if (has_ground_truth(options.dataset_options, sequence_id)) {
+        if (has_ground_truth(options.dataset_options_vector, sequence_id)) {
             dataset_with_gt = true;
             nb_seq_with_gt++;
 
-            auto ground_truth_poses = load_ground_truth(options.dataset_options, sequence_id);
+            auto ground_truth_poses = load_ground_truth(options.dataset_options_vector, sequence_id);
 
             bool valid_trajectory = ground_truth_poses.size() == trajectory_absolute_poses.size();
             if (!valid_trajectory)

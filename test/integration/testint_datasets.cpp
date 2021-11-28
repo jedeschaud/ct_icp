@@ -14,23 +14,14 @@
 
 #endif
 
-/* ------------------------------------------------------------------------------------------------------------------ */
-std::vector<ct_icp::DatasetOptions> ReadConfig(const YAML::Node &node) {
-    std::vector<ct_icp::DatasetOptions> datasets_option;
-    for (auto &child: node) {
-        ct_icp::DatasetOptions option = ct_icp::yaml_to_dataset_options(child);
-        datasets_option.push_back(option);
-    }
-    return datasets_option;
-}
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 std::vector<ct_icp::DatasetOptions> ReadCommandLine(int argc, char **argv) {
     std::string config_file_path;
     try {
         TCLAP::CmdLine cmd("Launches an integration tests on all datasets of the config file", ' ', "v0.9");
-        TCLAP::ValueArg<std::string> arg_config_file("c", "config", "Path to the yaml config file",
-                                                     true, "", "string");
+        TCLAP::ValueArg <std::string> arg_config_file("c", "config", "Path to the yaml config file",
+                                                      true, "", "string");
 
         cmd.add(arg_config_file);
         cmd.parse(argc, argv);
@@ -41,7 +32,7 @@ std::vector<ct_icp::DatasetOptions> ReadCommandLine(int argc, char **argv) {
     }
 
     auto root_node = slam::config::RootNode(config_file_path);
-    return ReadConfig(root_node);
+    return ct_icp::yaml_to_dataset_options_vector(root_node);
 }
 
 

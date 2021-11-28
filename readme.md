@@ -137,8 +137,8 @@ To run the SLAM call (on Unix, adapt for windows), please follow the following s
 
 1. Modify/Copy and modify one of the default config (`default_config.yaml`, `robust_high_frequency_config.yaml`
    or `robust_driving_config.yaml`) to suit your needs.
-   **Notably:** change the dataset and dataset root_path ```dataset_options.dataset```
-   and ```dataset_options.root_path```.
+   **Notably:** change the dataset and dataset root_path ```dataset_options_vector.dataset```
+   and ```dataset_options_vector.root_path```.
 2. Launch the SLAM with command:
    ```./slam -c <config file path, e.g. default_config.yaml>  # Launches the SLAM on the default config```
 
