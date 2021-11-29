@@ -11,12 +11,14 @@
 #include <yaml-cpp/yaml.h>
 #include <tclap/CmdLine.h>
 
-#include <ct_icp/odometry.h>
-#include <ct_icp/dataset.h>
-#include <ct_icp/io.h>
-#include <ct_icp/evaluate_slam.h>
-#include <ct_icp/utils.h>
-#include <ct_icp/config.h>
+#include <SlamUtils/eval.h>
+#include <SlamUtils/generic_tools.h>
+
+#include "ct_icp/odometry.h"
+#include "ct_icp/dataset.h"
+#include "ct_icp/io.h"
+#include "ct_icp/utils.h"
+#include "ct_icp/config.h"
 
 #ifdef CT_ICP_WITH_VIZ
 
@@ -71,10 +73,6 @@ namespace ct_icp {
 
         std::string sequence; // The desired sequence (only applicable if `all_sequences` is false)
 
-        int start_index = 0; // The start index of the sequence (only applicable if `all_sequences` is false)
-
-        int max_frames = -1; // The maximum number of frames to register (if -1 all frames in the Dataset are registered)
-
         bool with_viz3d = true; // Whether to display timing and debug information
 
         SLAM_VIZ_MODE viz_mode = KEYPOINTS; // The visualization mode for the point clouds (in AGGREGATED, KEYPOINTS)
@@ -100,14 +98,12 @@ SLAMOptions read_config(const std::string &config_path) {
         OPTION_CLAUSE(slam_node, options, suspend_on_failure, bool);
         OPTION_CLAUSE(slam_node, options, output_dir, std::string);
         OPTION_CLAUSE(slam_node, options, sequence, std::string);
-        OPTION_CLAUSE(slam_node, options, start_index, int);
         OPTION_CLAUSE(slam_node, options, all_sequences, bool);
         OPTION_CLAUSE(slam_node, options, with_viz3d, bool);
 
 
         if (!options.output_dir.empty() && options.output_dir[options.output_dir.size() - 1] != '/')
             options.output_dir += '/';
-        OPTION_CLAUSE(slam_node, options, max_frames, int);
         OPTION_CLAUSE(slam_node, options, with_viz3d, bool);
 
 
@@ -185,44 +181,6 @@ int main(int argc, char **argv) {
     LOG(INFO) << "Creating directory " << options.output_dir << std::endl;
     fs::create_directories(options.output_dir);
 
-    fs::path options_root_path(options.output_dir);
-    for (auto &dataset_option: options.dataset_options_vector) {
-        auto dataset_name = ct_icp::DATASETEnumToString(dataset_option.dataset);
-        LOG(INFO) << "Running the SLAM on dataset " << dataset_name << std::endl;
-        auto dataset_output_dir = options_root_path / dataset_name;
-        LOG(INFO) << "Output dir set to " << dataset_output_dir.string() << std::endl;
-        if (!fs::exists(dataset_output_dir))
-            fs::create_directories(dataset_output_dir);
-
-        auto dataset = ct_icp::Dataset::LoadDataset(dataset_option);
-        auto sequences = dataset.AllSequences();
-
-    }
-
-    auto sequences = ct_icp::get_sequences(options.dataset_options_vector);
-
-    if (!options.all_sequences) {
-        // Select a specific sequence
-        int seq_idx = -1;
-        for (int idx(0); idx < sequences.size(); ++idx) {
-            auto &sequence = sequences[idx];
-            if (sequence.sequence_name == options.sequence) {
-                seq_idx = idx;
-                break;
-            }
-        }
-
-        if (seq_idx == -1) {
-            LOG(ERROR) << "Could not find the sequence " << options.sequence << ". Exiting." << std::endl;
-            return 1;
-        }
-
-        auto selected_sequence = std::move(sequences[seq_idx]);
-        sequences.resize(1);
-        sequences[0] = std::move(selected_sequence);
-    }
-    int num_sequences = (int) sequences.size();
-
 #ifdef CT_ICP_WITH_VIZ
     std::unique_ptr<std::thread> gui_thread = nullptr;
     std::shared_ptr<ControlSlamWindow> window = nullptr;
@@ -234,191 +192,200 @@ int main(int argc, char **argv) {
     }
 #endif
 
-    std::map<std::string, ct_icp::seq_errors> sequence_name_to_errors;
-    bool dataset_with_gt = false;
-    double all_seq_registration_elapsed_ms = 0.0;
-    int all_seq_num_frames = 0;
-    double average_rpe_on_seq = 0.0;
-    int nb_seq_with_gt = 0;
+    fs::path options_root_path(options.output_dir);
+    for (auto &dataset_option: options.dataset_options_vector) {
+        auto dataset_name = ct_icp::DATASETEnumToString(dataset_option.dataset);
+        LOG(INFO) << "Running the SLAM on dataset " << dataset_name << std::endl;
+        auto dataset_output_dir = options_root_path / dataset_name;
+        LOG(INFO) << "Output dir set to " << dataset_output_dir.string() << std::endl;
+        if (!fs::exists(dataset_output_dir))
+            fs::create_directories(dataset_output_dir);
 
-    for (int i = 0; i < num_sequences; ++i) { //num_sequences
+        auto dataset = ct_icp::Dataset::LoadDataset(dataset_option);
+        auto sequences = dataset.AllSequences();
+        std::optional<std::vector<Pose>> ground_truth{};
+        auto sequence_infos = dataset.AllSequenceInfo();
 
-        int sequence_id = sequences[i].sequence_id;
-        ct_icp::Odometry ct_icp_odometry(&options.odometry_options);
+        int num_sequences = (int) sequences.size();
+        std::map<std::string, slam::kitti::seq_errors> sequence_name_to_errors;
+        bool dataset_with_gt = false;
+        double all_seq_registration_elapsed_ms = 0.0;
+        int all_seq_num_frames = 0;
+        double average_rpe_on_seq = 0.0;
+        int nb_seq_with_gt = 0;
 
-        double registration_elapsed_ms = 0.0;
+        for (int i = 0; i < num_sequences; ++i) { //num_sequences
 
-        auto iterator_ptr = get_dataset_sequence(options.dataset_options_vector, sequence_id);
+            auto &sequence_info = sequence_infos[i];
+            auto &sequence = sequences[i];
+            ground_truth.reset();
+            if (dataset.HasGroundTruth(sequence_info.sequence_name))
+                ground_truth.emplace(dataset.GetGroundTruth(sequence_info.sequence_name));
+            ct_icp::Odometry ct_icp_odometry(&options.odometry_options);
 
-        double avg_number_of_attempts = 0.0;
-        int frame_id(0);
-        if (!options.all_sequences && options.start_index > 0) {
-            std::cout << "Starting at frame " << options.start_index << std::endl;
-            iterator_ptr->SetInitFrame(options.start_index);
-        }
-        while (iterator_ptr->HasNext() && (options.max_frames < 0 || frame_id < options.max_frames)) {
-            auto time_start_frame = std::chrono::steady_clock::now();
-            auto frame = iterator_ptr->NextUnfilteredFrame();
+            double registration_elapsed_ms = 0.0;
+            double avg_number_of_attempts = 0.0;
+            int frame_id(0);
+            while (sequence->HasNext()) {
+                auto time_start_frame = std::chrono::steady_clock::now();
+                auto frame = sequence->NextFrame();
 
-            auto time_read_pointcloud = std::chrono::steady_clock::now();
+                auto time_read_pointcloud = std::chrono::steady_clock::now();
 
-            auto summary = ct_icp_odometry.RegisterFrame(frame);
-            avg_number_of_attempts += summary.number_of_attempts;
-            auto time_register_frame = std::chrono::steady_clock::now();
+                auto summary = ct_icp_odometry.RegisterFrame(frame.points);
+                avg_number_of_attempts += summary.number_of_attempts;
+                auto time_register_frame = std::chrono::steady_clock::now();
 
-            std::chrono::duration<double> total_elapsed = time_register_frame - time_start_frame;
-            std::chrono::duration<double> registration_elapsed = time_register_frame - time_read_pointcloud;
+                std::chrono::duration<double> total_elapsed = time_register_frame - time_start_frame;
+                std::chrono::duration<double> registration_elapsed = time_register_frame - time_read_pointcloud;
 
-            registration_elapsed_ms += registration_elapsed.count() * 1000;
-            all_seq_registration_elapsed_ms += registration_elapsed.count() * 1000;
+                registration_elapsed_ms += registration_elapsed.count() * 1000;
+                all_seq_registration_elapsed_ms += registration_elapsed.count() * 1000;
 
 #ifdef CT_ICP_WITH_VIZ
-            if (options.with_viz3d) {
-                auto &instance = viz::ExplorationEngine::Instance();
-                Eigen::Matrix4d camera_pose = summary.frame.MidPose();
-                camera_pose = camera_pose.inverse().eval();
-                instance.SetCameraPose(camera_pose);
+                if (options.with_viz3d) {
+                    auto &instance = viz::ExplorationEngine::Instance();
+                    Eigen::Matrix4d camera_pose = summary.frame.MidPose();
+                    camera_pose = camera_pose.inverse().eval();
+                    instance.SetCameraPose(camera_pose);
+
+                    {
+                        auto model_ptr = std::make_shared<viz::PosesModel>();
+                        auto &model_data = model_ptr->ModelData();
+                        auto trajectory = ct_icp_odometry.Trajectory();
+                        model_data.instance_model_to_world.resize(trajectory.size());
+                        for (size_t i(0); i < trajectory.size(); ++i) {
+                            model_data.instance_model_to_world[i] = trajectory[i].MidPose().cast<float>();
+                        }
+                        instance.AddModel(-11, model_ptr);
+
+                    }
+                    if (options.viz_mode == AGGREGATED) {
+                        {
+                            auto model_ptr = std::make_shared<viz::PointCloudModel>();
+                            auto &model_data = model_ptr->ModelData();
+                            model_data.xyz.resize(summary.all_corrected_points.size());
+                            for (size_t i(0); i < summary.all_corrected_points.size(); ++i) {
+                                model_data.xyz[i] = summary.all_corrected_points[i].WorldPoint().cast<float>();
+                            }
+                            instance.AddModel(frame_id % 500, model_ptr);
+                        }
+
+                    }
+
+                    if (window) {
+                        while (!window->ContinueSLAM()) {
+                            std::this_thread::sleep_for(std::chrono::duration<double>(0.01));
+                        }
+                    }
+                }
+#endif
+                if (!summary.success) {
+                    std::cerr << "Error while running SLAM for sequence " << sequence_info.sequence_name <<
+                              ", at frame index " << frame_id << ". Error Message: "
+                              << summary.error_message << std::endl;
+                    if (options.suspend_on_failure) {
+#ifdef CT_ICP_WITH_VIZ
+                        if (options.with_viz3d) {
+                            gui_thread->join();
+                        }
+#endif
+                        exit(1);
+                    }
+                    break;
+                }
+                frame_id++;
+                all_seq_num_frames++;
+            }
+
+            avg_number_of_attempts /= frame_id;
+
+            auto trajectory_frames = ct_icp_odometry.Trajectory();
+            auto trajectory_poses = slam::transform_vector<slam::Pose>(trajectory_frames, [](const auto &frame) {
+                return frame.begin_pose.InterpolatePoseAlpha(frame.end_pose, 0.5);
+            });
+            // Save Trajectory And Compute metrics for trajectory with ground truths
+            std::string _sequence_name = sequence_info.sequence_name;
+            if (options.save_trajectory) {
+                // Save trajectory to disk
+                auto filepath = options.output_dir + _sequence_name + "_poses.txt";
+                auto dual_poses_filepath = options.output_dir + _sequence_name + "_dual_poses.txt";
+                if (!slam::SavePosesKITTIFormat(filepath, trajectory_poses) ||
+                    !SaveTrajectoryFrame(dual_poses_filepath, trajectory_frames)) {
+                    std::cerr << "Error while saving the poses to " << filepath << std::endl;
+                    std::cerr << "Make sure output directory " << options.output_dir << " exists" << std::endl;
+
+                    if (options.suspend_on_failure) {
+#ifdef CT_ICP_WITH_VIZ
+                        if (gui_thread) {
+                            gui_thread->join();
+                        }
+#endif
+                        exit(1);
+
+                    }
+                }
+            }
+
+
+            // Evaluation
+            if (ground_truth) {
+                dataset_with_gt = true;
+                nb_seq_with_gt++;
+
+                const auto &ground_truth_poses = ground_truth.value();
+                auto poses_trajectory = slam::LinearContinuousTrajectory::Create(std::vector<Pose>(trajectory_poses));
+
+                auto seq_error = slam::kitti::EvaluatePoses(ground_truth_poses, poses_trajectory);
+                seq_error.average_elapsed_ms = registration_elapsed_ms / frame_id;
+                seq_error.mean_num_attempts = avg_number_of_attempts;
+
+                std::cout << "[RESULTS] Sequence " << _sequence_name << std::endl;
+                std::cout << "Average Number of Attempts : " << avg_number_of_attempts << std::endl;
+                std::cout << "Mean RPE : " << seq_error.mean_rpe << std::endl;
+                std::cout << "Mean APE : " << seq_error.mean_ape << std::endl;
+                std::cout << "Max APE : " << seq_error.max_ape << std::endl;
+                std::cout << "Mean Local Error : " << seq_error.mean_local_err << std::endl;
+                std::cout << "Max Local Error : " << seq_error.max_local_err << std::endl;
+                std::cout << "Index Max Local Error : " << seq_error.index_max_local_err << std::endl;
+                std::cout << "Average Duration : " << registration_elapsed_ms / frame_id << std::endl;
+                std::cout << std::endl;
+
+                average_rpe_on_seq += seq_error.mean_rpe;
 
                 {
-                    auto model_ptr = std::make_shared<viz::PosesModel>();
-                    auto &model_data = model_ptr->ModelData();
-                    auto trajectory = ct_icp_odometry.Trajectory();
-                    model_data.instance_model_to_world.resize(trajectory.size());
-                    for (size_t i(0); i < trajectory.size(); ++i) {
-                        model_data.instance_model_to_world[i] = trajectory[i].MidPose().cast<float>();
-                    }
-                    instance.AddModel(-11, model_ptr);
-
-                }
-                if (options.viz_mode == AGGREGATED) {
-                    {
-                        auto model_ptr = std::make_shared<viz::PointCloudModel>();
-                        auto &model_data = model_ptr->ModelData();
-                        model_data.xyz.resize(summary.all_corrected_points.size());
-                        for (size_t i(0); i < summary.all_corrected_points.size(); ++i) {
-                            model_data.xyz[i] = summary.all_corrected_points[i].WorldPoint().cast<float>();
-                        }
-                        instance.AddModel(frame_id % 500, model_ptr);
-                    }
-
-                }
-
-                if (window) {
-                    while (!window->ContinueSLAM()) {
-                        std::this_thread::sleep_for(std::chrono::duration<double>(0.01));
-                    }
-                }
-            }
-#endif
-            if (!summary.success) {
-                std::cerr << "Error while running SLAM for sequence " << sequence_id <<
-                          ", at frame index " << frame_id << ". Error Message: "
-                          << summary.error_message << std::endl;
-                if (options.suspend_on_failure) {
-#ifdef CT_ICP_WITH_VIZ
-                    if (options.with_viz3d) {
-                        gui_thread->join();
-                    }
-#endif
-                    exit(1);
-                }
-                break;
-            }
-            frame_id++;
-            all_seq_num_frames++;
-        }
-
-        avg_number_of_attempts /= frame_id;
-
-        auto trajectory = ct_icp_odometry.Trajectory();
-        auto trajectory_absolute_poses = transform_trajectory_frame(options.dataset_options_vector, trajectory,
-                                                                    sequence_id);
-        // Save Trajectory And Compute metrics for trajectory with ground truths
-
-        std::string _sequence_name = sequence_name(options.dataset_options_vector, sequence_id);
-        if (options.save_trajectory) {
-            // Save trajectory to disk
-            auto filepath = options.output_dir + _sequence_name + "_poses.txt";
-            auto dual_poses_filepath = options.output_dir + _sequence_name + "_dual_poses.txt";
-            if (!SavePosesKITTIFormat(filepath, trajectory_absolute_poses) ||
-                !SaveTrajectoryFrame(dual_poses_filepath, trajectory)) {
-                std::cerr << "Error while saving the poses to " << filepath << std::endl;
-                std::cerr << "Make sure output directory " << options.output_dir << " exists" << std::endl;
-
-                if (options.suspend_on_failure) {
-#ifdef CT_ICP_WITH_VIZ
-                    if (gui_thread) {
-                        gui_thread->join();
-                    }
-#endif
-                    exit(1);
-
-                }
+                    sequence_name_to_errors[_sequence_name] = seq_error;
+                    // Save Metrics to file
+                    auto node = slam::kitti::GenerateMetricYAMLNode(sequence_name_to_errors);
+                    std::ofstream file((dataset_output_dir / "metrics.yaml").string());
+                    file << node;
+                    file.close();
+                };
             }
         }
 
-
-        // Evaluation
-        if (has_ground_truth(options.dataset_options_vector, sequence_id)) {
-            dataset_with_gt = true;
-            nb_seq_with_gt++;
-
-            auto ground_truth_poses = load_ground_truth(options.dataset_options_vector, sequence_id);
-
-            bool valid_trajectory = ground_truth_poses.size() == trajectory_absolute_poses.size();
-            if (!valid_trajectory)
-                ground_truth_poses.resize(trajectory_absolute_poses.size());
-
-            ct_icp::seq_errors seq_error = ct_icp::eval(ground_truth_poses, trajectory_absolute_poses);
-            seq_error.average_elapsed_ms = registration_elapsed_ms / frame_id;
-            seq_error.mean_num_attempts = avg_number_of_attempts;
-
-            std::cout << "[RESULTS] Sequence " << _sequence_name << std::endl;
-            if (!valid_trajectory) {
-                std::cout << "Invalid Trajectory, Failed after " << ground_truth_poses.size() << std::endl;
-                std::cout << "Num Poses : " << seq_error.mean_rpe << std::endl;
-            }
-            std::cout << "Average Number of Attempts : " << avg_number_of_attempts << std::endl;
-            std::cout << "Mean RPE : " << seq_error.mean_rpe << std::endl;
-            std::cout << "Mean APE : " << seq_error.mean_ape << std::endl;
-            std::cout << "Max APE : " << seq_error.max_ape << std::endl;
-            std::cout << "Mean Local Error : " << seq_error.mean_local_err << std::endl;
-            std::cout << "Max Local Error : " << seq_error.max_local_err << std::endl;
-            std::cout << "Index Max Local Error : " << seq_error.index_max_local_err << std::endl;
-            std::cout << "Average Duration : " << registration_elapsed_ms / frame_id << std::endl;
+        if (dataset_with_gt) {
             std::cout << std::endl;
-
-            average_rpe_on_seq += seq_error.mean_rpe;
-
-            {
-                sequence_name_to_errors[_sequence_name] = seq_error;
-                // Save Metrics to file
-                ct_icp::SaveMetrics(sequence_name_to_errors, options.output_dir + "metrics.yaml",
-                                    valid_trajectory);
-            };
-        }
-    }
-
-    if (dataset_with_gt) {
-        std::cout << std::endl;
-        double all_seq_rpe_t = 0.0;
-        double all_seq_rpe_r = 0.0;
-        double num_total_errors = 0.0;
-        for (auto &pair: sequence_name_to_errors) {
-            for (auto &tab_error: pair.second.tab_errors) {
-                all_seq_rpe_t += tab_error.t_err;
-                all_seq_rpe_r += tab_error.r_err;
-                num_total_errors += 1;
+            double all_seq_rpe_t = 0.0;
+            double all_seq_rpe_r = 0.0;
+            double num_total_errors = 0.0;
+            for (auto &pair: sequence_name_to_errors) {
+                for (auto &tab_error: pair.second.tab_errors) {
+                    all_seq_rpe_t += tab_error.t_err;
+                    all_seq_rpe_r += tab_error.r_err;
+                    num_total_errors += 1;
+                }
             }
+            std::cout << "KITTI metric translation/rotation : " << (all_seq_rpe_t / num_total_errors) * 100 << " "
+                      << (all_seq_rpe_r / num_total_errors) * 180.0 / M_PI << std::endl;
+            std::cout << "Average RPE on seq : " << average_rpe_on_seq / nb_seq_with_gt;
         }
-        std::cout << "KITTI metric translation/rotation : " << (all_seq_rpe_t / num_total_errors) * 100 << " "
-                  << (all_seq_rpe_r / num_total_errors) * 180.0 / M_PI << std::endl;
-        std::cout << "Average RPE on seq : " << average_rpe_on_seq / nb_seq_with_gt;
-    }
 
-    std::cout << std::endl;
-    std::cout << "Average registration time for all sequences (ms) : "
-              << all_seq_registration_elapsed_ms / all_seq_num_frames << std::endl;
+        std::cout << std::endl;
+        std::cout << "Average registration time for all sequences (ms) : "
+                  << all_seq_registration_elapsed_ms / all_seq_num_frames << std::endl;
+
+    }
 
 #ifdef CT_ICP_WITH_VIZ
     if (gui_thread) {

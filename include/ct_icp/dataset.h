@@ -204,6 +204,9 @@ namespace ct_icp {
         // Returns whether the dataset has a sequence named `sequence_name`
         bool HasSequence(const std::string &sequence_name) const;
 
+        // Returns whether the dataset has a ground truth for the sequence `sequence_name`
+        bool HasGroundTruth(const std::string &sequence_name) const;
+
         // Returns the ground truth poses given a sequence name
         std::vector<Pose> GetGroundTruth(const std::string &sequence_name) const;
 

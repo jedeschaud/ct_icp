@@ -26,9 +26,9 @@ namespace ct_icp {
     void sub_sample_frame(std::vector<slam::WPoint3D> &frame, double size_voxel) {
         std::unordered_map<Voxel, std::vector<slam::WPoint3D>> grid;
         for (int i = 0; i < (int) frame.size(); i++) {
-            auto kx = static_cast<short>(frame[i].WorldPoint()[0] / size_voxel);
-            auto ky = static_cast<short>(frame[i].WorldPoint()[1] / size_voxel);
-            auto kz = static_cast<short>(frame[i].WorldPoint()[2] / size_voxel);
+            auto kx = static_cast<short>(frame[i].RawPoint()[0] / size_voxel);
+            auto ky = static_cast<short>(frame[i].RawPoint()[1] / size_voxel);
+            auto kz = static_cast<short>(frame[i].RawPoint()[2] / size_voxel);
             grid[Voxel(kx, ky, kz)].push_back(frame[i]);
         }
         frame.resize(0);

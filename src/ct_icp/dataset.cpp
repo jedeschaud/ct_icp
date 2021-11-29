@@ -777,13 +777,9 @@ namespace ct_icp {
                                                const fs::path &sequence_path,
                                                const SequenceInfo &sequence_info) {
         std::vector<Pose> poses;
-        ArrayPoses kitti_poses;
         std::string filename;
 
-        auto transform_kitti_poses = [&kitti_poses, &poses, &options, &sequence_info] {
-            poses.reserve(kitti_poses.size());
-            slam::Pose new_pose(slam::SE3(), 0., 0);
-
+        auto transform_kitti_poses = [&poses, &options, &sequence_info] {
             Eigen::Matrix4d Calib = Eigen::Matrix4d::Identity();
             switch (options.dataset) {
                 case KITTI:
@@ -796,14 +792,11 @@ namespace ct_icp {
             }
             Eigen::Matrix4d CalibI = Calib.inverse();
 
-            for (auto idx(0); idx < kitti_poses.size(); ++idx) {
-                auto &mat = CalibI * kitti_poses[idx] * Calib;
-                new_pose.dest_timestamp = static_cast<double>(idx) * 0.1;
-                new_pose.dest_frame_id = idx;
+            for (auto &new_pose: poses) {
+                const auto &mat = CalibI * new_pose.Matrix() * Calib;
                 new_pose.pose.quat = Eigen::Quaterniond(mat.block<3, 3>(0, 0));
                 new_pose.pose.quat.normalize();
                 new_pose.pose.tr = mat.block<3, 1>(0, 3);
-                poses.push_back(new_pose);
             }
         };
 
@@ -813,7 +806,7 @@ namespace ct_icp {
             case KITTI:
                 filename = (sequence_info.sequence_name + ".txt");
                 if (fs::exists(sequence_path / filename)) {
-                    kitti_poses = LoadPosesKITTIFormat(sequence_path / filename);
+                    poses = slam::LoadPosesKITTIFormat(sequence_path / filename);
                     transform_kitti_poses();
                     break;
                 }
@@ -821,7 +814,7 @@ namespace ct_icp {
             case KITTI_CARLA:
                 filename = "poses_gt.txt";
                 if (fs::exists(sequence_path / filename)) {
-                    kitti_poses = LoadPosesKITTIFormat(sequence_path / filename);
+                    poses = slam::LoadPosesKITTIFormat(sequence_path / filename);
                     transform_kitti_poses();
                     break;
                 }
@@ -932,6 +925,15 @@ namespace ct_icp {
         }
 
         return Dataset(std::move(sequences), std::move(sequence_infos));
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    bool Dataset::HasGroundTruth(const std::string &sequence_name) const {
+        auto it = std::find_if(sequence_infos_.begin(), sequence_infos_.end(), [&sequence_name](const auto &seq_info) {
+            return seq_info.sequence_name == sequence_name && seq_info.with_ground_truth == true;
+        });
+
+        return it != sequence_infos_.end();
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */

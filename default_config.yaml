@@ -1,4 +1,4 @@
-max_num_threads:  1 
+max_num_threads: 1
 save_trajectory: true
 suspend_on_failure: false
 output_dir: .outputs
@@ -9,11 +9,11 @@ viz_mode: AGGREGATED
 
 # DATASET OPTIONS ----
 dataset_options:
-  dataset: KITTI_raw # Options: [KITTI_raw / KITTI_CARLA / KITTI]
-  root_path: /media/pdell/SSD_1/DATASETS/KITTI_raw # Set to the root path of kitti's directory
-  fail_if_incomplete: false
-  min_dist_lidar_center: 3.0 # Suppresses points to close to the center of the sensor
-  max_dist_lidar_center: 100.0 # Suppresses points to far from the center of the sensor
+  - dataset: KITTI_raw # Options: [KITTI_raw / KITTI_CARLA / KITTI]
+    root_path: /media/pdell/SSD_1/DATASETS/KITTI_raw # Set to the root path of kitti's directory
+    fail_if_incomplete: false
+    min_dist_lidar_center: 3.0 # Suppresses points to close to the center of the sensor
+    max_dist_lidar_center: 100.0 # Suppresses points to far from the center of the sensor
 
 # ODOMETRY OPTIONS ----
 odometry_options:
@@ -45,7 +45,7 @@ odometry_options:
     solver: CERES # Options: [GN=Gauss-Newton, CERES]
     loss_function: CAUCHY # Options: [STANDARD, CAUCHY, HUBER, TOLERANT, TRUNCATED] (for CERES solver)
     ls_max_num_iters: 5 # The number of steps performed for each iteration of the ICP (for CERES solver)
-    ls_num_threads:  8 # The number of threads to build and solve the least square system (for CERES solver)
+    ls_num_threads: 8 # The number of threads to build and solve the least square system (for CERES solver)
     ls_sigma: 0.1 # The sigma parameter for loss CAUCHY, HUBER, TOLERANT, TRUNCATED (for CERES solver)
     ls_tolerant_min_threshold: 0.05 # The tolerant parameter for loss TOLERANT (for CERES solver)
 

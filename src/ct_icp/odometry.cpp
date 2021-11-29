@@ -270,18 +270,19 @@ namespace ct_icp {
 
         std::shuffle(frame.begin(), frame.end(), g);
 
+        const auto &tr_frame = trajectory_[kIndexFrame];
         if (kIndexFrame > 1) {
-            const auto &tr_frame = trajectory_[kIndexFrame];
             if (options_.motion_compensation == CONSTANT_VELOCITY) {
                 // The motion compensation of Constant velocity modifies the raw points of the point cloud
                 DistortFrame(frame, tr_frame.begin_pose, tr_frame.end_pose);
             }
 
-            for (auto &point: frame) {
-                TransformPoint(options_.motion_compensation, point,
-                               tr_frame.begin_pose,
-                               tr_frame.end_pose);
-            }
+        }
+
+        for (auto &point: frame) {
+            TransformPoint(options_.motion_compensation, point,
+                           tr_frame.begin_pose,
+                           tr_frame.end_pose);
         }
 
         for (auto &point: frame) {
@@ -377,7 +378,6 @@ namespace ct_icp {
                     summary.distance_correction = (current_frame.BeginTr() -
                                                    trajectory_[kIndexFrame - 1].EndTr()).norm();
 
-                    std::cout << "Hello1" << std::endl;
                     auto norm = ((trajectory_[kIndexFrame - 1].EndQuat().normalized().toRotationMatrix() *
                                   current_frame.EndQuat().normalized().toRotationMatrix().transpose()).trace() - 1.) /
                                 2.;
@@ -387,7 +387,6 @@ namespace ct_icp {
 
                     summary.relative_orientation = AngularDistance(trajectory_[kIndexFrame - 1].end_pose.pose,
                                                                    current_frame.end_pose.pose);
-                    std::cout << "Hello2" << std::endl;
 
 
                     summary.ego_orientation = summary.frame.EgoAngularDistance();
@@ -495,9 +494,46 @@ namespace ct_icp {
 
         }
 
+
+        // Remove voxels too far from actual position of the vehicule
+        const double kMaxDistance = options_.max_distance;
+        const Eigen::Vector3d location = trajectory_[kIndexFrame].EndTr();
+        RemovePointsFarFromLocation(voxel_map_, location, kMaxDistance);
+
+
+        if (kDisplay) {
+            log_out << "Average Load Factor (Map): " << voxel_map_.load_factor() << std::endl;
+            log_out << "Number of Buckets (Map): " << voxel_map_.bucket_count() << std::endl;
+            log_out << "Number of points (Map): " << MapSize() << std::endl;
+        }
+
+        auto end = std::chrono::steady_clock::now();
+        std::chrono::duration<double> elapsed_seconds = end - start;
+        if (kDisplay) {
+            log_out << "Elapsed Time: " << elapsed_seconds.count() * 1000.0 << " (ms)" << std::endl;
+        }
+
+        summary.corrected_points = frame;
+        summary.all_corrected_points = const_frame;
+
+        const auto &begin_pose = summary.frame.begin_pose;
+        const auto &end_pose = summary.frame.end_pose;
+
+        for (auto &point: summary.corrected_points) {
+            point.WorldPoint() = begin_pose.ContinuousTransform(point.RawPoint(),
+                                                                end_pose,
+                                                                point.Timestamp());
+        }
+
+        for (auto &point: summary.all_corrected_points) {
+            point.WorldPoint() = begin_pose.ContinuousTransform(point.RawPoint(),
+                                                                end_pose,
+                                                                point.Timestamp());
+        }
+
         if (add_points) {
             //Update Voxel Map+
-            AddPointsToMap(voxel_map_, frame, kSizeVoxelMap,
+            AddPointsToMap(voxel_map_, summary.corrected_points, kSizeVoxelMap,
                            kMaxNumPointsInVoxel, kMinDistancePoints);
         }
 
@@ -525,36 +561,6 @@ namespace ct_icp {
         }
 #endif
 
-
-        // Remove voxels too far from actual position of the vehicule
-        const double kMaxDistance = options_.max_distance;
-        const Eigen::Vector3d location = trajectory_[kIndexFrame].EndTr();
-        RemovePointsFarFromLocation(voxel_map_, location, kMaxDistance);
-
-
-        if (kDisplay) {
-            log_out << "Average Load Factor (Map): " << voxel_map_.load_factor() << std::endl;
-            log_out << "Number of Buckets (Map): " << voxel_map_.bucket_count() << std::endl;
-            log_out << "Number of points (Map): " << MapSize() << std::endl;
-        }
-
-        auto end = std::chrono::steady_clock::now();
-        std::chrono::duration<double> elapsed_seconds = end - start;
-        if (kDisplay) {
-            log_out << "Elapsed Time: " << elapsed_seconds.count() * 1000.0 << " (ms)" << std::endl;
-        }
-
-        summary.corrected_points = frame;
-        summary.all_corrected_points = const_frame;
-
-        const auto &begin_pose = summary.frame.begin_pose;
-        const auto &end_pose = summary.frame.end_pose;
-
-        for (auto &point: summary.all_corrected_points) {
-            point.WorldPoint() = begin_pose.ContinuousTransform(point.RawPoint(),
-                                                                end_pose,
-                                                                point.Timestamp());
-        }
 
         return summary;
     }
