@@ -301,29 +301,34 @@ int main(int argc, char **argv) {
             avg_number_of_attempts /= frame_id;
 
             auto trajectory_frames = ct_icp_odometry.Trajectory();
-            auto trajectory_poses = slam::transform_vector<slam::Pose>(trajectory_frames, [](const auto &frame) {
-                return frame.begin_pose.InterpolatePoseAlpha(frame.end_pose, 0.5);
-            });
+            std::vector<slam::Pose> all_poses, mid_poses;
+            all_poses.reserve(trajectory_frames.size() * 2);
+            mid_poses.reserve(trajectory_frames.size());
+            for (auto &frame: trajectory_frames) {
+                all_poses.push_back(frame.begin_pose);
+                all_poses.push_back(frame.end_pose);
+                mid_poses.push_back(frame.begin_pose.InterpolatePoseAlpha(frame.end_pose, 0.5,
+                                                                          frame.begin_pose.dest_frame_id));
+            }
+
             // Save Trajectory And Compute metrics for trajectory with ground truths
             std::string _sequence_name = sequence_info.sequence_name;
             if (options.save_trajectory) {
                 // Save trajectory to disk
-                auto filepath = options.output_dir + _sequence_name + "_poses.txt";
-                auto dual_poses_filepath = options.output_dir + _sequence_name + "_dual_poses.txt";
-                if (!slam::SavePosesKITTIFormat(filepath, trajectory_poses) ||
-                    !SaveTrajectoryFrame(dual_poses_filepath, trajectory_frames)) {
+                auto filepath = options.output_dir + _sequence_name + "_poses.ply";
+                try {
+                    slam::SavePosesAsPLY(filepath, all_poses);
+                } catch (...) {
                     std::cerr << "Error while saving the poses to " << filepath << std::endl;
                     std::cerr << "Make sure output directory " << options.output_dir << " exists" << std::endl;
-
                     if (options.suspend_on_failure) {
 #ifdef CT_ICP_WITH_VIZ
                         if (gui_thread) {
                             gui_thread->join();
                         }
 #endif
-                        exit(1);
-
                     }
+                    throw;
                 }
             }
 
@@ -333,10 +338,11 @@ int main(int argc, char **argv) {
                 dataset_with_gt = true;
                 nb_seq_with_gt++;
 
-                const auto &ground_truth_poses = ground_truth.value();
-                auto poses_trajectory = slam::LinearContinuousTrajectory::Create(std::vector<Pose>(trajectory_poses));
+                auto poses_trajectory = slam::LinearContinuousTrajectory::Create(
+                        std::vector<Pose>(ground_truth.value()));
 
-                auto seq_error = slam::kitti::EvaluatePoses(ground_truth_poses, poses_trajectory);
+                auto seq_error = slam::kitti::EvaluatePoses(mid_poses,
+                                                            poses_trajectory);
                 seq_error.average_elapsed_ms = registration_elapsed_ms / frame_id;
                 seq_error.mean_num_attempts = avg_number_of_attempts;
 

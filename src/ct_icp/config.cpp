@@ -195,11 +195,25 @@ namespace ct_icp {
             auto dataset = dataset_node["dataset"].as<std::string>();
             dataset_options.dataset = DATASETFromString(dataset);
         }
-        OPTION_CLAUSE(dataset_node, dataset_options, root_path, std::string);
-        OPTION_CLAUSE(dataset_node, dataset_options, fail_if_incomplete, bool);
-        OPTION_CLAUSE(dataset_node, dataset_options, min_dist_lidar_center, float);
-        OPTION_CLAUSE(dataset_node, dataset_options, nclt_num_aggregated_pc, int);
-        OPTION_CLAUSE(dataset_node, dataset_options, max_dist_lidar_center, float);
+        OPTION_CLAUSE(dataset_node, dataset_options, root_path, std::string)
+        OPTION_CLAUSE(dataset_node, dataset_options, fail_if_incomplete, bool)
+        OPTION_CLAUSE(dataset_node, dataset_options, min_dist_lidar_center, float)
+        OPTION_CLAUSE(dataset_node, dataset_options, nclt_num_aggregated_pc, int)
+        OPTION_CLAUSE(dataset_node, dataset_options, max_dist_lidar_center, float)
+        OPTION_CLAUSE(dataset_node, dataset_options, use_all_datasets, bool)
+
+        if (dataset_node["sequence_options"]) {
+            std::vector<SequenceOptions> sequence_options;
+            for (auto &seq_node: dataset_node["sequence_options"]) {
+                SequenceOptions seq_options;
+                OPTION_CLAUSE(seq_node, seq_options, sequence_name, std::string)
+                OPTION_CLAUSE(seq_node, seq_options, start_frame_id, int)
+                OPTION_CLAUSE(seq_node, seq_options, max_num_frames, int)
+                sequence_options.push_back(seq_options);
+            }
+            dataset_options.sequence_options = std::move(sequence_options);
+        }
+
         return dataset_options;
     }
 

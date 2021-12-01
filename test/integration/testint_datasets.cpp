@@ -20,8 +20,8 @@ std::vector<ct_icp::DatasetOptions> ReadCommandLine(int argc, char **argv) {
     std::string config_file_path;
     try {
         TCLAP::CmdLine cmd("Launches an integration tests on all datasets of the config file", ' ', "v0.9");
-        TCLAP::ValueArg <std::string> arg_config_file("c", "config", "Path to the yaml config file",
-                                                      true, "", "string");
+        TCLAP::ValueArg<std::string> arg_config_file("c", "config", "Path to the yaml config file",
+                                                     true, "", "string");
 
         cmd.add(arg_config_file);
         cmd.parse(argc, argv);

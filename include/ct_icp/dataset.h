@@ -51,9 +51,7 @@ namespace ct_icp {
 
 
         // Returns the number of frames (-1 if the total number of frames is unknown)
-        [[nodiscard]] virtual size_t NumFrames() const {
-            return -1;
-        }
+        [[nodiscard]] virtual size_t NumFrames() const = 0;
 
         // Returns the next frame (is the sequence contains one)
         // Applies the eventual filter defined on the frame
@@ -69,9 +67,9 @@ namespace ct_icp {
         // Remove the filter on the frame
         void ClearFilter();
 
-        virtual void SetInitFrame(int frame_index) {
-            init_frame_id_ = frame_index;
-        };
+        virtual void SetInitFrame(int frame_index) = 0;
+
+        void SetMaxNumFrames(int max_num_frames) { max_num_frames_ = max_num_frames; };
 
         // Whether the dataset support random access
         virtual bool WithRandomAccess() const;
@@ -86,8 +84,9 @@ namespace ct_icp {
 
         [[nodiscard]] virtual Frame GetUnfilteredFrame(size_t index) const;
 
-
+        int max_num_frames_ = -1;
         int init_frame_id_ = 0; // The initial frame index of the sequence
+        int current_frame_id_ = 0; // The current frame index of the iterator
         std::optional<std::function<void(std::vector<slam::WPoint3D> &)>> filter_{};
     };
 
@@ -135,11 +134,13 @@ namespace ct_icp {
         explicit PLYDirectory(fs::path &&root_path,
                               std::vector<std::string> &&file_names);
 
+        void SetInitFrame(int frame_index) override;
+
     private:
+        size_t full_sequence_size_ = -1;
         std::vector<std::string> file_names_;
         fs::path root_dir_path_;
         slam::PointCloudSchema schema_;
-        size_t size_, it_ = 0;
         std::optional<slam::LinearContinuousTrajectory> ground_truth_;
         std::optional<PatternFunctionType> file_pattern_;
     };

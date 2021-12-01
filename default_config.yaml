@@ -14,6 +14,11 @@ dataset_options:
     fail_if_incomplete: false
     min_dist_lidar_center: 3.0 # Suppresses points to close to the center of the sensor
     max_dist_lidar_center: 100.0 # Suppresses points to far from the center of the sensor
+    use_all_datasets: false
+    sequence_options:
+      - sequence_name: 04
+        start_frame_id: 0
+        max_num_frames: -1
 
 # ODOMETRY OPTIONS ----
 odometry_options:

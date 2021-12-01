@@ -46,11 +46,6 @@ namespace ct_icp {
             "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"
     };
 
-    const int KITTI_raw_SEQUENCE_IDS[] = {0, 1, 2, 4, 5, 6, 7, 8, 9, 10};
-    const int KITTI_SEQUENCE_IDS[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
-    const int NUMBER_SEQUENCES_KITTI_raw = 10;
-    const int NUMBER_SEQUENCES_KITTI = 22;
-
     const int KITTI_SEQUENCES_SIZE[] = {4540, 1100, 4660, 800, 270, 2760, 1100, 1100, 4070, 1590, 1200, 920, 1060,
                                         3280, 630, 1900, 1730, 490, 1800, 4980, 830, 2720};
 
@@ -87,38 +82,25 @@ namespace ct_icp {
         return _map;
     }();
 
-//    // Calibration Sequence 00, 01, 02, 13, 14, 15, 16, 17, 18, 19, 20, 21
-//    const double R_Tr_data_A_KITTI[] = {4.276802385584e-04, -9.999672484946e-01, -8.084491683471e-03,
-//                                        -7.210626507497e-03, 8.081198471645e-03, -9.999413164504e-01,
-//                                        9.999738645903e-01, 4.859485810390e-04, -7.206933692422e-03};
-//    Eigen::Matrix3d R_Tr_A_KITTI(R_Tr_data_A_KITTI);
-//    Eigen::Vector3d T_Tr_A_KITTI = Eigen::Vector3d(-1.198459927713e-02, -5.403984729748e-02, -2.921968648686e-01);
-//
-//    // Calibration Sequence 03
-//    const double R_Tr_data_B_KITTI[] = {2.347736981471e-04, -9.999441545438e-01, -1.056347781105e-02,
-//                                        1.044940741659e-02, 1.056535364138e-02, -9.998895741176e-01,
-//                                        9.999453885620e-01, 1.243653783865e-04, 1.045130299567e-02};
-//    const Eigen::Matrix3d R_Tr_B_KITTI(R_Tr_data_B_KITTI);
-//    const Eigen::Vector3d T_Tr_B_KITTI = Eigen::Vector3d(-2.796816941295e-03, -7.510879138296e-02, -2.721327964059e-01);
-//
-//    // Calibration Sequence 04, 05, 06, 07, 08, 09, 10, 11, 12
-//    const double R_Tr_data_C_KITTI[] = {-1.857739385241e-03, -9.999659513510e-01, -8.039975204516e-03,
-//                                        -6.481465826011e-03, 8.051860151134e-03, -9.999466081774e-01,
-//                                        9.999773098287e-01, -1.805528627661e-03, -6.496203536139e-03};
-//    const Eigen::Matrix3d R_Tr_C_KITTI(R_Tr_data_C_KITTI);
-//    const Eigen::Vector3d T_Tr_C_KITTI = Eigen::Vector3d(-4.784029760483e-03, -7.337429464231e-02, -3.339968064433e-01);
-//
-//    const Eigen::Matrix3d R_Tr_array_KITTI[] = {R_Tr_A_KITTI, R_Tr_A_KITTI, R_Tr_A_KITTI, R_Tr_B_KITTI, R_Tr_C_KITTI,
-//                                                R_Tr_C_KITTI, R_Tr_C_KITTI, R_Tr_C_KITTI, R_Tr_C_KITTI, R_Tr_C_KITTI,
-//                                                R_Tr_C_KITTI, R_Tr_C_KITTI, R_Tr_C_KITTI, R_Tr_A_KITTI, R_Tr_A_KITTI,
-//                                                R_Tr_A_KITTI, R_Tr_A_KITTI, R_Tr_A_KITTI, R_Tr_A_KITTI, R_Tr_A_KITTI,
-//                                                R_Tr_A_KITTI, R_Tr_A_KITTI};
-//    const Eigen::Vector3d T_Tr_array_KITTI[] = {T_Tr_A_KITTI, T_Tr_A_KITTI, T_Tr_A_KITTI, T_Tr_B_KITTI, T_Tr_C_KITTI,
-//                                                T_Tr_C_KITTI, T_Tr_C_KITTI, T_Tr_C_KITTI, T_Tr_C_KITTI, T_Tr_C_KITTI,
-//                                                T_Tr_C_KITTI, T_Tr_C_KITTI, T_Tr_C_KITTI, T_Tr_A_KITTI, T_Tr_A_KITTI,
-//                                                T_Tr_A_KITTI, T_Tr_A_KITTI, T_Tr_A_KITTI, T_Tr_A_KITTI, T_Tr_A_KITTI,
-//                                                T_Tr_A_KITTI, T_Tr_A_KITTI};
-//
+    auto kitti_frame_filter = [](std::vector<slam::WPoint3D> &points) {
+        std::vector<slam::WPoint3D> copy;
+        const double KITTI_MIN_Z = -5.0; //Bad returns under the ground
+        const double KITTI_GLOBAL_VERTICAL_ANGLE_OFFSET = 0.205; //Issue in the intrinsic calibration of the KITTI Velodyne HDL64
+        copy.reserve(points.size());
+        for (auto &point: points) {
+            const Eigen::Vector3d uz(0., 0., 1.);
+            if (point.RawPoint()[2] > KITTI_MIN_Z) {
+                Eigen::Vector3d rotationVector = point.RawPoint().cross(uz);
+                rotationVector.normalize();
+                Eigen::Matrix3d rotationScan;
+                rotationScan = Eigen::AngleAxisd(KITTI_GLOBAL_VERTICAL_ANGLE_OFFSET * M_PI / 180.0, rotationVector);
+                // Filter points below the ground
+                point.RawPoint() = rotationScan * point.RawPoint();
+                copy.push_back(point);
+            }
+        }
+        std::swap(points, copy);
+    };
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// HARD CODED VALUES FOR KITTI-360
@@ -404,9 +386,8 @@ namespace ct_icp {
             filter_.value()(frame.points);
         return frame;
     }
+
     /* -------------------------------------------------------------------------------------------------------------- */
-
-
     /// NCLT Iterator for NCLT
     class NCLTIterator final : public ADatasetSequence {
     public:
@@ -420,16 +401,20 @@ namespace ct_icp {
 
         [[nodiscard]] bool HasNext() const override {
             CHECK(file != nullptr) << "An error has occured, the velodyne hits file is closed" << std::endl;
-            return !file->eof();
+            return !file->eof() && (max_num_frames_ < 0 || current_frame_id_ < max_num_frames_ + init_frame_id_);
         }
 
         void SetInitFrame(int frame_index) override {
-            ADatasetSequence::SetInitFrame(frame_index);
+            init_frame_id_ = frame_index;
             OpenFile();
             for (int i(0); i < frame_index; i++) {
                 std::cout << "[NCLT] Jumping frame " << i << std::endl;
                 DoNext(true);
             }
+        }
+
+        size_t NumFrames() const override {
+            return max_num_frames_;
         }
 
         Frame DoNext(bool jump_frame = false) {
@@ -458,14 +443,12 @@ namespace ct_icp {
                 points.resize(old_size + next_batch.size());
                 std::copy(next_batch.begin(), next_batch.end(), points.begin() + old_size);
             }
-            for (auto &point: points)
-                point.Timestamp() = (point.Timestamp() - min_timestamp) / (max_timestamp - min_timestamp);
+            current_frame_id_++;
             return {points, {}, {}};
         }
 
         Frame NextUnfilteredFrame() override {
             return DoNext();
-
         }
 
         std::vector<WPoint3D> NextBatch(bool jump_batch) {
@@ -508,6 +491,7 @@ namespace ct_icp {
                 point_3d.RawPoint() = Eigen::Vector3d(_x, _y, _z);
                 point_3d.Timestamp() = (double) utime;
                 point_3d.WorldPoint() = point_3d.RawPoint();
+                point_3d.index_frame = current_frame_id_;
             }
             return points;
         }
@@ -633,12 +617,13 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     bool PLYDirectory::HasNext() const {
-        return it_ < size_ - 1;
+        return current_frame_id_ < full_sequence_size_ &&
+               (max_num_frames_ < 0 || current_frame_id_ - init_frame_id_ < max_num_frames_);
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
     ADatasetSequence::Frame PLYDirectory::NextUnfilteredFrame() {
-        return GetUnfilteredFrame(it_++);
+        return GetUnfilteredFrame(current_frame_id_++);
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -648,14 +633,14 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     void PLYDirectory::SetFilePattern(size_t expected_size, std::function<std::string(size_t)> &&file_pattern) {
-        size_ = expected_size;
-        it_ = 0;
+        full_sequence_size_ = expected_size;
         file_pattern_.emplace(file_pattern);
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
     size_t PLYDirectory::NumFrames() const {
-        return size_;
+        auto max_possible_num_frames = std::max(static_cast<int>(full_sequence_size_) - init_frame_id_, 0);
+        return max_num_frames_ < 0 ? max_possible_num_frames : std::min(max_possible_num_frames, max_num_frames_);
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -687,9 +672,15 @@ namespace ct_icp {
     PLYDirectory::PLYDirectory(fs::path &&root_path,
                                std::vector<std::string> &&file_names) : file_names_(std::move(file_names)),
                                                                         root_dir_path_(std::move(root_path)) {
-        size_ = file_names.size();
+        full_sequence_size_ = file_names.size();
+        current_frame_id_ = init_frame_id_;
     }
 
+    /* -------------------------------------------------------------------------------------------------------------- */
+    void PLYDirectory::SetInitFrame(int frame_index) {
+        init_frame_id_ = frame_index;
+        current_frame_id_ = frame_index;
+    }
 
     /* -------------------------------------------------------------------------------------------------------------- */
     std::vector<SequenceInfo> Dataset::AllSequenceInfo() const {
@@ -792,11 +783,14 @@ namespace ct_icp {
             }
             Eigen::Matrix4d CalibI = Calib.inverse();
 
+            auto i(0);
             for (auto &new_pose: poses) {
-                const auto &mat = CalibI * new_pose.Matrix() * Calib;
+                Eigen::Matrix4d mat = CalibI * new_pose.Matrix() * Calib;
                 new_pose.pose.quat = Eigen::Quaterniond(mat.block<3, 3>(0, 0));
                 new_pose.pose.quat.normalize();
                 new_pose.pose.tr = mat.block<3, 1>(0, 3);
+                new_pose.dest_timestamp = (static_cast<double>(i) + 0.5) * 0.1;
+                new_pose.dest_frame_id = i++;
             }
         };
 
@@ -867,6 +861,7 @@ namespace ct_icp {
                                                                    [](size_t index) {
                                                                        return DefaultFilePattern(index, 4);
                                                                    });
+                ply_directory_ptr->SetFilter(kitti_frame_filter);
                 convert_plydir_to_dataset_sequence();
                 break;
 
@@ -878,6 +873,7 @@ namespace ct_icp {
                                                                    [](size_t index) {
                                                                        return DefaultFilePattern(index, 5);
                                                                    });
+                ply_directory_ptr->SetFilter(kitti_frame_filter);
                 convert_plydir_to_dataset_sequence();
                 break;
             case KITTI_CARLA:
@@ -912,17 +908,39 @@ namespace ct_icp {
         auto function_pattern = ExpectedSequenceDirNames(options.dataset);
         std::vector<std::shared_ptr<ADatasetSequence>> sequences;
         std::vector<SequenceInfo> sequence_infos;
+
+        std::map<std::string, size_t> sequence_names;
+        if (!options.use_all_datasets) {
+            auto i(0);
+            for (auto &seq_option: options.sequence_options) {
+                sequence_names.emplace(seq_option.sequence_name, i++);
+            }
+        }
+
         for (auto &entry: fs::directory_iterator(root_path)) {
             auto &entry_path = entry.path();
             if (fs::is_directory(entry_path)) {
                 auto dirname = entry_path.stem().string();
                 if (function_pattern(dirname)) {
                     auto[seq_info, dataset_seq] = GetDatasetSequence(options, dirname, entry_path);
+
+                    if (!options.use_all_datasets) {
+                        if (sequence_names.find(seq_info.sequence_name) == sequence_names.end())
+                            continue;
+                        const auto &seq_option = options.sequence_options[sequence_names[seq_info.sequence_name]];
+                        dataset_seq->SetInitFrame(seq_option.start_frame_id);
+                        dataset_seq->SetMaxNumFrames(seq_option.max_num_frames);
+                    }
+
+
                     sequences.push_back(dataset_seq);
                     sequence_infos.push_back(seq_info);
                 }
             }
         }
+        if (!options.use_all_datasets)
+            CHECK(sequence_names.size() == sequence_infos.size())
+                            << "Could not find all the sequences in `sequence_options`" << std::endl;
 
         return Dataset(std::move(sequences), std::move(sequence_infos));
     }
