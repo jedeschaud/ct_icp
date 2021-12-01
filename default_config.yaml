@@ -9,16 +9,15 @@ viz_mode: AGGREGATED
 
 # DATASET OPTIONS ----
 dataset_options:
-  - dataset: KITTI_raw # Options: [KITTI_raw / KITTI_CARLA / KITTI]
+  - dataset: KITTI_raw
     root_path: /media/pdell/SSD_1/DATASETS/KITTI_raw # Set to the root path of kitti's directory
-    fail_if_incomplete: false
-    min_dist_lidar_center: 3.0 # Suppresses points to close to the center of the sensor
-    max_dist_lidar_center: 100.0 # Suppresses points to far from the center of the sensor
-    use_all_datasets: false
-    sequence_options:
-      - sequence_name: 04
-        start_frame_id: 0
-        max_num_frames: -1
+    use_all_datasets: true
+  - dataset: KITTI_360
+    root_path: /media/pdell/SSD_1/DATASETS/KITTI-360 # Set to the root path of kitti's directory
+    use_all_datasets: true
+  - dataset: KITTI_CARLA
+    root_path: /media/pdell/SSD_1/DATASETS/KITTI_CARLA/KITTI-CARLA_v3 # Set to the root path of kitti's directory
+    use_all_datasets: true
 
 # ODOMETRY OPTIONS ----
 odometry_options:

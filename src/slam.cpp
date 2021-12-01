@@ -315,7 +315,7 @@ int main(int argc, char **argv) {
             std::string _sequence_name = sequence_info.sequence_name;
             if (options.save_trajectory) {
                 // Save trajectory to disk
-                auto filepath = options.output_dir + _sequence_name + "_poses.ply";
+                auto filepath = dataset_output_dir / (_sequence_name + "_poses.ply");
                 try {
                     slam::SavePosesAsPLY(filepath, all_poses);
                 } catch (...) {
@@ -331,7 +331,6 @@ int main(int argc, char **argv) {
                     throw;
                 }
             }
-
 
             // Evaluation
             if (ground_truth) {
