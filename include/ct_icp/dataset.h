@@ -232,6 +232,9 @@ namespace ct_icp {
         std::vector<SequenceInfo> sequence_infos_;
         std::map<std::string, size_t> map_seq_info_seq_id_;
     };
+
+    // Reads the poses from NCLT ground truth poses
+    std::vector<slam::Pose> ReadNCLTPoses(const std::string &file_path);
 }
 
 

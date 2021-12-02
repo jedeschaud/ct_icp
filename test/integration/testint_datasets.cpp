@@ -57,11 +57,13 @@ int main(int argc, char **argv) {
             auto &seq = all_sequences[seq_idx];
             const auto &seq_info = sequence_infos[seq_idx];
             auto gt = seq->GroundTruth();
+            std::optional<slam::LinearContinuousTrajectory> trajectory{};
             LOG(INFO) << "Loaded sequence " << seq_info.sequence_name << " from dataset "
                       << ct_icp::DATASETEnumToString(dataset_option.dataset) << std::endl;
 
             if (gt) {
                 LOG(INFO) << "The sequence contains a ground truth with " << gt.value().size() << " poses.";
+                trajectory.emplace(slam::LinearContinuousTrajectory::Create(std::vector<slam::Pose>(gt.value())));
 #ifdef SLAM_WITH_VIZ3D
                 {
                     auto data_ptr = std::make_shared<viz::PosesModel>();
@@ -81,11 +83,12 @@ int main(int argc, char **argv) {
             while (seq->HasNext()) {
                 auto frame = seq->NextFrame();
                 bool world_points = false;
-                if (frame.begin_pose && frame.end_pose) {
-                    for (auto &point: frame.points)
-                        point.WorldPoint() = frame.begin_pose->ContinuousTransform(point.RawPoint(),
-                                                                                   frame.end_pose.value(),
-                                                                                   point.Timestamp());
+                if (trajectory) {
+
+                    for (auto &point: frame.points) {
+                        point.WorldPoint() = trajectory->TransformPoint(point.RawPoint(),
+                                                                        point.Timestamp());
+                    }
                     world_points = true;
                 }
 

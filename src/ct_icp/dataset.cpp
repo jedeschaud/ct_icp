@@ -174,6 +174,24 @@ namespace ct_icp {
         return map;
     }();
 
+
+    const Eigen::Matrix4d kNCLT_Calib = [] {
+        Eigen::Matrix4d D = Eigen::Matrix4d::Identity();
+        D(0, 3) = 0.002;
+        D(1, 3) = -0.004;
+        D(2, 3) = -0.957;
+
+        double roll = (0.807 / 180.) * M_PI;
+        double pitch = (0.166 / 180.) * M_PI;
+        double yaw = (-90.703 / 180.) * M_PI;
+        Eigen::Matrix3d rot = (Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
+                               Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) *
+                               Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX())).toRotationMatrix();
+        D.block<3, 3>(0, 0) = rot;
+        return D;
+    }();
+
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// HARD CODED VALUES FOR HILTI
 
@@ -273,6 +291,71 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
+    std::vector<slam::Pose> ReadNCLTPoses(const std::string &file_path) {
+        CHECK(fs::exists(file_path) && fs::is_regular_file(file_path))
+                        << "The NCLT ground truth file " << file_path << " does not exist" << std::endl;
+
+        std::ifstream file(file_path);
+        CHECK(file.is_open()) << "Cannot open the NCLT GT file at " << file_path << std::endl;
+
+        std::string line;
+        std::vector<double> values(7);
+
+        std::optional<slam::SE3> init_pose{};
+        std::vector<slam::Pose> poses;
+
+
+        while (std::getline(file, line)) {
+            std::vector<std::string> tokens;
+            tokens.reserve(7);
+            while (!line.empty()) {
+                auto it = line.find_first_of(',');
+                if (it == std::string::npos) {
+                    tokens.push_back(line);
+                    line.clear();
+                    break;
+                }
+
+                tokens.push_back(line.substr(0, it));
+                line = line.substr(it + 1);
+            }
+            CHECK(tokens.size() == 7) << "Error parsing the file" << std::endl;
+            std::transform(tokens.begin(), tokens.end(), values.begin(), [](const auto &token) {
+                return std::stod(token);
+            });
+
+            slam::Pose new_pose;
+
+            new_pose.dest_timestamp = values[0];
+            new_pose.pose.tr.x() = values[1];
+            new_pose.pose.tr.y() = values[2];
+            new_pose.pose.tr.z() = values[3];
+
+            double roll = values[4];
+            double pitch = values[5];
+            double yaw = values[6];
+            Eigen::Matrix3d rot = (Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
+                                   Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) *
+                                   Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX())).toRotationMatrix();
+
+            new_pose.pose.quat = Eigen::Quaterniond(rot);
+            double norm_quat = new_pose.pose.quat.norm();
+            double norm_tr = new_pose.pose.tr.norm();
+
+            if (norm_quat != norm_quat || norm_tr != norm_tr)
+                continue;
+
+            if (!init_pose)
+                init_pose = new_pose.pose;
+            new_pose.pose = init_pose->Inverse() * new_pose.pose;
+            poses.push_back(new_pose);
+        }
+
+        file.close();
+        return poses;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
     /// NCLT Iterator for NCLT
     class NCLTIterator final : public ADatasetSequence {
     public:
@@ -297,6 +380,16 @@ namespace ct_icp {
                 DoNext(true);
             }
         }
+
+        void SetGroundTruth(std::vector<Pose> &&poses) {
+            ground_truth_.emplace(slam::LinearContinuousTrajectory::Create(std::move(poses)));
+        }
+
+
+        std::optional<std::vector<slam::Pose>> GroundTruth() override {
+            if (ground_truth_) return ground_truth_->Poses();
+            return {};
+        };
 
         size_t NumFrames() const override {
             return max_num_frames_;
@@ -328,8 +421,15 @@ namespace ct_icp {
                 points.resize(old_size + next_batch.size());
                 std::copy(next_batch.begin(), next_batch.end(), points.begin() + old_size);
             }
+
+            Frame frame{std::move(points), {}, {}};
+            if (ground_truth_) {
+                auto min_max = slam::MinMaxTimestamps(frame.points);
+                frame.begin_pose = ground_truth_->InterpolatePose(min_max.first);
+                frame.end_pose = ground_truth_->InterpolatePose(min_max.second);
+            }
             current_frame_id_++;
-            return {points, {}, {}};
+            return frame;
         }
 
         Frame NextUnfilteredFrame() override {
@@ -411,6 +511,7 @@ namespace ct_icp {
 
         int num_aggregated_pc_;
 
+        std::optional<slam::LinearContinuousTrajectory> ground_truth_{};
         std::unique_ptr<std::ifstream> file = nullptr;
         std::string sequence_name_, root_path_;
     };
@@ -663,7 +764,7 @@ namespace ct_icp {
         std::vector<Pose> poses;
         std::string filename;
 
-        auto transform_kitti_poses = [&poses, &options, &sequence_info] {
+        auto transform_poses = [&poses, &options, &sequence_info] {
             Eigen::Matrix4d Calib = Eigen::Matrix4d::Identity();
             switch (options.dataset) {
                 case KITTI:
@@ -676,6 +777,9 @@ namespace ct_icp {
                 case HILTI:
                     Calib = kHILTI_Calib.Matrix();
                     break;
+                case NCLT:
+                    Calib = kNCLT_Calib;
+                    break;
                 default:
                     break;
             }
@@ -687,8 +791,18 @@ namespace ct_icp {
                 new_pose.pose.quat = Eigen::Quaterniond(mat.block<3, 3>(0, 0));
                 new_pose.pose.quat.normalize();
                 new_pose.pose.tr = mat.block<3, 1>(0, 3);
-                new_pose.dest_timestamp = (static_cast<double>(i) + 0.5) * 0.1;
-                new_pose.dest_frame_id = i++;
+                switch (options.dataset) {
+                    case KITTI:
+                    case KITTI_raw:
+                    case KITTI_360:
+                    case HILTI:
+                        new_pose.dest_timestamp = (static_cast<double>(i) + 0.5) * 0.1;
+                        new_pose.dest_frame_id = i++;
+                        break;
+                    default:
+                        break;
+                }
+
             }
         };
 
@@ -700,7 +814,7 @@ namespace ct_icp {
                 filename = (sequence_info.sequence_name + ".txt");
                 if (fs::exists(sequence_path / filename)) {
                     poses = slam::LoadPosesKITTIFormat(sequence_path / filename);
-                    transform_kitti_poses();
+                    transform_poses();
                     break;
                 }
                 break;
@@ -708,15 +822,19 @@ namespace ct_icp {
                 filename = "poses_gt.txt";
                 if (fs::exists(sequence_path / filename)) {
                     poses = slam::LoadPosesKITTIFormat(sequence_path / filename);
-                    transform_kitti_poses();
+                    transform_poses();
                     break;
                 }
                 break;
             case NCLT:
-                filename = "ground_truth_" + sequence_info.sequence_name + ".csv";
-                if (fs::exists(sequence_path / filename)) {
-                    // TODO
+                filename = "groundtruth_" + sequence_info.sequence_name + ".csv";
+
+                if (fs::exists(sequence_path / sequence_info.sequence_name / filename)) {
+                    poses = ReadNCLTPoses(sequence_path / sequence_info.sequence_name / filename);
+                    transform_poses();
+                    break;
                 }
+                break;
             default:
                 break;
 
@@ -735,6 +853,7 @@ namespace ct_icp {
                                                                                   const std::string &seq_dirname,
                                                                                   const fs::path &sequence_path) {
         std::shared_ptr<ADatasetSequence> dataset_sequence = nullptr;
+        std::shared_ptr<NCLTIterator> nclt_ptr = nullptr;
         std::shared_ptr<PLYDirectory> ply_directory_ptr = nullptr;
         SequenceInfo seq_info;
         std::optional<std::vector<Pose>> gt_poses{};
@@ -790,7 +909,12 @@ namespace ct_icp {
                 seq_info.sequence_id = kNCLTDirNameToId.at(seq_dirname);
                 seq_info.sequence_name = NCLT_SEQUENCE_NAMES[seq_info.sequence_id];
                 seq_info.sequence_size = -1;
-                dataset_sequence = std::make_shared<NCLTIterator>(options, seq_info.sequence_id);
+
+                nclt_ptr = std::make_shared<NCLTIterator>(options, seq_info.sequence_id);
+                gt_poses = LoadPoses(options, sequence_path, seq_info);
+                if (gt_poses)
+                    nclt_ptr->SetGroundTruth(std::move(gt_poses.value()));
+                dataset_sequence = std::move(nclt_ptr);
                 break;
             case HILTI:
                 CHECK(kHILTINamesToIds.find(seq_dirname) != kHILTINamesToIds.end());
