@@ -26,6 +26,8 @@ namespace ct_icp {
 
     std::string DATASETEnumToString(DATASET dataset);
 
+    bool IsDrivingDataset(DATASET dataset);
+
     /**
      * An ADatasetSequence allows access to the frames for a sequence of a dataset
      */

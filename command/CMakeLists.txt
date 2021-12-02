@@ -1,0 +1,5 @@
+if (WITH_VIZ3D)
+    add_executable(cmd_viz_dataset cmd_viz_dataset.cpp)
+    target_link_libraries(cmd_viz_dataset PUBLIC CT_ICP tclap::tclap)
+    target_compile_definitions(cmd_viz_dataset PUBLIC CT_ICP_WITH_VIZ=1)
+endif ()

@@ -74,3 +74,4 @@ SLAM_INSTALL_TARGET(
         INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_subdirectory(test)
+add_subdirectory(command)

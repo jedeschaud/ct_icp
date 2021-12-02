@@ -564,6 +564,17 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
+    bool IsDrivingDataset(DATASET dataset) {
+        switch (dataset) {
+            case HILTI:
+            case NCLT:
+                return false;
+            default:
+                return true;
+        }
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
     PLYDirectory::PLYDirectory(fs::path &&root_path,
                                size_t expected_size,
                                PLYDirectory::PatternFunctionType &&optional_pattern) :
@@ -912,8 +923,10 @@ namespace ct_icp {
 
                 nclt_ptr = std::make_shared<NCLTIterator>(options, seq_info.sequence_id);
                 gt_poses = LoadPoses(options, sequence_path, seq_info);
-                if (gt_poses)
+                if (gt_poses) {
                     nclt_ptr->SetGroundTruth(std::move(gt_poses.value()));
+                    seq_info.with_ground_truth = true;
+                }
                 dataset_sequence = std::move(nclt_ptr);
                 break;
             case HILTI:

@@ -226,13 +226,93 @@ int main(int argc, char **argv) {
             double registration_elapsed_ms = 0.0;
             double avg_number_of_attempts = 0.0;
             int frame_id(0);
+            ct_icp::Odometry::RegistrationSummary summary;
+            bool finished = false;
+
+            // Lambda function which saves intermediary and final results to disk
+            auto save_trajectory_and_metrics = [&] {
+                avg_number_of_attempts /= frame_id;
+                auto trajectory_frames = ct_icp_odometry.Trajectory();
+                std::vector<slam::Pose> all_poses, mid_poses;
+                all_poses.reserve(trajectory_frames.size() * 2);
+                mid_poses.reserve(trajectory_frames.size());
+                for (auto &frame: trajectory_frames) {
+                    all_poses.push_back(frame.begin_pose);
+                    all_poses.push_back(frame.end_pose);
+                    mid_poses.push_back(frame.begin_pose.InterpolatePoseAlpha(frame.end_pose, 0.5,
+                                                                              frame.begin_pose.dest_frame_id));
+                }
+
+                // Save Trajectory And Compute metrics for trajectory with ground truths
+                std::string _sequence_name = sequence_info.sequence_name;
+                if (options.save_trajectory) {
+                    // Save trajectory to disk
+                    auto filepath = dataset_output_dir / (_sequence_name + "_poses.ply");
+                    try {
+                        slam::SavePosesAsPLY(filepath, all_poses);
+                    } catch (...) {
+                        std::cerr << "Error while saving the poses to " << filepath << std::endl;
+                        std::cerr << "Make sure output directory " << options.output_dir << " exists" << std::endl;
+                        if (options.suspend_on_failure) {
+#ifdef CT_ICP_WITH_VIZ
+                            if (gui_thread) {
+                                gui_thread->join();
+                            }
+#endif
+                        }
+                        throw;
+                    }
+                }
+
+                // Evaluation
+                if (ground_truth) {
+                    dataset_with_gt = true;
+                    nb_seq_with_gt++;
+
+                    auto poses_trajectory = slam::LinearContinuousTrajectory::Create(
+                            std::vector<Pose>(ground_truth.value()));
+
+                    auto seq_error = slam::kitti::EvaluatePoses(mid_poses,
+                                                                poses_trajectory,
+                                                                ct_icp::IsDrivingDataset(dataset_option.dataset));
+                    seq_error.finished = finished;
+                    seq_error.success = summary.success;
+                    seq_error.average_elapsed_ms = registration_elapsed_ms / frame_id;
+                    seq_error.mean_num_attempts = avg_number_of_attempts;
+
+                    std::cout << "[RESULTS] Sequence " << _sequence_name << std::endl;
+                    std::cout << "Average Number of Attempts : " << avg_number_of_attempts << std::endl;
+                    std::cout << "Mean RPE : " << seq_error.mean_rpe << std::endl;
+                    std::cout << "Mean APE : " << seq_error.mean_ape << std::endl;
+                    std::cout << "Max APE : " << seq_error.max_ape << std::endl;
+                    std::cout << "Mean Local Error : " << seq_error.mean_local_err << std::endl;
+                    std::cout << "Max Local Error : " << seq_error.max_local_err << std::endl;
+                    std::cout << "Index Max Local Error : " << seq_error.index_max_local_err << std::endl;
+                    std::cout << "Average Duration : " << registration_elapsed_ms / frame_id << std::endl;
+                    std::cout << std::endl;
+
+                    average_rpe_on_seq += seq_error.mean_rpe;
+
+                    {
+                        sequence_name_to_errors[_sequence_name] = seq_error;
+                        // Save Metrics to file
+                        auto node = slam::kitti::GenerateMetricYAMLNode(sequence_name_to_errors);
+                        std::ofstream file((dataset_output_dir / "metrics.yaml").string());
+                        file << node;
+                        file.close();
+                    };
+                }
+            };
+
+
+            // Launches the iterations
             while (sequence->HasNext()) {
                 auto time_start_frame = std::chrono::steady_clock::now();
                 auto frame = sequence->NextFrame();
 
                 auto time_read_pointcloud = std::chrono::steady_clock::now();
 
-                auto summary = ct_icp_odometry.RegisterFrame(frame.points);
+                summary = ct_icp_odometry.RegisterFrame(frame.points);
                 avg_number_of_attempts += summary.number_of_attempts;
                 auto time_register_frame = std::chrono::steady_clock::now();
 
@@ -296,77 +376,12 @@ int main(int argc, char **argv) {
                 }
                 frame_id++;
                 all_seq_num_frames++;
+                if (frame_id % 1000 == 0)
+                    // Save intermediary results
+                    save_trajectory_and_metrics();
             }
-
-            avg_number_of_attempts /= frame_id;
-
-            auto trajectory_frames = ct_icp_odometry.Trajectory();
-            std::vector<slam::Pose> all_poses, mid_poses;
-            all_poses.reserve(trajectory_frames.size() * 2);
-            mid_poses.reserve(trajectory_frames.size());
-            for (auto &frame: trajectory_frames) {
-                all_poses.push_back(frame.begin_pose);
-                all_poses.push_back(frame.end_pose);
-                mid_poses.push_back(frame.begin_pose.InterpolatePoseAlpha(frame.end_pose, 0.5,
-                                                                          frame.begin_pose.dest_frame_id));
-            }
-
-            // Save Trajectory And Compute metrics for trajectory with ground truths
-            std::string _sequence_name = sequence_info.sequence_name;
-            if (options.save_trajectory) {
-                // Save trajectory to disk
-                auto filepath = dataset_output_dir / (_sequence_name + "_poses.ply");
-                try {
-                    slam::SavePosesAsPLY(filepath, all_poses);
-                } catch (...) {
-                    std::cerr << "Error while saving the poses to " << filepath << std::endl;
-                    std::cerr << "Make sure output directory " << options.output_dir << " exists" << std::endl;
-                    if (options.suspend_on_failure) {
-#ifdef CT_ICP_WITH_VIZ
-                        if (gui_thread) {
-                            gui_thread->join();
-                        }
-#endif
-                    }
-                    throw;
-                }
-            }
-
-            // Evaluation
-            if (ground_truth) {
-                dataset_with_gt = true;
-                nb_seq_with_gt++;
-
-                auto poses_trajectory = slam::LinearContinuousTrajectory::Create(
-                        std::vector<Pose>(ground_truth.value()));
-
-                auto seq_error = slam::kitti::EvaluatePoses(mid_poses,
-                                                            poses_trajectory);
-                seq_error.average_elapsed_ms = registration_elapsed_ms / frame_id;
-                seq_error.mean_num_attempts = avg_number_of_attempts;
-
-                std::cout << "[RESULTS] Sequence " << _sequence_name << std::endl;
-                std::cout << "Average Number of Attempts : " << avg_number_of_attempts << std::endl;
-                std::cout << "Mean RPE : " << seq_error.mean_rpe << std::endl;
-                std::cout << "Mean APE : " << seq_error.mean_ape << std::endl;
-                std::cout << "Max APE : " << seq_error.max_ape << std::endl;
-                std::cout << "Mean Local Error : " << seq_error.mean_local_err << std::endl;
-                std::cout << "Max Local Error : " << seq_error.max_local_err << std::endl;
-                std::cout << "Index Max Local Error : " << seq_error.index_max_local_err << std::endl;
-                std::cout << "Average Duration : " << registration_elapsed_ms / frame_id << std::endl;
-                std::cout << std::endl;
-
-                average_rpe_on_seq += seq_error.mean_rpe;
-
-                {
-                    sequence_name_to_errors[_sequence_name] = seq_error;
-                    // Save Metrics to file
-                    auto node = slam::kitti::GenerateMetricYAMLNode(sequence_name_to_errors);
-                    std::ofstream file((dataset_output_dir / "metrics.yaml").string());
-                    file << node;
-                    file.close();
-                };
-            }
+            finished = true;
+            save_trajectory_and_metrics();
         }
 
         if (dataset_with_gt) {
