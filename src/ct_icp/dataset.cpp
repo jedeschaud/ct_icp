@@ -175,6 +175,36 @@ namespace ct_icp {
     }();
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// HARD CODED VALUES FOR HILTI
+
+    const std::map<std::string, size_t> kHILTINamesToIds = []() {
+        std::map<std::string, size_t> map;
+        for (auto i(0); i < 12; ++i) {
+            std::stringstream ss;
+            ss << std::setw(2) << std::setfill('0');
+            ss << i;
+            map.emplace(ss.str(), i);
+        }
+        return map;
+    }();
+
+    const slam::SE3 kHILTI_Calib = slam::SE3(Eigen::Quaterniond(-0.00016947759535612024,
+                                                                0.999993918507834,
+                                                                0.0012283821413574625,
+                                                                -0.0032596475280467258
+                                             ).normalized(),
+                                             Eigen::Vector3d(0.01001966915517371,
+                                                             -0.006645473484212856,
+                                                             0.09473042428051345));
+
+
+    const char *HILTI_SEQUENCE_NAMES[] = {
+            "00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11"
+    };
+
+    const int HILTI_SEQUENCES_SIZE[] = {895, 2004, 2641, 5824, 1130, 3308, 3503, 1357, 1995, 3992, 4298, 3749};
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
     // Returns the Path to the folder containing a sequence's point cloud Data
@@ -188,6 +218,7 @@ namespace ct_icp {
             case KITTI_CARLA:
             case KITTI:
             case KITTI_360:
+            case HILTI:
                 folder_path += sequence_name + "/frames/";
                 break;
             case PLY_DIRECTORY:
@@ -199,152 +230,6 @@ namespace ct_icp {
         return folder_path;
     }
 
-    // Returns the Path to the Ground Truth file for the given sequence
-    // Note: The name of the sequence is not checked
-    inline std::string ground_truth_path(const DatasetOptions &options, const std::string &sequence_name) {
-        std::string ground_truth_path = options.root_path;
-        if (ground_truth_path.size() > 0 && ground_truth_path[ground_truth_path.size() - 1] != '/')
-            ground_truth_path += '/';
-
-        switch (options.dataset) {
-            case KITTI_raw:
-                ground_truth_path += sequence_name + "/" + sequence_name + ".txt";
-                break;
-            case KITTI_CARLA:
-                ground_truth_path += sequence_name + "/poses_gt.txt";
-                break;
-            case KITTI:
-                ground_truth_path += sequence_name + "/" + sequence_name + ".txt";
-                break;
-            case KITTI_360:
-                ground_truth_path += sequence_name + "/" + sequence_name + ".txt";
-                break;
-            case NCLT:
-                throw std::runtime_error("Not Implemented!");
-        }
-        return ground_truth_path;
-    }
-
-    inline std::string frame_file_name(int frame_id) {
-        std::stringstream ss;
-        ss << std::setw(4) << std::setfill('0') << frame_id;
-        return "frame_" + ss.str() + ".ply";
-    }
-
-    inline std::string frame_file_name_kitti_360(int frame_id) {
-        std::stringstream ss;
-        ss << std::setw(5) << std::setfill('0') << frame_id;
-        return "frame_" + ss.str() + ".ply";
-    }
-
-    int CountNumFilesInDirectory(const std::string &dir_path, std::vector<std::string> *out_frames = nullptr) {
-#ifdef WITH_STD_FILESYSTEM
-        auto dirIter = std::filesystem::directory_iterator(dir_path);
-        if (out_frames)
-            out_frames->clear();
-        int size = std::count_if(
-                begin(dirIter),
-                end(dirIter),
-                [out_frames](auto &entry) {
-                    std::string extension = entry.path().extension();
-                    bool is_ply_file = extension == ".PLY" || extension == ".ply";
-                    is_ply_file &= entry.is_regular_file();
-                    if (is_ply_file && out_frames)
-                        out_frames->push_back(entry.path().string());
-                    return is_ply_file;
-                });
-        return size;
-#endif
-        return -1;
-    }
-
-    /* -------------------------------------------------------------------------------------------------------------- */
-    std::vector<WPoint3D> read_ply_pointcloud(const DatasetOptions &options, const std::string &path) {
-        std::vector<WPoint3D> frame = slam::ReadPLYFromFile(path, {
-                {"vertex", "x", "y", "z"},
-                {{"vertex", "timestamp"}}
-        });
-
-        return frame;
-    }
-
-    /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses kitti_raw_transform_trajectory_frame(const std::vector<TrajectoryFrame> &trajectory, int sequence_id) {
-        // For KITTI_raw the evaluation counts the middle of the frame as the pose which is compared to the ground truth
-        ArrayPoses poses;
-        const auto &Tr_pose = kKITTIIdToCalib.at(sequence_id);
-
-        poses.reserve(trajectory.size());
-        for (auto &frame: trajectory) {
-            auto mid_pose = frame.begin_pose.InterpolatePoseAlpha(frame.end_pose, 0.5).pose;
-            auto mid_pose_left_camera = Tr_pose.Inverse() * mid_pose * Tr_pose;
-            poses.push_back(mid_pose_left_camera.Matrix());
-        }
-        return poses;
-    }
-
-
-    /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses kitti_360_transform_trajectory_frame(const std::vector<TrajectoryFrame> &trajectory, int sequence_id) {
-        // For KITTI_raw the evaluation counts the middle of the frame as the pose which is compared to the ground truth
-        ArrayPoses poses;
-        const auto &Tr_pose = kKITTI360_Calib;
-        poses.reserve(trajectory.size());
-
-        for (auto &frame: trajectory) {
-            auto mid_frame = frame.begin_pose.InterpolatePoseAlpha(frame.end_pose, 0.5).pose;
-            auto mid_frame_left_camera = Tr_pose * mid_frame * Tr_pose;
-            poses.push_back(mid_frame_left_camera.Matrix());
-        }
-        return poses;
-    }
-
-    /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses kitti_carla_transform_trajectory_frame(const std::vector<TrajectoryFrame> &trajectory) {
-        // For KITTI_CARLA the evaluation counts the beginning of the frame to compare to ground truth
-        ArrayPoses poses;
-        poses.reserve(trajectory.size());
-
-        Eigen::Matrix4d init = trajectory.front().begin_pose.Matrix();
-        poses.push_back(init);
-
-        for (auto i(0); i < trajectory.size() - 1; ++i) {
-            auto mid_pose = trajectory[i].end_pose.InterpolatePoseAlpha(trajectory[i + 1].begin_pose,
-                                                                        0.5).Matrix();
-            poses.push_back(mid_pose);
-        }
-
-        return poses;
-    }
-
-    /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses nclt_transform_trajectory_frame(const std::vector<TrajectoryFrame> &trajectory) {
-        ArrayPoses poses(trajectory.size());
-        for (auto i(0); i < trajectory.size(); ++i) {
-            poses[i] = trajectory[i].MidPose();
-        }
-        return poses;
-
-    }
-
-    /* -------------------------------------------------------------------------------------------------------------- */
-    ArrayPoses transform_trajectory_frame(const DatasetOptions &options, const std::vector<TrajectoryFrame> &trajectory,
-                                          int sequence_id) {
-        switch (options.dataset) {
-            case PLY_DIRECTORY:
-            case KITTI_raw:
-            case KITTI:
-                return kitti_raw_transform_trajectory_frame(trajectory, sequence_id);
-            case KITTI_CARLA:
-                return kitti_carla_transform_trajectory_frame(trajectory);
-            case KITTI_360:
-                return kitti_360_transform_trajectory_frame(trajectory, sequence_id);
-            case NCLT:
-                return nclt_transform_trajectory_frame(trajectory);
-        }
-
-        throw std::runtime_error("Dataset Option not recognised");
-    }
 
     /* -------------------------------------------------------------------------------------------------------------- */
     ADatasetSequence::~ADatasetSequence() = default;
@@ -541,6 +426,8 @@ namespace ct_icp {
             return KITTI_360;
         else if (lc_string == "kitti")
             return KITTI;
+        else if (lc_string == "hilti")
+            return HILTI;
         else if (lc_string == "kitti_raw")
             return KITTI_raw;
         else if (lc_string == "nclt")
@@ -562,6 +449,8 @@ namespace ct_icp {
                 return "KITTI";
             case KITTI_raw:
                 return "KITTI_raw";
+            case HILTI:
+                return "HILTI";
             case NCLT:
                 return "NCLT";
             case KITTI_360:
@@ -628,6 +517,7 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     void PLYDirectory::SetGroundTruth(std::vector<Pose> &&poses) {
+        ground_truth_.reset();
         ground_truth_.emplace(slam::LinearContinuousTrajectory::Create(std::move(poses)));
     }
 
@@ -749,6 +639,9 @@ namespace ct_icp {
                 case KITTI_360:
                     names = {"00", "02", "03", "04", "05", "06", "07", "09", "10"};
                     break;
+                case HILTI:
+                    names = {"00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11"};
+                    break;
                 case NCLT:
                     return [](const std::string &name) {
                         return kNCLTDirNameToId.find(name) != kNCLTDirNameToId.end();
@@ -780,6 +673,11 @@ namespace ct_icp {
                 case KITTI_360:
                     Calib = kKITTI360_Calib.Matrix();
                     break;
+                case HILTI:
+                    Calib = kHILTI_Calib.Matrix();
+                    break;
+                default:
+                    break;
             }
             Eigen::Matrix4d CalibI = Calib.inverse();
 
@@ -798,6 +696,7 @@ namespace ct_icp {
             case KITTI_raw:
             case KITTI_360:
             case KITTI:
+            case HILTI:
                 filename = (sequence_info.sequence_name + ".txt");
                 if (fs::exists(sequence_path / filename)) {
                     poses = slam::LoadPosesKITTIFormat(sequence_path / filename);
@@ -842,8 +741,8 @@ namespace ct_icp {
 
         auto convert_plydir_to_dataset_sequence = [&] {
             gt_poses = LoadPoses(options, sequence_path, seq_info);
-            if (gt_poses) {
-                ply_directory_ptr->SetGroundTruth(std::move(gt_poses.value()));
+            if (gt_poses.has_value()) {
+                ply_directory_ptr->SetGroundTruth(std::move(*gt_poses));
                 seq_info.with_ground_truth = true;
             }
             ply_directory_ptr->Schema().timestamp_element_and_property = {"vertex", "timestamp"};
@@ -893,6 +792,20 @@ namespace ct_icp {
                 seq_info.sequence_size = -1;
                 dataset_sequence = std::make_shared<NCLTIterator>(options, seq_info.sequence_id);
                 break;
+            case HILTI:
+                CHECK(kHILTINamesToIds.find(seq_dirname) != kHILTINamesToIds.end());
+                seq_info.sequence_id = kHILTINamesToIds.at(seq_dirname);
+                seq_info.sequence_name = seq_dirname;
+                seq_info.sequence_size = HILTI_SEQUENCES_SIZE[seq_info.sequence_id];
+                ply_directory_ptr = std::make_shared<PLYDirectory>(sequence_path / "frames", seq_info.sequence_size,
+                                                                   [](size_t index) {
+                                                                       return DefaultFilePattern(index, 5);
+                                                                   });
+                convert_plydir_to_dataset_sequence();
+                break;
+            case PLY_DIRECTORY:
+                LOG(WARNING) << "You can not define a dataset from `PLY_DIRECTORY`, "
+                                "but you need to use PLYDirectory as a sequence directly." << std::endl;
             default:
                 break;
         }

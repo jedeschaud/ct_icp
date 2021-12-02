@@ -3,18 +3,18 @@ save_trajectory: true
 suspend_on_failure: false
 output_dir: .outputs
 max_frames: -1 # For negative values, all frames are computed
-display_debug: true
-with_viz3d: true
+display_debug: false
+with_viz3d: false
 viz_mode: AGGREGATED
 
 # DATASET OPTIONS ----
 dataset_options:
-  - dataset: KITTI_raw
-    root_path: /media/pdell/SSD_1/DATASETS/KITTI_raw # Set to the root path of kitti's directory
-    use_all_datasets: true
-  - dataset: KITTI_360
-    root_path: /media/pdell/SSD_1/DATASETS/KITTI-360 # Set to the root path of kitti's directory
-    use_all_datasets: true
+  #  - dataset: KITTI_raw
+  #    root_path: /media/pdell/SSD_1/DATASETS/KITTI_raw # Set to the root path of kitti's directory
+  #    use_all_datasets: true
+  #  - dataset: KITTI_360
+  #    root_path: /media/pdell/SSD_1/DATASETS/KITTI-360 # Set to the root path of kitti's directory
+  #    use_all_datasets: true
   - dataset: KITTI_CARLA
     root_path: /media/pdell/SSD_1/DATASETS/KITTI_CARLA/KITTI-CARLA_v3 # Set to the root path of kitti's directory
     use_all_datasets: true

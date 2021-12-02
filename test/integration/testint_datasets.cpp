@@ -72,6 +72,11 @@ int main(int argc, char **argv) {
                 }
 #endif // SLAM_WITH_VIZ3D
             }
+#ifdef SLAM_WITH_VIZ3D
+            else
+                instance.RemoveModel(0);
+#endif // SLAM_WITH_VIZ3D
+
             size_t f_id(0);
             while (seq->HasNext()) {
                 auto frame = seq->NextFrame();

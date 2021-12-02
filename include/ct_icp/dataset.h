@@ -18,7 +18,8 @@ namespace ct_icp {
         KITTI = 2,
         KITTI_360 = 3,
         NCLT = 4,
-        PLY_DIRECTORY = 5
+        HILTI = 5,
+        PLY_DIRECTORY = 6
     };
 
     DATASET DATASETFromString(const std::string &);
@@ -141,8 +142,8 @@ namespace ct_icp {
         std::vector<std::string> file_names_;
         fs::path root_dir_path_;
         slam::PointCloudSchema schema_;
-        std::optional<slam::LinearContinuousTrajectory> ground_truth_;
-        std::optional<PatternFunctionType> file_pattern_;
+        std::optional<slam::LinearContinuousTrajectory> ground_truth_{};
+        std::optional<PatternFunctionType> file_pattern_{};
     };
 
     struct SequenceOptions {
