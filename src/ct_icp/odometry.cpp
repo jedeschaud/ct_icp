@@ -555,7 +555,7 @@ namespace ct_icp {
                 }
             }
             model_data.rgb = get_viz3d_color(scalars, true, slam::VIRIDIS);
-            model_data.point_size = 1;
+            model_data.point_size = 3;
             model_data.default_color = Eigen::Vector3f::Zero();
             instance.AddModel(-3, model_ptr);
         }

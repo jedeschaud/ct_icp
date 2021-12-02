@@ -9,14 +9,14 @@ viz_mode: AGGREGATED
 
 # DATASET OPTIONS ----
 dataset_options:
-  #  - dataset: KITTI_raw
-  #    root_path: /media/pdell/SSD_1/DATASETS/KITTI_raw # Set to the root path of kitti's directory
-  #    use_all_datasets: true
-  #  - dataset: KITTI_360
-  #    root_path: /media/pdell/SSD_1/DATASETS/KITTI-360 # Set to the root path of kitti's directory
-  #    use_all_datasets: true
+  - dataset: KITTI_raw
+    root_path: .kitti_raw
+    use_all_datasets: true
+  - dataset: KITTI_360
+    root_path: .kitti_360
+    use_all_datasets: true
   - dataset: KITTI_CARLA
-    root_path: /media/pdell/SSD_1/DATASETS/KITTI_CARLA/KITTI-CARLA_v3 # Set to the root path of kitti's directory
+    root_path: .kitti_carla
     use_all_datasets: true
 
 # ODOMETRY OPTIONS ----
