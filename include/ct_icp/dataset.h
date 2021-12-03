@@ -60,6 +60,9 @@ namespace ct_icp {
         // Applies the eventual filter defined on the frame
         virtual Frame NextFrame();
 
+        // Skips the next frame
+        virtual void SkipFrame() = 0;
+
         // Returns a frame at `index`. Throws an exception if the dataset does not support Random Access
         // Applies the eventual filter defined on the frame
         virtual Frame GetFrame(size_t index) const;
@@ -109,6 +112,8 @@ namespace ct_icp {
         explicit PLYDirectory(fs::path &&root_path, size_t expected_size, PatternFunctionType &&optional_pattern);
 
         static PLYDirectory FromDirectoryPath(const std::string &dir_path);
+
+        void SkipFrame() override;
 
         static std::shared_ptr<PLYDirectory> PtrFromDirectoryPath(const std::string &dir_path);
 

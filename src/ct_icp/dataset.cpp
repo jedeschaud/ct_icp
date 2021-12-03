@@ -367,6 +367,11 @@ namespace ct_icp {
             OpenFile();
         }
 
+        void SkipFrame() override {
+            CHECK(HasNext()) << "Cannot skip this frame. No more frames available" << std::endl;
+            auto frame = DoNext(true);
+        }
+
         [[nodiscard]] bool HasNext() const override {
             CHECK(file != nullptr) << "An error has occured, the velodyne hits file is closed" << std::endl;
             return !file->eof() && (max_num_frames_ < 0 || current_frame_id_ < max_num_frames_ + init_frame_id_);
@@ -620,6 +625,12 @@ namespace ct_icp {
     bool PLYDirectory::HasNext() const {
         return current_frame_id_ < full_sequence_size_ &&
                (max_num_frames_ < 0 || current_frame_id_ - init_frame_id_ < max_num_frames_);
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    void PLYDirectory::SkipFrame() {
+        CHECK(HasNext()) << "Cannot skip a frame. No more frame in the iterator " << std::endl;
+        current_frame_id_++;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
