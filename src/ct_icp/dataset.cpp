@@ -717,15 +717,15 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     bool Dataset::HasSequence(const std::string &sequence_name) const {
-        return map_seq_info_seq_id_.find(sequence_name) != map_seq_info_seq_id_.end();
+        return map_seqname_to_id_.find(sequence_name) != map_seqname_to_id_.end();
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
     std::vector<Pose> Dataset::GetGroundTruth(const std::string &sequence_name) const {
-        CHECK(map_seq_info_seq_id_.find(sequence_name) != map_seq_info_seq_id_.end()) <<
-                                                                                      "The dataset does not contain sequences with name "
-                                                                                      << sequence_name << std::endl;
-        const auto &idx = map_seq_info_seq_id_.at(sequence_name);
+        CHECK(map_seqname_to_id_.find(sequence_name) != map_seqname_to_id_.end()) <<
+                                                                                  "The dataset does not contain sequences with name "
+                                                                                  << sequence_name << std::endl;
+        const auto &idx = map_seqname_to_id_.at(sequence_name);
         auto result = dataset_sequences_[idx]->GroundTruth();
         CHECK(result.has_value()) << "The sequence " << sequence_name
                                   << " does not contain a ground truth" << std::endl;
@@ -1005,5 +1005,16 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
+    SequenceInfo Dataset::GetSequenceInfo(const std::string &name) const {
+        CHECK(HasSequence(name)) << "The dataset does not contain sequence " << name << std::endl;
+        return sequence_infos_[map_seqname_to_id_.at(name)];
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    std::shared_ptr<ADatasetSequence> Dataset::GetSequence(const std::string &name) const {
+        CHECK(HasSequence(name)) << "The dataset does not contain sequence " << name << std::endl;
+        return dataset_sequences_[map_seqname_to_id_.at(name)];
+
+    }
 
 } // namespace ct_icp

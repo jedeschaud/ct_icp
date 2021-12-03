@@ -205,6 +205,10 @@ namespace ct_icp {
 
         inline DATASET DatasetType() const { return dataset_; };
 
+        SequenceInfo GetSequenceInfo(const std::string &name) const;
+
+        std::shared_ptr<ADatasetSequence> GetSequence(const std::string &name) const;
+
         // Returns whether the dataset has a sequence named `sequence_name`
         bool HasSequence(const std::string &sequence_name) const;
 
@@ -223,7 +227,7 @@ namespace ct_icp {
                 dataset_sequences_(std::move(dataset_sequences)) {
             int i(0);
             for (auto &seq_info: sequence_infos_) {
-                map_seq_info_seq_id_[seq_info.sequence_name] = i;
+                map_seqname_to_id_[seq_info.sequence_name] = i;
                 seq_info.sequence_id = i++;
             }
         }
@@ -232,7 +236,7 @@ namespace ct_icp {
         DATASET dataset_;
         std::vector<std::shared_ptr<ADatasetSequence>> dataset_sequences_;
         std::vector<SequenceInfo> sequence_infos_;
-        std::map<std::string, size_t> map_seq_info_seq_id_;
+        std::map<std::string, size_t> map_seqname_to_id_;
     };
 
     // Reads the poses from NCLT ground truth poses
