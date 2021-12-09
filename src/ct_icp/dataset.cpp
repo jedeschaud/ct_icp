@@ -821,6 +821,10 @@ namespace ct_icp {
                         new_pose.dest_timestamp = (static_cast<double>(i) + 0.5) * 0.1;
                         new_pose.dest_frame_id = i++;
                         break;
+                    case KITTI_CARLA:
+                        new_pose.dest_timestamp = (static_cast<double>(i)) * 0.1;
+                        new_pose.dest_frame_id = i++;
+                        break;
                     default:
                         break;
                 }
