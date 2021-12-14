@@ -615,6 +615,12 @@ namespace ct_icp {
         FIND_OPTION(root_node, options, num_points_per_primitives, size_t)
 
         auto poses = acquisition.GeneratePoses(options.sample_frequency);
+        slam::frame_id_t fid(0);
+        auto init_pose_I = poses.front().pose.Inverse();
+        for (auto fid(0); fid < poses.size(); ++fid) {
+            poses[fid].dest_frame_id = fid;
+            poses[fid].pose = init_pose_I * poses[fid].pose;
+        }
         double max_t = acquisition.GetTrajectory().MaxTimestamp();
         auto _poses = acquisition.GetTrajectory().Poses();
         auto ptr = std::make_shared<SyntheticSequence>(std::move(acquisition),

@@ -1,4 +1,4 @@
-sample_frequency: 20.0 # The frequency of frame acquisition
+sample_frequency: 40.0 # The frequency of frame acquisition
 max_lidar_distance: 15.0
 num_points_per_primitives: 300
 
