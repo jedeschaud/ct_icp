@@ -4,7 +4,7 @@
 #include <memory>
 #include <regex>
 
-
+#include <SlamUtils/config_utils.h>
 #include <ct_icp/dataset.h>
 #include <ct_icp/io.h>
 #include <ct_icp/utils.h>
@@ -291,6 +291,12 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
+    void ADatasetSequence::SkipFrame() {
+        CHECK(HasNext()) << "Cannot skip frame. No more frames in the iterator" << std::endl;
+        current_frame_id_++;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
     std::vector<slam::Pose> ReadNCLTPoses(const std::string &file_path) {
         CHECK(fs::exists(file_path) && fs::is_regular_file(file_path))
                         << "The NCLT ground truth file " << file_path << " does not exist" << std::endl;
@@ -538,6 +544,8 @@ namespace ct_icp {
             return KITTI_raw;
         else if (lc_string == "nclt")
             return NCLT;
+        else if (lc_string == "synthetic")
+            return SYNTHETIC;
         else if (lc_string == "ply_directory")
             return PLY_DIRECTORY;
         else {
@@ -563,6 +571,8 @@ namespace ct_icp {
                 return "KITTI_360";
             case PLY_DIRECTORY:
                 return "PLY_DIRECTORY";
+            case SYNTHETIC:
+                return "SYNTHETIC";
             default:
                 throw std::runtime_error("Unsupported");
         }
@@ -580,9 +590,78 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
+    SyntheticSequence::SyntheticSequence(slam::SyntheticSensorAcquisition &&sensor_acquisition,
+                                         std::vector<slam::Pose> &&gt_poses) {
+        acquisition_ = std::move(sensor_acquisition);
+        ground_truth_poses_ = std::move(gt_poses);
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    std::shared_ptr<SyntheticSequence> SyntheticSequence::PtrFromDirectoryPath(const std::string &yaml_path) {
+        CHECK(fs::is_regular_file(yaml_path));
+        auto root_node = slam::config::RootNode(yaml_path);
+        return PtrFromNode(root_node);;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    std::shared_ptr<SyntheticSequence> SyntheticSequence::PtrFromNode(const YAML::Node &root_node) {
+        CHECK(root_node["acquisition"]) << "The root node does not contain a node `acquisition` at its root."
+                                        << std::endl;
+
+
+        double sample_frequency = 10.;
+        if (root_node["sample_frequency"])
+            sample_frequency = root_node["sample_frequency"].as<double>();
+        auto acquisition = slam::SyntheticSensorAcquisition::ReadYAML(root_node["acquisition"]);
+        auto poses = acquisition.GeneratePoses(sample_frequency);
+        double max_t = acquisition.GetTrajectory().MaxTimestamp();
+        auto _poses = acquisition.GetTrajectory().Poses();
+        return std::make_shared<SyntheticSequence>(std::move(acquisition),
+                                                   std::move(poses));
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    bool SyntheticSequence::HasNext() const {
+        return current_frame_id_ < ground_truth_poses_.size() ||
+               (max_num_frames_ > 0 && (current_frame_id_ - init_frame_id_) < max_num_frames_);
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    ADatasetSequence::Frame SyntheticSequence::NextUnfilteredFrame() {
+        return GetUnfilteredFrame(current_frame_id_++);
+
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    size_t SyntheticSequence::NumFrames() const {
+        auto max_possible_num_frames = std::max(static_cast<int>(ground_truth_poses_.size()) - init_frame_id_, 0);
+        return max_num_frames_ < 0 ? max_possible_num_frames : std::min(max_possible_num_frames, max_num_frames_);
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    ADatasetSequence::Frame SyntheticSequence::GetUnfilteredFrame(size_t index) const {
+        Frame frame;
+        frame.begin_pose = ground_truth_poses_[index];
+        frame.end_pose = ground_truth_poses_[index];
+        frame.points = acquisition_.GenerateFrame(options_.num_points_per_primitives,
+                                                  ground_truth_poses_[index].dest_timestamp,
+                                                  ground_truth_poses_[index + 1].dest_timestamp,
+                                                  index,
+                                                  options_.max_lidar_distance);
+        return frame;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    void SyntheticSequence::SetInitFrame(int frame_index) {
+        CHECK(frame_index < ground_truth_poses_.size() - 1);
+        init_frame_id_ = frame_index;
+        current_frame_id_ = frame_index;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
     PLYDirectory::PLYDirectory(fs::path &&root_path,
                                size_t expected_size,
-                               PLYDirectory::PatternFunctionType &&optional_pattern) :
+                               PLYDirectory::FilePatternFunctionType &&optional_pattern) :
             root_dir_path_(std::move(root_path)) {
         SetFilePattern(expected_size, std::move(optional_pattern));
     }
@@ -625,12 +704,6 @@ namespace ct_icp {
     bool PLYDirectory::HasNext() const {
         return current_frame_id_ < full_sequence_size_ &&
                (max_num_frames_ < 0 || current_frame_id_ - init_frame_id_ < max_num_frames_);
-    }
-
-    /* -------------------------------------------------------------------------------------------------------------- */
-    void PLYDirectory::SkipFrame() {
-        CHECK(HasNext()) << "Cannot skip a frame. No more frame in the iterator " << std::endl;
-        current_frame_id_++;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -746,7 +819,7 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     namespace {
 
-        std::function<bool(const std::string &)> ExpectedSequenceDirNames(DATASET dataset) {
+        std::function<bool(const fs::path &, const std::string &)> ExpectedSequenceDirNames(DATASET dataset) {
             std::set<std::string> names;
             switch (dataset) {
                 case KITTI:
@@ -766,14 +839,18 @@ namespace ct_icp {
                     names = {"00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11"};
                     break;
                 case NCLT:
-                    return [](const std::string &name) {
+                    return [](const fs::path &, const std::string &name) {
                         return kNCLTDirNameToId.find(name) != kNCLTDirNameToId.end();
                     };
+                case SYNTHETIC:
+                    return [](const fs::path &entry_path, const std::string &name) {
+                        return fs::exists(entry_path) && fs::is_regular_file(entry_path);
+                    };
                 default:
-                    return [](const std::string &name) { return false; };
+                    return [](const fs::path &, const std::string &) { return false; };
             }
 
-            return [names](const std::string &name) {
+            return [names](const fs::path &, const std::string &name) {
                 return names.find(name) != names.end();
             };
         }
@@ -875,12 +952,14 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    std::pair<SequenceInfo, std::shared_ptr<ADatasetSequence>> GetDatasetSequence(const DatasetOptions &options,
-                                                                                  const std::string &seq_dirname,
-                                                                                  const fs::path &sequence_path) {
+    std::optional<std::pair<SequenceInfo,
+            std::shared_ptr<ADatasetSequence>>> GetDatasetSequence(const DatasetOptions &options,
+                                                                   const std::string &seq_dirname,
+                                                                   const fs::path &sequence_path) {
         std::shared_ptr<ADatasetSequence> dataset_sequence = nullptr;
         std::shared_ptr<NCLTIterator> nclt_ptr = nullptr;
         std::shared_ptr<PLYDirectory> ply_directory_ptr = nullptr;
+        std::shared_ptr<SyntheticSequence> synthetic_ptr = nullptr;
         SequenceInfo seq_info;
         std::optional<std::vector<Pose>> gt_poses{};
 
@@ -955,14 +1034,30 @@ namespace ct_icp {
                                                                    });
                 convert_plydir_to_dataset_sequence();
                 break;
+            case SYNTHETIC:
+                if (fs::exists(sequence_path) && fs::is_regular_file(sequence_path)
+                    && sequence_path.has_extension() && sequence_path.extension() == ".yaml") {
+                    synthetic_ptr = SyntheticSequence::PtrFromDirectoryPath(sequence_path.string());
+                    seq_info.sequence_id = 0;
+                    seq_info.sequence_name = seq_dirname;
+                    seq_info.sequence_size = synthetic_ptr->NumFrames();
+                    seq_info.with_ground_truth = true;
+                    dataset_sequence = std::move(synthetic_ptr);
+                    break;
+                }
+                LOG(WARNING) << "The entry path " << sequence_path <<
+                             " is not the path to a yaml file with `.yaml` extension." << std::endl;
+                return {};
+                break;
             case PLY_DIRECTORY:
                 LOG(WARNING) << "You can not define a dataset from `PLY_DIRECTORY`, "
                                 "but you need to use PLYDirectory as a sequence directly." << std::endl;
+                return {};
             default:
                 break;
         }
         CHECK(dataset_sequence) << "Could not build the dataset for sequence " << seq_dirname << std::endl;
-        return {seq_info, dataset_sequence};
+        return {{seq_info, dataset_sequence}};
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -984,22 +1079,23 @@ namespace ct_icp {
 
         for (auto &entry: fs::directory_iterator(root_path)) {
             auto &entry_path = entry.path();
-            if (fs::is_directory(entry_path)) {
+            if ((fs::is_directory(entry_path) && options.dataset != SYNTHETIC) || options.dataset == SYNTHETIC) {
                 auto dirname = entry_path.stem().string();
-                if (function_pattern(dirname)) {
-                    auto[seq_info, dataset_seq] = GetDatasetSequence(options, dirname, entry_path);
+                if (function_pattern(entry_path, dirname)) {
+                    auto sequence_option = GetDatasetSequence(options, dirname, entry_path);
+                    if (sequence_option) {
+                        auto[seq_info, dataset_seq] = *sequence_option;
+                        if (!options.use_all_datasets) {
+                            if (sequence_names.find(seq_info.sequence_name) == sequence_names.end())
+                                continue;
+                            const auto &seq_option = options.sequence_options[sequence_names[seq_info.sequence_name]];
+                            dataset_seq->SetInitFrame(seq_option.start_frame_id);
+                            dataset_seq->SetMaxNumFrames(seq_option.max_num_frames);
+                        }
 
-                    if (!options.use_all_datasets) {
-                        if (sequence_names.find(seq_info.sequence_name) == sequence_names.end())
-                            continue;
-                        const auto &seq_option = options.sequence_options[sequence_names[seq_info.sequence_name]];
-                        dataset_seq->SetInitFrame(seq_option.start_frame_id);
-                        dataset_seq->SetMaxNumFrames(seq_option.max_num_frames);
+                        sequences.push_back(dataset_seq);
+                        sequence_infos.push_back(seq_info);
                     }
-
-
-                    sequences.push_back(dataset_seq);
-                    sequence_infos.push_back(seq_info);
                 }
             }
         }
@@ -1007,7 +1103,7 @@ namespace ct_icp {
             CHECK(sequence_names.size() == sequence_infos.size())
                             << "Could not find all the sequences in `sequence_options`" << std::endl;
 
-        return Dataset(std::move(sequences), std::move(sequence_infos));
+        return Dataset(options.dataset, std::move(sequences), std::move(sequence_infos));
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */

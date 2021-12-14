@@ -5,8 +5,9 @@
 #include "types.h"
 #include <filesystem>
 
-#include "SlamUtils/io.h"
-#include "SlamUtils/trajectory.h"
+#include <SlamUtils/io.h>
+#include <SlamUtils/trajectory.h>
+#include <SlamUtils/synthetic.h>
 
 namespace fs = std::filesystem;
 
@@ -19,7 +20,8 @@ namespace ct_icp {
         KITTI_360 = 3,
         NCLT = 4,
         HILTI = 5,
-        PLY_DIRECTORY = 6
+        PLY_DIRECTORY = 6,
+        SYNTHETIC = 7
     };
 
     DATASET DATASETFromString(const std::string &);
@@ -61,7 +63,7 @@ namespace ct_icp {
         virtual Frame NextFrame();
 
         // Skips the next frame
-        virtual void SkipFrame() = 0;
+        virtual void SkipFrame();
 
         // Returns a frame at `index`. Throws an exception if the dataset does not support Random Access
         // Applies the eventual filter defined on the frame
@@ -103,17 +105,56 @@ namespace ct_icp {
     }
 
     /**
+     * A Synthetic Acquisition simulates the acquisition of a Depth Sensor in a synthetic environment
+     */
+    class SyntheticSequence : public ADatasetSequence {
+    public:
+
+        SyntheticSequence(slam::SyntheticSensorAcquisition &&sensor_acquisition,
+                          std::vector<slam::Pose> &&gt_poses);
+
+        static std::shared_ptr<SyntheticSequence> PtrFromDirectoryPath(const std::string &yaml_path);
+
+        static std::shared_ptr<SyntheticSequence> PtrFromNode(const YAML::Node &node);
+
+        [[nodiscard]] bool HasNext() const override;
+
+        Frame NextUnfilteredFrame() override;
+
+        // Returns the number of frames (-1 if the total number of frames is unknown)
+        [[nodiscard]] size_t NumFrames() const;
+
+        // Returns a frame at `index`. Throws an exception if the dataset does not support Random Access
+        [[nodiscard]] Frame GetUnfilteredFrame(size_t index) const override;;
+
+        // Whether the dataset support random access
+        [[nodiscard]] bool WithRandomAccess() const override { return true; };
+
+        // Returns the ground truth if the dataset has a ground truth
+        std::optional<std::vector<slam::Pose>> GroundTruth() override { return ground_truth_poses_; };
+
+        void SetInitFrame(int frame_index) override;
+
+    private:
+        struct Options {
+            size_t num_points_per_primitives = 300; // The number of points per primitive to sample
+            double max_lidar_distance = 100.0; // The maximum distance to the lidar sensor for points of a new frame
+            double frequency = 10.; // The frequency in Hz of the frame sampling
+        } options_;
+        slam::SyntheticSensorAcquisition acquisition_;
+        std::vector<slam::Pose> ground_truth_poses_;
+    };
+
+    /**
      * A Generic Sequence to iterate over a directory consisting of point cloud PLY files
      */
     class PLYDirectory : public ADatasetSequence {
     public:
-        typedef std::function<std::string(size_t)> PatternFunctionType;
+        typedef std::function<std::string(size_t)> FilePatternFunctionType;
 
-        explicit PLYDirectory(fs::path &&root_path, size_t expected_size, PatternFunctionType &&optional_pattern);
+        explicit PLYDirectory(fs::path &&root_path, size_t expected_size, FilePatternFunctionType &&optional_pattern);
 
         static PLYDirectory FromDirectoryPath(const std::string &dir_path);
-
-        void SkipFrame() override;
 
         static std::shared_ptr<PLYDirectory> PtrFromDirectoryPath(const std::string &dir_path);
 
@@ -150,7 +191,7 @@ namespace ct_icp {
         fs::path root_dir_path_;
         slam::PointCloudSchema schema_;
         std::optional<slam::LinearContinuousTrajectory> ground_truth_{};
-        std::optional<PatternFunctionType> file_pattern_{};
+        std::optional<FilePatternFunctionType> file_pattern_{};
     };
 
     struct SequenceOptions {
@@ -226,8 +267,10 @@ namespace ct_icp {
         static Dataset LoadDataset(const DatasetOptions &options);
 
     private:
-        Dataset(std::vector<std::shared_ptr<ADatasetSequence>> &&dataset_sequences,
+        Dataset(DATASET dataset,
+                std::vector<std::shared_ptr<ADatasetSequence>> &&dataset_sequences,
                 std::vector<SequenceInfo> &&sequence_infos) :
+                dataset_(dataset),
                 sequence_infos_(std::move(sequence_infos)),
                 dataset_sequences_(std::move(dataset_sequences)) {
             int i(0);
