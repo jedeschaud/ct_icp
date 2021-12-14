@@ -139,7 +139,7 @@ namespace ct_icp {
         struct Options {
             size_t num_points_per_primitives = 300; // The number of points per primitive to sample
             double max_lidar_distance = 100.0; // The maximum distance to the lidar sensor for points of a new frame
-            double frequency = 10.; // The frequency in Hz of the frame sampling
+            double sample_frequency = 10.; // The frequency in Hz of the frame sampling
         } options_;
         slam::SyntheticSensorAcquisition acquisition_;
         std::vector<slam::Pose> ground_truth_poses_;

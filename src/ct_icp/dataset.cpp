@@ -607,17 +607,20 @@ namespace ct_icp {
     std::shared_ptr<SyntheticSequence> SyntheticSequence::PtrFromNode(const YAML::Node &root_node) {
         CHECK(root_node["acquisition"]) << "The root node does not contain a node `acquisition` at its root."
                                         << std::endl;
-
-
-        double sample_frequency = 10.;
-        if (root_node["sample_frequency"])
-            sample_frequency = root_node["sample_frequency"].as<double>();
         auto acquisition = slam::SyntheticSensorAcquisition::ReadYAML(root_node["acquisition"]);
-        auto poses = acquisition.GeneratePoses(sample_frequency);
+        double sample_frequency = 10.;
+        Options options;
+        FIND_OPTION(root_node, options, sample_frequency, double)
+        FIND_OPTION(root_node, options, max_lidar_distance, double)
+        FIND_OPTION(root_node, options, num_points_per_primitives, size_t)
+
+        auto poses = acquisition.GeneratePoses(options.sample_frequency);
         double max_t = acquisition.GetTrajectory().MaxTimestamp();
         auto _poses = acquisition.GetTrajectory().Poses();
-        return std::make_shared<SyntheticSequence>(std::move(acquisition),
-                                                   std::move(poses));
+        auto ptr = std::make_shared<SyntheticSequence>(std::move(acquisition),
+                                                       std::move(poses));
+        ptr->options_ = options;
+        return ptr;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -642,7 +645,7 @@ namespace ct_icp {
     ADatasetSequence::Frame SyntheticSequence::GetUnfilteredFrame(size_t index) const {
         Frame frame;
         frame.begin_pose = ground_truth_poses_[index];
-        frame.end_pose = ground_truth_poses_[index];
+        frame.end_pose = ground_truth_poses_[index + 1];
         frame.points = acquisition_.GenerateFrame(options_.num_points_per_primitives,
                                                   ground_truth_poses_[index].dest_timestamp,
                                                   ground_truth_poses_[index + 1].dest_timestamp,

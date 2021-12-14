@@ -7,6 +7,7 @@
 struct Options {
     std::string root_path;
     std::string dataset;
+    double sleep_time = 100; // Sleep time in ms
 };
 
 Options ReadArguments(int argc, char **argv) {
@@ -20,14 +21,19 @@ Options ReadArguments(int argc, char **argv) {
         TCLAP::ValueArg<std::string> dataset_arg("d", "dataset",
                                                  "name of the dataset",
                                                  true, "", "string");
+        TCLAP::ValueArg<double> sleep_arg("s", "sleep",
+                                          "sleep time between two frames",
+                                          false, 100., "double");
 
 
+        cmd.add(sleep_arg);
         cmd.add(config_arg);
         cmd.add(dataset_arg);
 
         // Parse the arguments of the command line
         cmd.parse(argc, argv);
 
+        options.sleep_time = sleep_arg.getValue();
         options.root_path = config_arg.getValue();
         options.dataset = dataset_arg.getValue();
         return options;
@@ -84,6 +90,8 @@ int main(int argc, char **argv) {
             model_data.xyz = slam::slam_to_viz3d_pc(next.points);
             instance.AddModel(model_id, model_ptr);
             it++;
+
+            std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(options.sleep_time));
         }
 
     }
