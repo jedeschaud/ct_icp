@@ -187,7 +187,23 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     Odometry::RegistrationSummary Odometry::RegisterFrame(const std::vector<slam::WPoint3D> &frame) {
         auto frame_info = compute_frame_info(frame, registered_frames_++);
+        if (!trajectory_.empty() && !(trajectory_.back().begin_pose.dest_timestamp <= frame_info.begin_timestamp &&
+                                      trajectory_.back().end_pose.dest_timestamp <= frame_info.end_timestamp)) {
+
+            std::cout << "Num points: " << frame.size() << std::endl;
+            for (auto &point: frame) {
+                std::cout << "World Point:" << point.WorldPointConst()
+                          << " / Raw Point: " << point.RawPointConst() << " / Timestamp: " << point.TimestampConst()
+                          << " / Index Frame: " << point.index_frame << std::endl;
+                throw std::runtime_error("Error!");
+
+            }
+
+
+        }
+
         InitializeMotion(frame_info, nullptr);
+
         return DoRegister(frame, frame_info);
     }
 

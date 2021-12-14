@@ -625,7 +625,7 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     bool SyntheticSequence::HasNext() const {
-        return current_frame_id_ < ground_truth_poses_.size() ||
+        return current_frame_id_ < ground_truth_poses_.size() - 1 ||
                (max_num_frames_ > 0 && (current_frame_id_ - init_frame_id_) < max_num_frames_);
     }
 
@@ -643,9 +643,12 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     ADatasetSequence::Frame SyntheticSequence::GetUnfilteredFrame(size_t index) const {
+        CHECK(index - init_frame_id_ < std::max(max_num_frames_, static_cast<int>(ground_truth_poses_.size() - 1)));
         Frame frame;
         frame.begin_pose = ground_truth_poses_[index];
         frame.end_pose = ground_truth_poses_[index + 1];
+        CHECK(frame.begin_pose->dest_timestamp <= frame.end_pose->dest_timestamp)
+                        << "Error at Index: " << index << " / Max num frames: " << max_num_frames_ << std::endl;
         frame.points = acquisition_.GenerateFrame(options_.num_points_per_primitives,
                                                   ground_truth_poses_[index].dest_timestamp,
                                                   ground_truth_poses_[index + 1].dest_timestamp,
