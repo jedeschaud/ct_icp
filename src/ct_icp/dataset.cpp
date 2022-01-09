@@ -4,7 +4,7 @@
 #include <memory>
 #include <regex>
 
-#include <SlamUtils/config_utils.h>
+#include <SlamCore/config_utils.h>
 #include <ct_icp/dataset.h>
 #include <ct_icp/io.h>
 #include <ct_icp/utils.h>
@@ -502,9 +502,9 @@ namespace ct_icp {
         void OpenFile() {
             Close();
 #ifdef WITH_STD_FILESYSTEM
-            std::filesystem::path root_path(root_path_);
+            fs::path root_path(root_path_);
             auto _hits_file_path = root_path / (sequence_name_ + "_vel") / sequence_name_ / "velodyne_hits.bin";
-            CHECK(std::filesystem::exists(_hits_file_path))
+            CHECK(fs::exists(_hits_file_path))
                             << "The file " << _hits_file_path << " does not exist on disk" << std::endl;
             auto hits_file_path = _hits_file_path.string();
 #elif

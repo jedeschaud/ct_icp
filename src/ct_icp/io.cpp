@@ -1,18 +1,9 @@
-#include <ct_icp/io.h>
-
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 
-#ifdef __has_include(filesystem) // C++17 feature
-
-#define CT_ICP_WITH_FS
-
-#include <filesystem>
-
-namespace fs = std::filesystem;
-
-#endif
+#include "ct_icp/io.h"
+#include "ct_icp/utils.h"
 
 
 namespace ct_icp {
@@ -38,7 +29,7 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     bool SaveTrajectoryFrame(const std::string &file_path, const std::vector<TrajectoryFrame> &trajectory) {
-#ifdef CT_ICP_WITH_FS
+#ifdef WITH_STD_FILESYSTEM
         auto parent_path = fs::path(file_path).parent_path();
         if (!exists(parent_path))
             fs::create_directories(parent_path);

@@ -3,13 +3,12 @@
 
 #include <memory>
 #include "types.h"
-#include <filesystem>
+#include "ct_icp/utils.h"
 
-#include <SlamUtils/io.h>
-#include <SlamUtils/trajectory.h>
-#include <SlamUtils/synthetic.h>
+#include <SlamCore/io.h>
+#include <SlamCore/trajectory.h>
+#include <SlamCore/experimental/synthetic.h>
 
-namespace fs = std::filesystem;
 
 namespace ct_icp {
 

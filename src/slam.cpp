@@ -11,8 +11,8 @@
 #include <yaml-cpp/yaml.h>
 #include <tclap/CmdLine.h>
 
-#include <SlamUtils/eval.h>
-#include <SlamUtils/generic_tools.h>
+#include <SlamCore/eval.h>
+#include <SlamCore/generic_tools.h>
 
 #include "ct_icp/odometry.h"
 #include "ct_icp/dataset.h"

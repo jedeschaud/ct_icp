@@ -4,7 +4,7 @@
 #ifdef CT_ICP_WITH_VIZ
 
 #include <viz3d/types.h>
-#include <ct_icp/types.h>
+#include "ct_icp/types.h"
 
 namespace ct_icp {
 

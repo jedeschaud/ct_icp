@@ -13,7 +13,7 @@
 #ifdef CT_ICP_WITH_VIZ
 
 #include <viz3d/engine.h>
-#include <SlamUtils/viz3d_utils.h>
+#include <SlamCore-viz3d/viz3d_utils.h>
 #include "ct_icp/viz3d_utils.h"
 
 #endif

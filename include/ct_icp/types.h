@@ -10,7 +10,7 @@
 #include <Eigen/Dense>
 #include <Eigen/StdVector>
 #include <glog/logging.h>
-#include <SlamUtils/types.h>
+#include <SlamCore/types.h>
 
 #include "utils.h"
 

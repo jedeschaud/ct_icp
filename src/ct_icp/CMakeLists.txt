@@ -33,5 +33,6 @@ target_include_directories(CT_ICP PUBLIC
         "$<BUILD_INTERFACE:${CT_ICP_INCLUDE_DIR}>"
         "$<INSTALL_INTERFACE:include>")
 target_link_libraries(CT_ICP PUBLIC Eigen3::Eigen Ceres::ceres glog::glog
-        tsl::robin_map yaml-cpp OpenMP::OpenMP_CXX colormap::colormap Slam::SlamUtils)
+        tsl::robin_map yaml-cpp OpenMP::OpenMP_CXX colormap::colormap Slam::SlamCore)
+
 LINK_WITH_VIZ3D(TARGET CT_ICP)

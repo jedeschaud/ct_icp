@@ -17,19 +17,26 @@ if (NOT SUPERBUILD_INSTALL_DIR)
 endif ()
 
 # ----------------------------------------------------------------------------------------------------------------------
-# Find package SlamUtils
+# Find package SlamCore
 
-if (NOT SLAM_UTILS_DIR)
-    set(SLAM_UTILS_DIR ${SUPERBUILD_INSTALL_DIR}/SlamUtils/lib/cmake)
-    get_filename_component(SLAM_UTILS_DIR ${SLAM_UTILS_DIR} ABSOLUTE)
-    message(INFO "${LOG_PREFIX}Variable \"SLAM_UTILS_DIR\" not specified. Trying to set it to ${SLAM_UTILS_DIR}.")
+if (NOT SLAM_CORE_DIR)
+    set(SLAM_CORE_DIR ${SUPERBUILD_INSTALL_DIR}/SlamCore/lib/cmake)
+    get_filename_component(SLAM_CORE_DIR ${SLAM_CORE_DIR} ABSOLUTE)
+    message(INFO "${LOG_PREFIX}Variable \"SLAM_CORE_DIR\" not specified. Trying to set it to ${SLAM_CORE_DIR}.")
 endif ()
-find_package(SlamUtils REQUIRED CONFIG PATHS ${SLAM_UTILS_DIR} NO_DEFAULT_PATH)
+find_package(SlamCore REQUIRED CONFIG PATHS ${SLAM_CORE_DIR} NO_DEFAULT_PATH)
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Define Default variables
 
 SLAM_COMPILER_FLAGS()
+if (UNIX)
+    if (CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 8.1)
+        message(INFO "${LOG_PREFIX}GCC version detected is ${CMAKE_CXX_COMPILER_VERSION}. Adding the filesystem library with 'stdc++fs' flag.")
+        link_libraries(stdc++fs)
+    endif ()
+endif ()
+
 SLAM_DEFAULT_VARIABLES()
 SLAM_INCLUDE_SUPERBUILD()
 SLAM_INSTALL_DEFAULT_VARIABLES(TARGET CT_ICP PREFIX CT_ICP)
@@ -46,6 +53,7 @@ endif ()
 SLAM_CHECK_TARGETS(Ceres::ceres glog::glog Eigen3::Eigen OpenMP::OpenMP_CXX)
 if (WITH_VIZ3D)
     SLAM_CHECK_TARGETS(viz3d)
+    find_package(SlamCore-viz3d REQUIRED CONFIG PATHS ${SLAM_CORE_DIR} NO_DEFAULT_PATH)
 endif ()
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -54,7 +62,7 @@ macro(LINK_WITH_VIZ3D)
     cmake_parse_arguments(SLAM "" "${on_value_args}" "" ${ARGN})
     if (WITH_VIZ3D)
         target_compile_definitions(${SLAM_TARGET} PUBLIC CT_ICP_WITH_VIZ=1)
-        target_link_libraries(${SLAM_TARGET} PUBLIC viz3d)
+        target_link_libraries(${SLAM_TARGET} PUBLIC viz3d Slam::SlamCore-viz3d)
     endif ()
 endmacro(LINK_WITH_VIZ3D)
 
