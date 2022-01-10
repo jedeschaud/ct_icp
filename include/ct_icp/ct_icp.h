@@ -15,9 +15,10 @@
 #include <unordered_map>
 
 #include <Eigen/Dense>
+#include <SlamCore/pointcloud.h>
 
-#include "types.h"
-#include "cost_functions.h"
+#include "ct_icp/types.h"
+#include "ct_icp/cost_functions.h"
 
 
 namespace ct_icp {
@@ -131,11 +132,67 @@ namespace ct_icp {
     };
 
     struct ICPSummary {
+
         bool success = false; // Whether the registration succeeded
 
         int num_residuals_used = 0;
 
         std::string error_log;
+    };
+
+
+    /*!
+     * @class   CT_ICP_Registration
+     */
+    class CT_ICP_Registration {
+#define PARAMETER_GETSET(param, type, default_value) \
+        type param ## _= default_value;                                 \
+    public:                                                             \
+        const type& Get ##param() const { return param ## _;};          \
+        void Set ## param(const type& value) { param ## _ = value;};
+
+    private:
+        /// The element of the Raw Point in the input PointCloud schema
+        PARAMETER_GETSET(RawPointElement, std::string, "vertex");
+    private:
+        /// The element of the World Point in the input PointCloud schema
+        PARAMETER_GETSET(WorldPointElement, std::string, "");
+    private:
+        /// The element of the Timestamp property in the input PointCloud schema
+        PARAMETER_GETSET(TimestampsElement, std::string, "");
+    private:
+        /// The property of the timestamp in the Input PointCloud schema
+        PARAMETER_GETSET(TimestampsProperty, std::string, "");
+    public:
+
+        CTICPOptions &Options() { return options_; }
+
+        ICPSummary Register(const VoxelHashMap &voxel_map,
+                            std::vector<slam::WPoint3D> &keypoints,
+                            TrajectoryFrame &trajectory_frame,
+                            const TrajectoryFrame *const previous_frame = nullptr);
+
+        ICPSummary Register(const VoxelHashMap &voxel_map,
+                            slam::PointCloud &keypoints,
+                            TrajectoryFrame &trajectory_frame,
+                            const TrajectoryFrame *const previous_frame = nullptr);
+
+    private:
+        ICPSummary DoRegisterCeres(const VoxelHashMap &voxel_map,
+                                   slam::ProxyView<Eigen::Vector3d> &raw_kpts,
+                                   slam::ProxyView<Eigen::Vector3d> &world_kpts,
+                                   slam::ProxyView<double> &timestamps,
+                                   TrajectoryFrame &trajectory_frame,
+                                   const TrajectoryFrame *const previous_frame = nullptr);
+
+//        ICPSummary DoRegisterGaussNewton(const VoxelHashMap &voxel_map,
+//                                         slam::ProxyView<Eigen::Vector3d> &raw_kpts,
+//                                         slam::ProxyView<Eigen::Vector3d> &world_kpts,
+//                                         slam::ProxyView<double> &timestamps,
+//                                         TrajectoryFrame &trajectory_frame,
+//                                         const TrajectoryFrame *const previous_frame = nullptr);
+
+        CTICPOptions options_;
     };
 
     // CT_ICP_CERES : Registers keypoints into the voxel_map taking into account the motion of the
@@ -158,15 +215,17 @@ namespace ct_icp {
     //      At each iteration, after refinement of the estimate of the end pose of the trajectory frame
     //
     // Note: CT_ICP_CERES will modify the last TrajectoryFrame of the trajectory vector
-    ICPSummary CT_ICP_CERES(const CTICPOptions &options,
-                            const VoxelHashMap &voxels_map, std::vector<slam::WPoint3D> &keypoints,
-                            TrajectoryFrame &trajectory_frame,
-                            const TrajectoryFrame *const previous_frame = nullptr);
+//    ICPSummary CT_ICP_CERES(const CTICPOptions &options,
+//                            const VoxelHashMap &voxels_map,
+//                            std::vector<slam::WPoint3D> &keypoints,
+//                            TrajectoryFrame &trajectory_frame,
+//                            const TrajectoryFrame *const previous_frame = nullptr);
 
-    ICPSummary CT_ICP_GN(const CTICPOptions &options,
-                         const VoxelHashMap &voxels_map, std::vector<slam::WPoint3D> &keypoints,
-                         TrajectoryFrame &trajectory_frame,
-                         const TrajectoryFrame *const previous_frame = nullptr);
+
+//    ICPSummary CT_ICP_GN(const CTICPOptions &options,
+//                         const VoxelHashMap &voxels_map, std::vector<slam::WPoint3D> &keypoints,
+//                         TrajectoryFrame &trajectory_frame,
+//                         const TrajectoryFrame *const previous_frame = nullptr);
 
 } // namespace Elastic_ICP
 

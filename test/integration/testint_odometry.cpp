@@ -1,6 +1,6 @@
 #include <thread>
 #include <viz3d/engine.h>
-#include <SlamUtils/types.h>
+#include <SlamCore/types.h>
 #include "testint_utils.h"
 
 

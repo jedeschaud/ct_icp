@@ -188,7 +188,6 @@ namespace ct_icp {
     Odometry::RegistrationSummary Odometry::RegisterFrame(const std::vector<slam::WPoint3D> &frame) {
         auto frame_info = compute_frame_info(frame, registered_frames_++);
         InitializeMotion(frame_info, nullptr);
-
         return DoRegister(frame, frame_info);
     }
 
@@ -591,13 +590,18 @@ namespace ct_icp {
 
             //CT ICP
             ICPSummary icp_summary;
-            if (options_.ct_icp_options.solver == CT_ICP_SOLVER::GN) {
-                icp_summary = CT_ICP_GN(options, voxel_map_, keypoints,
-                                        registration_summary.frame, previous_frame);
-            } else {
-                icp_summary = CT_ICP_CERES(options, voxel_map_, keypoints,
-                                           registration_summary.frame, previous_frame);
-            }
+//            if (options_.ct_icp_options.solver == CT_ICP_SOLVER::GN) {
+            CT_ICP_Registration registration;
+            registration.Options() = options;
+            icp_summary = registration.Register(voxel_map_,
+                                                keypoints,
+                                                registration_summary.frame, previous_frame);
+//                icp_summary = CT_ICP_GN(options, voxel_map_, keypoints,
+//                                        registration_summary.frame, previous_frame);
+//            } else {
+//                icp_summary = CT_ICP_CERES(options, voxel_map_, keypoints,
+//                                           registration_summary.frame, previous_frame);
+//            }
 
             registration_summary.success = icp_summary.success;
             registration_summary.number_of_residuals = icp_summary.num_residuals_used;

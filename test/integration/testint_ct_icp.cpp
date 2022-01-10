@@ -1,6 +1,6 @@
 #include <thread>
 #include <viz3d/engine.h>
-#include <SlamUtils/types.h>
+#include <SlamCore/types.h>
 #include <ct_icp/ct_icp.h>
 #include <ct_icp/odometry.h>
 #include "testint_utils.h"
@@ -32,14 +32,18 @@ bool TestCT_ICP(const ct_icp::CTICPOptions &options) {
     ct_icp::TrajectoryFrame frame;
     frame.begin_pose = init_pose;
     frame.end_pose = noisy_pose;
-    switch (options.solver) {
-        case ct_icp::CERES:
-            ct_icp::CT_ICP_CERES(options, map, keypoints, frame);
-            break;
-        case ct_icp::GN:
-            ct_icp::CT_ICP_GN(options, map, keypoints, frame);
-            break;
-    }
+
+    ct_icp::CT_ICP_Registration registration;
+    registration.Options() = options;
+    registration.Register(map, keypoints, frame);
+//    switch (options.solver) {
+//        case ct_icp::CERES:
+//            ct_icp::CT_ICP_CERES(options, map, keypoints, frame);
+//            break;
+//        case ct_icp::GN:
+//            ct_icp::CT_ICP_GN(options, map, keypoints, frame);
+//            break;
+//    }
 
     auto corrected_keypoints = keypoints;
     add_pc_model(2, corrected_keypoints, 6, Eigen::Vector3f(0.f, 1.0f, 0.0f));

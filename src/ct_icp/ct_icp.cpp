@@ -231,12 +231,16 @@ namespace ct_icp {
         using PointToPlaneResidual = ceres::AutoDiffCostFunction<PointToPlaneFunctor, 1, 4, 3>;
 
         explicit ICPOptimizationBuilder(const CTICPOptions *options,
-                                        const std::vector<slam::WPoint3D> *points) :
+                                        const slam::ProxyView<Eigen::Vector3d> &raw_points,
+                                        const slam::ProxyView<Eigen::Vector3d> &world_points,
+                                        const slam::ProxyView<double> &timestamps) :
                 options_(options),
-                keypoints(points) {
-            corrected_raw_points_.resize(keypoints->size());
-            for (int i(0); i < points->size(); ++i)
-                corrected_raw_points_[i] = (*points)[i].RawPointConst();
+                timestamps_(timestamps),
+                raw_points_(raw_points),
+                world_points_(world_points) {
+            corrected_raw_points_.resize(world_points.size());
+            for (int i(0); i < raw_points_.size(); ++i)
+                corrected_raw_points_[i] = raw_points_[i].operator Eigen::Vector3d();
 
             max_num_residuals_ = options->max_num_residuals;
         }
@@ -280,12 +284,13 @@ namespace ct_icp {
                 // Distorts the frame (put all raw_points in the coordinate frame of the pose at the end of the acquisition)
                 auto end_pose_I = end_pose.Inverse().pose; // Rotation of the inverse pose
 
-                for (int i(0); i < keypoints->size(); ++i) {
-                    auto &keypoint = (*keypoints)[i];
-                    auto interpolated_pose = begin_pose.InterpolatePose(end_pose, keypoint.TimestampConst());
+                for (int i(0); i < world_points_.size(); ++i) {
+                    Eigen::Vector3d raw_point = raw_points_[i];
+                    double timestamp = timestamps_[i];
+                    auto interpolated_pose = begin_pose.InterpolatePose(end_pose, timestamp);
 
                     // Distort Raw Keypoints
-                    corrected_raw_points_[i] = end_pose_I * (interpolated_pose * keypoint.RawPointConst());
+                    corrected_raw_points_[i] = end_pose_I * (interpolated_pose * raw_point);
                 }
             }
         }
@@ -397,11 +402,11 @@ namespace ct_icp {
                 auto &instance = viz::ExplorationEngine::Instance();
                 auto model_ptr = std::make_shared<viz::PointCloudModel>();
                 auto &model_data = model_ptr->ModelData();
-                model_data.xyz.reserve(keypoints->size());
+                model_data.xyz.reserve(world_points_.size());
                 model_data.point_size = 6;
                 model_data.default_color = Eigen::Vector3f(1, 0, 0);
-                model_data.rgb.reserve(keypoints->size());
-                std::vector<double> scalars(keypoints->size());
+                model_data.rgb.reserve(world_points_.size());
+                std::vector<double> scalars(world_points_.size());
 
                 double s_min = 0.0;
                 double s_max = 1.0;
@@ -409,8 +414,8 @@ namespace ct_icp {
                 if (options_->viz_mode == WEIGHT || options_->viz_mode == TIMESTAMP) {
                     s_min = std::numeric_limits<double>::max();
                     s_max = std::numeric_limits<double>::min();
-                    s_values.resize(keypoints->size());
-                    for (int i(0); i < keypoints->size(); ++i) {
+                    s_values.resize(world_points_.size());
+                    for (int i(0); i < world_points_.size(); ++i) {
                         double new_s;
                         auto *ptr = vector_cost_functors_[i];
                         if (ptr != nullptr) {
@@ -437,12 +442,12 @@ namespace ct_icp {
                     }
                 }
 
-                for (size_t i(0); i < keypoints->size(); ++i) {
+                for (size_t i(0); i < world_points_.size(); ++i) {
                     void *ptr = vector_cost_functors_[i];
                     if (!ptr)
                         continue;
-                    model_data.xyz.push_back((*keypoints)[i].WorldPointConst().cast<float>());
-                    scalars[i] = (*keypoints)[i].TimestampConst();
+                    model_data.xyz.push_back(world_points_[i].operator Eigen::Vector3d().cast<float>());
+                    scalars[i] = timestamps_[i].operator double();
                     if (options_->viz_mode == NORMAL) {
                         switch (options_->distance) {
                             case CT_POINT_TO_PLANE:
@@ -486,7 +491,9 @@ namespace ct_icp {
         double *end_t_ = nullptr;
 
         // Pointers managed by ceres
-        const std::vector<slam::WPoint3D> *keypoints;
+        const slam::ProxyView<Eigen::Vector3d> &world_points_;
+        const slam::ProxyView<Eigen::Vector3d> &raw_points_;
+        const slam::ProxyView<double> &timestamps_;
         std::vector<Eigen::Vector3d> corrected_raw_points_;
 
         std::vector<void *> vector_cost_functors_;
@@ -494,11 +501,18 @@ namespace ct_icp {
         ceres::LossFunction *loss_function = nullptr;
     };
 
+
     /* -------------------------------------------------------------------------------------------------------------- */
-    ICPSummary CT_ICP_CERES(const CTICPOptions &options,
-                            const VoxelHashMap &voxels_map, std::vector<slam::WPoint3D> &slam_keypoints,
-                            TrajectoryFrame &frame_to_optimize,
-                            const TrajectoryFrame *const _previous_frame) {
+
+    ICPSummary CT_ICP_Registration::DoRegisterCeres(const VoxelHashMap &voxels_map,
+                                                    slam::ProxyView<Eigen::Vector3d> &raw_kpts,
+                                                    slam::ProxyView<Eigen::Vector3d> &world_kpts,
+                                                    slam::ProxyView<double> &timestamps,
+                                                    TrajectoryFrame &frame_to_optimize,
+                                                    const TrajectoryFrame *const _previous_frame) {
+        CHECK(raw_kpts.size() == world_kpts.size() && raw_kpts.size() == timestamps.size());
+        size_t num_points = raw_kpts.size();
+        auto &options = Options();
 
         frame_to_optimize.begin_pose.pose.quat.normalize();
         frame_to_optimize.end_pose.pose.quat.normalize();
@@ -530,21 +544,25 @@ namespace ct_icp {
 
         int number_of_residuals;
 
-        ICPOptimizationBuilder builder(&options, &slam_keypoints);
+        ICPOptimizationBuilder builder(&options, raw_kpts, world_kpts, timestamps);
         if (options.point_to_plane_with_distortion) {
             builder.DistortFrame(begin_pose, end_pose);
         }
 
         auto transform_keypoints = [&]() {
             // Elastically distorts the frame to improve on Neighbor estimation
-            for (auto &keypoint: slam_keypoints) {
+            for (auto i(0); i < num_points; ++i) {
                 if (options.point_to_plane_with_distortion ||
                     options.distance == CT_POINT_TO_PLANE) {
+                    double timestamp = timestamps[i];
+                    auto world_point_proxy = world_kpts[i];
                     auto interpolated_pose = frame_to_optimize.begin_pose.InterpolatePose(
-                            frame_to_optimize.end_pose, keypoint.Timestamp());
-                    keypoint.WorldPoint() = interpolated_pose * keypoint.raw_point.point;
-                } else
-                    keypoint.WorldPoint() = frame_to_optimize.end_pose * keypoint.raw_point.point;
+                            frame_to_optimize.end_pose, timestamp);
+                    world_point_proxy = interpolated_pose * (raw_kpts[i].operator Eigen::Vector3d());
+                } else {
+                    auto world_point_proxy = world_kpts[i];
+                    world_point_proxy = frame_to_optimize.end_pose * (raw_kpts[i].operator Eigen::Vector3d());
+                }
             }
         };
 
@@ -573,19 +591,21 @@ namespace ct_icp {
         for (int iter(0); iter < options.num_iters_icp; iter++) {
             transform_keypoints();
 
-            builder.InitProblem(slam_keypoints.size() * options.num_closest_neighbors);
+            builder.InitProblem(num_points * options.num_closest_neighbors);
             builder.AddParameterBlocks(begin_quat, end_quat, begin_t, end_t);
 
             // Add Point-to-plane residuals
-            int num_keypoints = slam_keypoints.size();
+            int num_keypoints = num_points;
             int num_threads = options.ls_num_threads;
 #pragma omp parallel for num_threads(num_threads)
             for (int k = 0; k < num_keypoints; ++k) {
-                auto &keypoint = slam_keypoints[k];
-                auto &raw_point = keypoint.raw_point.point;
+                Eigen::Vector3d raw_point = raw_kpts[k];
+                double timestamp = timestamps[k];
+                Eigen::Vector3d world_point = world_kpts[k];
+
                 // Neighborhood search
-                std::vector <Voxel> voxels;
-                auto vector_neighbors = search_neighbors(voxels_map, keypoint.WorldPoint(),
+                std::vector<Voxel> voxels;
+                auto vector_neighbors = search_neighbors(voxels_map, world_point,
                                                          nb_voxels_visited, options.size_voxel_map,
                                                          options.max_number_neighbors, kThresholdCapacity,
                                                          options.estimate_normal_from_neighborhood ? nullptr : &voxels);
@@ -600,19 +620,19 @@ namespace ct_icp {
 
                 weight = lambda_weight * weight +
                          lambda_neighborhood * std::exp(-(vector_neighbors[0] -
-                                                          keypoint.WorldPoint()).norm() /
+                                                          world_point).norm() /
                                                         (kMaxPointToPlane * kMinNumNeighbors));
 
                 double point_to_plane_dist;
-                std::set <Voxel> neighbor_voxels;
+                std::set<Voxel> neighbor_voxels;
                 for (int i(0); i < options.num_closest_neighbors; ++i) {
                     point_to_plane_dist = std::abs(
-                            (keypoint.WorldPoint() - vector_neighbors[i]).transpose() * neighborhood.normal);
+                            (world_point - vector_neighbors[i]).transpose() * neighborhood.normal);
                     if (point_to_plane_dist < options.max_dist_to_plane_ct_icp) {
                         builder.SetResidualBlock(options.num_closest_neighbors * k + i, k,
                                                  vector_neighbors[i],
                                                  neighborhood.normal, weight,
-                                                 begin_pose.GetAlphaTimestamp(keypoint.Timestamp(), end_pose));
+                                                 begin_pose.GetAlphaTimestamp(timestamp, end_pose));
                     }
                 }
             }
@@ -718,280 +738,313 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    ICPSummary CT_ICP_GN(const CTICPOptions &options,
-                         const VoxelHashMap &voxels_map, std::vector<slam::WPoint3D> &slam_keypoints,
-                         TrajectoryFrame &frame_to_optimize,
-                         const TrajectoryFrame *const _previous_frame) {
+//    ICPSummary CT_ICP_GN(const CTICPOptions &options,
+//                         const VoxelHashMap &voxels_map,
+//                         std::vector<slam::WPoint3D> &slam_keypoints,
+//                         TrajectoryFrame &frame_to_optimize,
+//                         const TrajectoryFrame *const _previous_frame) {
+//
+//        frame_to_optimize.begin_pose.pose.quat.normalize();
+//        frame_to_optimize.end_pose.pose.quat.normalize();
+//        auto &pose_begin = frame_to_optimize.begin_pose;
+//        auto &pose_end = frame_to_optimize.end_pose;
+//
+//
+//        //Optimization with Traj constraints
+//        double ALPHA_C = options.beta_location_consistency; // 0.001;
+//        double ALPHA_E = options.beta_constant_velocity; // 0.001; //no ego (0.0) is not working
+//
+//        // For the 50 first frames, visit 2 voxels
+//        const short nb_voxels_visited = options.voxel_neighborhood;
+//        int number_keypoints_used = 0;
+//        const int kMinNumNeighbors = options.min_number_neighbors;
+//
+//        using AType = Eigen::Matrix<double, 12, 12>;
+//        using bType = Eigen::Matrix<double, 12, 1>;
+//        AType A;
+//        bType b;
+//
+//        // TODO Remove chronos
+//        double elapsed_search_neighbors = 0.0;
+//        double elapsed_select_closest_neighbors = 0.0;
+//        double elapsed_normals = 0.0;
+//        double elapsed_A_construction = 0.0;
+//        double elapsed_solve = 0.0;
+//        double elapsed_update = 0.0;
+//
+//        ICPSummary summary;
+//
+//        int num_iter_icp = options.num_iters_icp;
+//        for (int iter(0); iter < num_iter_icp; iter++) {
+//            A = Eigen::MatrixXd::Zero(12, 12);
+//            b = Eigen::VectorXd::Zero(12);
+//
+//            number_keypoints_used = 0;
+//            double total_scalar = 0;
+//            double mean_scalar = 0.0;
+//
+//            for (auto &keypoint: slam_keypoints) {
+//                auto start = std::chrono::steady_clock::now();
+//                auto &pt_keypoint = keypoint.WorldPoint();
+//
+//                // Neighborhood search
+//                ArrayVector3d vector_neighbors = search_neighbors(voxels_map, pt_keypoint,
+//                                                                  nb_voxels_visited, options.size_voxel_map,
+//                                                                  options.max_number_neighbors);
+//                auto step1 = std::chrono::steady_clock::now();
+//                std::chrono::duration<double> _elapsed_search_neighbors = step1 - start;
+//                elapsed_search_neighbors += _elapsed_search_neighbors.count() * 1000.0;
+//
+//
+//                if (vector_neighbors.size() < kMinNumNeighbors) {
+//                    continue;
+//                }
+//
+//                auto step2 = std::chrono::steady_clock::now();
+//                std::chrono::duration<double> _elapsed_neighbors_selection = step2 - step1;
+//                elapsed_select_closest_neighbors += _elapsed_neighbors_selection.count() * 1000.0;
+//
+//                // Compute normals from neighbors
+//                auto neighborhood = compute_neighborhood_distribution(vector_neighbors);
+//                double planarity_weight = neighborhood.a2D;
+//                auto &normal = neighborhood.normal;
+//
+//                if (normal.dot(frame_to_optimize.BeginTr() - pt_keypoint) < 0) {
+//                    normal = -1.0 * normal;
+//                }
+//
+//                double alpha_timestamp = pose_begin.GetAlphaTimestamp(keypoint.Timestamp(), pose_end);
+//                double weight = planarity_weight *
+//                                planarity_weight; //planarity_weight**2 much better than planarity_weight (planarity_weight**3 is not working)
+//                Eigen::Vector3d closest_pt_normal = weight * normal;
+//
+//                Eigen::Vector3d closest_point = vector_neighbors[0];
+//
+//                double dist_to_plane = normal[0] * (pt_keypoint[0] - closest_point[0]) +
+//                                       normal[1] * (pt_keypoint[1] - closest_point[1]) +
+//                                       normal[2] * (pt_keypoint[2] - closest_point[2]);
+//
+//                auto step3 = std::chrono::steady_clock::now();
+//                std::chrono::duration<double> _elapsed_normals = step3 - step2;
+//                elapsed_normals += _elapsed_normals.count() * 1000.0;
+//
+//                // std::cout << "dist_to_plane : " << dist_to_plane << std::endl;
+//
+//                if (fabs(dist_to_plane) < options.max_dist_to_plane_ct_icp) {
+//
+//                    double scalar = closest_pt_normal[0] * (pt_keypoint[0] - closest_point[0]) +
+//                                    closest_pt_normal[1] * (pt_keypoint[1] - closest_point[1]) +
+//                                    closest_pt_normal[2] * (pt_keypoint[2] - closest_point[2]);
+//                    total_scalar = total_scalar + scalar * scalar;
+//                    mean_scalar = mean_scalar + fabs(scalar);
+//                    number_keypoints_used++;
+//
+//
+//                    Eigen::Vector3d frame_idx_previous_origin_begin =
+//                            frame_to_optimize.BeginQuat() * keypoint.RawPoint();
+//                    Eigen::Vector3d frame_idx_previous_origin_end =
+//                            frame_to_optimize.EndQuat() * keypoint.RawPoint();
+//
+//                    double cbx =
+//                            (1 - alpha_timestamp) * (frame_idx_previous_origin_begin[1] * closest_pt_normal[2] -
+//                                                     frame_idx_previous_origin_begin[2] * closest_pt_normal[1]);
+//                    double cby =
+//                            (1 - alpha_timestamp) * (frame_idx_previous_origin_begin[2] * closest_pt_normal[0] -
+//                                                     frame_idx_previous_origin_begin[0] * closest_pt_normal[2]);
+//                    double cbz =
+//                            (1 - alpha_timestamp) * (frame_idx_previous_origin_begin[0] * closest_pt_normal[1] -
+//                                                     frame_idx_previous_origin_begin[1] * closest_pt_normal[0]);
+//
+//                    double nbx = (1 - alpha_timestamp) * closest_pt_normal[0];
+//                    double nby = (1 - alpha_timestamp) * closest_pt_normal[1];
+//                    double nbz = (1 - alpha_timestamp) * closest_pt_normal[2];
+//
+//                    double cex = (alpha_timestamp) * (frame_idx_previous_origin_end[1] * closest_pt_normal[2] -
+//                                                      frame_idx_previous_origin_end[2] * closest_pt_normal[1]);
+//                    double cey = (alpha_timestamp) * (frame_idx_previous_origin_end[2] * closest_pt_normal[0] -
+//                                                      frame_idx_previous_origin_end[0] * closest_pt_normal[2]);
+//                    double cez = (alpha_timestamp) * (frame_idx_previous_origin_end[0] * closest_pt_normal[1] -
+//                                                      frame_idx_previous_origin_end[1] * closest_pt_normal[0]);
+//
+//                    double nex = (alpha_timestamp) * closest_pt_normal[0];
+//                    double ney = (alpha_timestamp) * closest_pt_normal[1];
+//                    double nez = (alpha_timestamp) * closest_pt_normal[2];
+//
+//                    Eigen::VectorXd u(12);
+//                    u << cbx, cby, cbz, nbx, nby, nbz, cex, cey, cez, nex, ney, nez;
+//                    for (int i = 0; i < 12; i++) {
+//                        for (int j = 0; j < 12; j++) {
+//                            A(i, j) = A(i, j) + u[i] * u[j];
+//                        }
+//                        b(i) = b(i) - u[i] * scalar;
+//                    }
+//
+//
+//                    auto step4 = std::chrono::steady_clock::now();
+//                    std::chrono::duration<double> _elapsed_A = step4 - step3;
+//                    elapsed_search_neighbors += _elapsed_A.count() * 1000.0;
+//                }
+//            }
+//
+//
+//            if (number_keypoints_used < 100) {
+//                std::stringstream ss_out;
+//                ss_out << "[CT_ICP]Error : not enough keypoints selected in ct-icp !" << std::endl;
+//                ss_out << "[CT_ICP]Number_of_residuals : " << number_keypoints_used << std::endl;
+//
+//                summary.error_log = ss_out.str();
+//                if (options.debug_print)
+//                    std::cout << summary.error_log;
+//
+//                summary.success = false;
+//                return summary;
+//            }
+//
+//            auto start = std::chrono::steady_clock::now();
+//
+//
+//            // Normalize equation
+//            for (int i(0); i < 12; i++) {
+//                for (int j(0); j < 12; j++) {
+//                    A(i, j) = A(i, j) / number_keypoints_used;
+//                }
+//                b(i) = b(i) / number_keypoints_used;
+//            }
+//
+//            //Add constraints in trajectory
+//            if (_previous_frame) //no constraints for frame_index == 1
+//            {
+//                Eigen::Vector3d diff_traj = frame_to_optimize.BeginTr() - frame_to_optimize.EndTr();
+//                A(3, 3) = A(3, 3) + ALPHA_C;
+//                A(4, 4) = A(4, 4) + ALPHA_C;
+//                A(5, 5) = A(5, 5) + ALPHA_C;
+//                b(3) = b(3) - ALPHA_C * diff_traj(0);
+//                b(4) = b(4) - ALPHA_C * diff_traj(1);
+//                b(5) = b(5) - ALPHA_C * diff_traj(2);
+//
+//                Eigen::Vector3d diff_ego = frame_to_optimize.EndTr() - frame_to_optimize.BeginTr() -
+//                                           _previous_frame->EndTr() + _previous_frame->BeginTr();
+//                A(9, 9) = A(9, 9) + ALPHA_E;
+//                A(10, 10) = A(10, 10) + ALPHA_E;
+//                A(11, 11) = A(11, 11) + ALPHA_E;
+//                b(9) = b(9) - ALPHA_E * diff_ego(0);
+//                b(10) = b(10) - ALPHA_E * diff_ego(1);
+//                b(11) = b(11) - ALPHA_E * diff_ego(2);
+//            }
+//
+//
+//            //Solve
+//            Eigen::VectorXd x_bundle = A.ldlt().solve(b);
+//
+//            double alpha_begin = x_bundle(0);
+//            double beta_begin = x_bundle(1);
+//            double gamma_begin = x_bundle(2);
+//            Eigen::Matrix3d rotation_begin;
+//            rotation_begin(0, 0) = cos(gamma_begin) * cos(beta_begin);
+//            rotation_begin(0, 1) =
+//                    -sin(gamma_begin) * cos(alpha_begin) + cos(gamma_begin) * sin(beta_begin) * sin(alpha_begin);
+//            rotation_begin(0, 2) =
+//                    sin(gamma_begin) * sin(alpha_begin) + cos(gamma_begin) * sin(beta_begin) * cos(alpha_begin);
+//            rotation_begin(1, 0) = sin(gamma_begin) * cos(beta_begin);
+//            rotation_begin(1, 1) =
+//                    cos(gamma_begin) * cos(alpha_begin) + sin(gamma_begin) * sin(beta_begin) * sin(alpha_begin);
+//            rotation_begin(1, 2) =
+//                    -cos(gamma_begin) * sin(alpha_begin) + sin(gamma_begin) * sin(beta_begin) * cos(alpha_begin);
+//            rotation_begin(2, 0) = -sin(beta_begin);
+//            rotation_begin(2, 1) = cos(beta_begin) * sin(alpha_begin);
+//            rotation_begin(2, 2) = cos(beta_begin) * cos(alpha_begin);
+//            Eigen::Vector3d translation_begin = Eigen::Vector3d(x_bundle(3), x_bundle(4), x_bundle(5));
+//
+//            double alpha_end = x_bundle(6);
+//            double beta_end = x_bundle(7);
+//            double gamma_end = x_bundle(8);
+//            Eigen::Matrix3d rotation_end;
+//            rotation_end(0, 0) = cos(gamma_end) * cos(beta_end);
+//            rotation_end(0, 1) = -sin(gamma_end) * cos(alpha_end) + cos(gamma_end) * sin(beta_end) * sin(alpha_end);
+//            rotation_end(0, 2) = sin(gamma_end) * sin(alpha_end) + cos(gamma_end) * sin(beta_end) * cos(alpha_end);
+//            rotation_end(1, 0) = sin(gamma_end) * cos(beta_end);
+//            rotation_end(1, 1) = cos(gamma_end) * cos(alpha_end) + sin(gamma_end) * sin(beta_end) * sin(alpha_end);
+//            rotation_end(1, 2) = -cos(gamma_end) * sin(alpha_end) + sin(gamma_end) * sin(beta_end) * cos(alpha_end);
+//            rotation_end(2, 0) = -sin(beta_end);
+//            rotation_end(2, 1) = cos(beta_end) * sin(alpha_end);
+//            rotation_end(2, 2) = cos(beta_end) * cos(alpha_end);
+//            Eigen::Vector3d translation_end = Eigen::Vector3d(x_bundle(9), x_bundle(10), x_bundle(11));
+//
+//            pose_begin.QuatRef() = Eigen::Quaterniond(rotation_begin *
+//                                                      frame_to_optimize.BeginQuat().toRotationMatrix());
+//            pose_begin.TrRef() += translation_begin;
+//            pose_end.QuatRef() = Eigen::Quaterniond(rotation_end *
+//                                                    frame_to_optimize.EndQuat().toRotationMatrix());
+//            pose_end.TrRef() += translation_end;
+//
+//            auto solve_step = std::chrono::steady_clock::now();
+//            std::chrono::duration<double> _elapsed_solve = solve_step - start;
+//            elapsed_solve += _elapsed_solve.count() * 1000.0;
+//
+//            frame_to_optimize.begin_pose.pose.quat.normalize();
+//            frame_to_optimize.end_pose.pose.quat.normalize();
+//            //Update keypoints
+//            for (auto &keypoint: slam_keypoints)
+//                keypoint.WorldPoint() = pose_begin.InterpolatePose(pose_end,
+//                                                                   keypoint.Timestamp()) * keypoint.RawPoint();
+//
+//            auto update_step = std::chrono::steady_clock::now();
+//            std::chrono::duration<double> _elapsed_update = update_step - solve_step;
+//            elapsed_update += _elapsed_update.count() * 1000.0;
+//
+//
+//            if ((x_bundle.norm() < options.threshold_orientation_norm)) {
+//                break;
+//            }
+//        }
+//
+//        if (options.debug_print) {
+//            std::cout << "Elapsed Normals: " << elapsed_normals << std::endl;
+//            std::cout << "Elapsed Search Neighbors: " << elapsed_search_neighbors << std::endl;
+//            std::cout << "Elapsed A Construction: " << elapsed_A_construction << std::endl;
+//            std::cout << "Elapsed Select closest: " << elapsed_select_closest_neighbors << std::endl;
+//            std::cout << "Elapsed Solve: " << elapsed_solve << std::endl;
+//            std::cout << "Elapsed Solve: " << elapsed_update << std::endl;
+//            std::cout << "Number iterations CT-ICP : " << options.num_iters_icp << std::endl;
+//        }
+//        summary.success = true;
+//        summary.num_residuals_used = number_keypoints_used;
+//
+//
+//        return summary;
+//    }
 
-        frame_to_optimize.begin_pose.pose.quat.normalize();
-        frame_to_optimize.end_pose.pose.quat.normalize();
-        auto &pose_begin = frame_to_optimize.begin_pose;
-        auto &pose_end = frame_to_optimize.end_pose;
 
-
-        //Optimization with Traj constraints
-        double ALPHA_C = options.beta_location_consistency; // 0.001;
-        double ALPHA_E = options.beta_constant_velocity; // 0.001; //no ego (0.0) is not working
-
-        // For the 50 first frames, visit 2 voxels
-        const short nb_voxels_visited = options.voxel_neighborhood;
-        int number_keypoints_used = 0;
-        const int kMinNumNeighbors = options.min_number_neighbors;
-
-        using AType = Eigen::Matrix<double, 12, 12>;
-        using bType = Eigen::Matrix<double, 12, 1>;
-        AType A;
-        bType b;
-
-        // TODO Remove chronos
-        double elapsed_search_neighbors = 0.0;
-        double elapsed_select_closest_neighbors = 0.0;
-        double elapsed_normals = 0.0;
-        double elapsed_A_construction = 0.0;
-        double elapsed_solve = 0.0;
-        double elapsed_update = 0.0;
-
-        ICPSummary summary;
-
-        int num_iter_icp = options.num_iters_icp;
-        for (int iter(0); iter < num_iter_icp; iter++) {
-            A = Eigen::MatrixXd::Zero(12, 12);
-            b = Eigen::VectorXd::Zero(12);
-
-            number_keypoints_used = 0;
-            double total_scalar = 0;
-            double mean_scalar = 0.0;
-
-            for (auto &keypoint: slam_keypoints) {
-                auto start = std::chrono::steady_clock::now();
-                auto &pt_keypoint = keypoint.WorldPoint();
-
-                // Neighborhood search
-                ArrayVector3d vector_neighbors = search_neighbors(voxels_map, pt_keypoint,
-                                                                  nb_voxels_visited, options.size_voxel_map,
-                                                                  options.max_number_neighbors);
-                auto step1 = std::chrono::steady_clock::now();
-                std::chrono::duration<double> _elapsed_search_neighbors = step1 - start;
-                elapsed_search_neighbors += _elapsed_search_neighbors.count() * 1000.0;
-
-
-                if (vector_neighbors.size() < kMinNumNeighbors) {
-                    continue;
-                }
-
-                auto step2 = std::chrono::steady_clock::now();
-                std::chrono::duration<double> _elapsed_neighbors_selection = step2 - step1;
-                elapsed_select_closest_neighbors += _elapsed_neighbors_selection.count() * 1000.0;
-
-                // Compute normals from neighbors
-                auto neighborhood = compute_neighborhood_distribution(vector_neighbors);
-                double planarity_weight = neighborhood.a2D;
-                auto &normal = neighborhood.normal;
-
-                if (normal.dot(frame_to_optimize.BeginTr() - pt_keypoint) < 0) {
-                    normal = -1.0 * normal;
-                }
-
-                double alpha_timestamp = pose_begin.GetAlphaTimestamp(keypoint.Timestamp(), pose_end);
-                double weight = planarity_weight *
-                                planarity_weight; //planarity_weight**2 much better than planarity_weight (planarity_weight**3 is not working)
-                Eigen::Vector3d closest_pt_normal = weight * normal;
-
-                Eigen::Vector3d closest_point = vector_neighbors[0];
-
-                double dist_to_plane = normal[0] * (pt_keypoint[0] - closest_point[0]) +
-                                       normal[1] * (pt_keypoint[1] - closest_point[1]) +
-                                       normal[2] * (pt_keypoint[2] - closest_point[2]);
-
-                auto step3 = std::chrono::steady_clock::now();
-                std::chrono::duration<double> _elapsed_normals = step3 - step2;
-                elapsed_normals += _elapsed_normals.count() * 1000.0;
-
-                // std::cout << "dist_to_plane : " << dist_to_plane << std::endl;
-
-                if (fabs(dist_to_plane) < options.max_dist_to_plane_ct_icp) {
-
-                    double scalar = closest_pt_normal[0] * (pt_keypoint[0] - closest_point[0]) +
-                                    closest_pt_normal[1] * (pt_keypoint[1] - closest_point[1]) +
-                                    closest_pt_normal[2] * (pt_keypoint[2] - closest_point[2]);
-                    total_scalar = total_scalar + scalar * scalar;
-                    mean_scalar = mean_scalar + fabs(scalar);
-                    number_keypoints_used++;
-
-
-                    Eigen::Vector3d frame_idx_previous_origin_begin =
-                            frame_to_optimize.BeginQuat() * keypoint.RawPoint();
-                    Eigen::Vector3d frame_idx_previous_origin_end =
-                            frame_to_optimize.EndQuat() * keypoint.RawPoint();
-
-                    double cbx =
-                            (1 - alpha_timestamp) * (frame_idx_previous_origin_begin[1] * closest_pt_normal[2] -
-                                                     frame_idx_previous_origin_begin[2] * closest_pt_normal[1]);
-                    double cby =
-                            (1 - alpha_timestamp) * (frame_idx_previous_origin_begin[2] * closest_pt_normal[0] -
-                                                     frame_idx_previous_origin_begin[0] * closest_pt_normal[2]);
-                    double cbz =
-                            (1 - alpha_timestamp) * (frame_idx_previous_origin_begin[0] * closest_pt_normal[1] -
-                                                     frame_idx_previous_origin_begin[1] * closest_pt_normal[0]);
-
-                    double nbx = (1 - alpha_timestamp) * closest_pt_normal[0];
-                    double nby = (1 - alpha_timestamp) * closest_pt_normal[1];
-                    double nbz = (1 - alpha_timestamp) * closest_pt_normal[2];
-
-                    double cex = (alpha_timestamp) * (frame_idx_previous_origin_end[1] * closest_pt_normal[2] -
-                                                      frame_idx_previous_origin_end[2] * closest_pt_normal[1]);
-                    double cey = (alpha_timestamp) * (frame_idx_previous_origin_end[2] * closest_pt_normal[0] -
-                                                      frame_idx_previous_origin_end[0] * closest_pt_normal[2]);
-                    double cez = (alpha_timestamp) * (frame_idx_previous_origin_end[0] * closest_pt_normal[1] -
-                                                      frame_idx_previous_origin_end[1] * closest_pt_normal[0]);
-
-                    double nex = (alpha_timestamp) * closest_pt_normal[0];
-                    double ney = (alpha_timestamp) * closest_pt_normal[1];
-                    double nez = (alpha_timestamp) * closest_pt_normal[2];
-
-                    Eigen::VectorXd u(12);
-                    u << cbx, cby, cbz, nbx, nby, nbz, cex, cey, cez, nex, ney, nez;
-                    for (int i = 0; i < 12; i++) {
-                        for (int j = 0; j < 12; j++) {
-                            A(i, j) = A(i, j) + u[i] * u[j];
-                        }
-                        b(i) = b(i) - u[i] * scalar;
-                    }
-
-
-                    auto step4 = std::chrono::steady_clock::now();
-                    std::chrono::duration<double> _elapsed_A = step4 - step3;
-                    elapsed_search_neighbors += _elapsed_A.count() * 1000.0;
-                }
-            }
-
-
-            if (number_keypoints_used < 100) {
-                std::stringstream ss_out;
-                ss_out << "[CT_ICP]Error : not enough keypoints selected in ct-icp !" << std::endl;
-                ss_out << "[CT_ICP]Number_of_residuals : " << number_keypoints_used << std::endl;
-
-                summary.error_log = ss_out.str();
-                if (options.debug_print)
-                    std::cout << summary.error_log;
-
-                summary.success = false;
-                return summary;
-            }
-
-            auto start = std::chrono::steady_clock::now();
-
-
-            // Normalize equation
-            for (int i(0); i < 12; i++) {
-                for (int j(0); j < 12; j++) {
-                    A(i, j) = A(i, j) / number_keypoints_used;
-                }
-                b(i) = b(i) / number_keypoints_used;
-            }
-
-            //Add constraints in trajectory
-            if (_previous_frame) //no constraints for frame_index == 1
-            {
-                Eigen::Vector3d diff_traj = frame_to_optimize.BeginTr() - frame_to_optimize.EndTr();
-                A(3, 3) = A(3, 3) + ALPHA_C;
-                A(4, 4) = A(4, 4) + ALPHA_C;
-                A(5, 5) = A(5, 5) + ALPHA_C;
-                b(3) = b(3) - ALPHA_C * diff_traj(0);
-                b(4) = b(4) - ALPHA_C * diff_traj(1);
-                b(5) = b(5) - ALPHA_C * diff_traj(2);
-
-                Eigen::Vector3d diff_ego = frame_to_optimize.EndTr() - frame_to_optimize.BeginTr() -
-                                           _previous_frame->EndTr() + _previous_frame->BeginTr();
-                A(9, 9) = A(9, 9) + ALPHA_E;
-                A(10, 10) = A(10, 10) + ALPHA_E;
-                A(11, 11) = A(11, 11) + ALPHA_E;
-                b(9) = b(9) - ALPHA_E * diff_ego(0);
-                b(10) = b(10) - ALPHA_E * diff_ego(1);
-                b(11) = b(11) - ALPHA_E * diff_ego(2);
-            }
-
-
-            //Solve
-            Eigen::VectorXd x_bundle = A.ldlt().solve(b);
-
-            double alpha_begin = x_bundle(0);
-            double beta_begin = x_bundle(1);
-            double gamma_begin = x_bundle(2);
-            Eigen::Matrix3d rotation_begin;
-            rotation_begin(0, 0) = cos(gamma_begin) * cos(beta_begin);
-            rotation_begin(0, 1) =
-                    -sin(gamma_begin) * cos(alpha_begin) + cos(gamma_begin) * sin(beta_begin) * sin(alpha_begin);
-            rotation_begin(0, 2) =
-                    sin(gamma_begin) * sin(alpha_begin) + cos(gamma_begin) * sin(beta_begin) * cos(alpha_begin);
-            rotation_begin(1, 0) = sin(gamma_begin) * cos(beta_begin);
-            rotation_begin(1, 1) =
-                    cos(gamma_begin) * cos(alpha_begin) + sin(gamma_begin) * sin(beta_begin) * sin(alpha_begin);
-            rotation_begin(1, 2) =
-                    -cos(gamma_begin) * sin(alpha_begin) + sin(gamma_begin) * sin(beta_begin) * cos(alpha_begin);
-            rotation_begin(2, 0) = -sin(beta_begin);
-            rotation_begin(2, 1) = cos(beta_begin) * sin(alpha_begin);
-            rotation_begin(2, 2) = cos(beta_begin) * cos(alpha_begin);
-            Eigen::Vector3d translation_begin = Eigen::Vector3d(x_bundle(3), x_bundle(4), x_bundle(5));
-
-            double alpha_end = x_bundle(6);
-            double beta_end = x_bundle(7);
-            double gamma_end = x_bundle(8);
-            Eigen::Matrix3d rotation_end;
-            rotation_end(0, 0) = cos(gamma_end) * cos(beta_end);
-            rotation_end(0, 1) = -sin(gamma_end) * cos(alpha_end) + cos(gamma_end) * sin(beta_end) * sin(alpha_end);
-            rotation_end(0, 2) = sin(gamma_end) * sin(alpha_end) + cos(gamma_end) * sin(beta_end) * cos(alpha_end);
-            rotation_end(1, 0) = sin(gamma_end) * cos(beta_end);
-            rotation_end(1, 1) = cos(gamma_end) * cos(alpha_end) + sin(gamma_end) * sin(beta_end) * sin(alpha_end);
-            rotation_end(1, 2) = -cos(gamma_end) * sin(alpha_end) + sin(gamma_end) * sin(beta_end) * cos(alpha_end);
-            rotation_end(2, 0) = -sin(beta_end);
-            rotation_end(2, 1) = cos(beta_end) * sin(alpha_end);
-            rotation_end(2, 2) = cos(beta_end) * cos(alpha_end);
-            Eigen::Vector3d translation_end = Eigen::Vector3d(x_bundle(9), x_bundle(10), x_bundle(11));
-
-            pose_begin.QuatRef() = Eigen::Quaterniond(rotation_begin *
-                                                      frame_to_optimize.BeginQuat().toRotationMatrix());
-            pose_begin.TrRef() += translation_begin;
-            pose_end.QuatRef() = Eigen::Quaterniond(rotation_end *
-                                                    frame_to_optimize.EndQuat().toRotationMatrix());
-            pose_end.TrRef() += translation_end;
-
-            auto solve_step = std::chrono::steady_clock::now();
-            std::chrono::duration<double> _elapsed_solve = solve_step - start;
-            elapsed_solve += _elapsed_solve.count() * 1000.0;
-
-            frame_to_optimize.begin_pose.pose.quat.normalize();
-            frame_to_optimize.end_pose.pose.quat.normalize();
-            //Update keypoints
-            for (auto &keypoint: slam_keypoints)
-                keypoint.WorldPoint() = pose_begin.InterpolatePose(pose_end,
-                                                                   keypoint.Timestamp()) * keypoint.RawPoint();
-
-            auto update_step = std::chrono::steady_clock::now();
-            std::chrono::duration<double> _elapsed_update = update_step - solve_step;
-            elapsed_update += _elapsed_update.count() * 1000.0;
-
-
-            if ((x_bundle.norm() < options.threshold_orientation_norm)) {
-                break;
-            }
-        }
-
-        if (options.debug_print) {
-            std::cout << "Elapsed Normals: " << elapsed_normals << std::endl;
-            std::cout << "Elapsed Search Neighbors: " << elapsed_search_neighbors << std::endl;
-            std::cout << "Elapsed A Construction: " << elapsed_A_construction << std::endl;
-            std::cout << "Elapsed Select closest: " << elapsed_select_closest_neighbors << std::endl;
-            std::cout << "Elapsed Solve: " << elapsed_solve << std::endl;
-            std::cout << "Elapsed Solve: " << elapsed_update << std::endl;
-            std::cout << "Number iterations CT-ICP : " << options.num_iters_icp << std::endl;
-        }
-        summary.success = true;
-        summary.num_residuals_used = number_keypoints_used;
-
-
-        return summary;
+    /* -------------------------------------------------------------------------------------------------------------- */
+    ICPSummary CT_ICP_Registration::Register(const VoxelHashMap &voxel_map, std::vector<slam::WPoint3D> &keypoints,
+                                             TrajectoryFrame &trajectory_frame,
+                                             const TrajectoryFrame *const previous_frame) {
+        auto buffer_collection = slam::BufferCollection::Factory(
+                slam::BufferWrapper::CreatePtr(keypoints, slam::WPoint3D::DefaultSchema()));
+        auto raw_points = buffer_collection.element_proxy<Eigen::Vector3d>("raw_point");
+        auto world_points = buffer_collection.element_proxy<Eigen::Vector3d>("world_point");
+        auto timestamps = buffer_collection.property_proxy<double>("properties", "t");
+        return DoRegisterCeres(voxel_map,
+                               raw_points,
+                               world_points,
+                               timestamps,
+                               trajectory_frame, previous_frame);
     }
 
+    /* -------------------------------------------------------------------------------------------------------------- */
+    ICPSummary CT_ICP_Registration::Register(const VoxelHashMap &voxel_map,
+                                             slam::PointCloud &keypoints,
+                                             TrajectoryFrame &trajectory_frame,
+                                             const TrajectoryFrame *const previous_frame) {
+        auto raw_points = keypoints.ElementProxyView<Eigen::Vector3d>(GetRawPointElement());
+        auto world_points = keypoints.ElementProxyView<Eigen::Vector3d>(GetWorldPointElement());
+        auto timestamps = keypoints.PropertyProxyView<double>(GetTimestampsElement(), GetTimestampsProperty());
+        return DoRegisterCeres(voxel_map,
+                               raw_points,
+                               world_points,
+                               timestamps,
+                               trajectory_frame,
+                               previous_frame);
+    }
 
 } // namespace Elastic_ICP

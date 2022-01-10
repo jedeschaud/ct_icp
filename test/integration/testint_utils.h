@@ -1,8 +1,8 @@
 #ifndef CT_ICP_TESTINT_UTILS_H
 #define CT_ICP_TESTINT_UTILS_H
 
-#include <SlamUtils/types.h>
-#include <SlamUtils/viz3d_utils.h>
+#include <SlamCore/types.h>
+#include <SlamCore-viz3d/viz3d_utils.h>
 #include <ct_icp/ct_icp.h>
 #include <ct_icp/odometry.h>
 #include <iostream>
