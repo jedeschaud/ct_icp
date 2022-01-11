@@ -163,32 +163,74 @@ namespace ct_icp {
         point.WorldPoint() = pose * point.RawPoint();
     }
 
-    const auto compute_frame_info = [](const std::vector<WPoint3D> &points, auto registered_fid) {
+    const auto compute_frame_info = [](const slam::View<double> &timestamps, auto registered_fid) {
         Odometry::FrameInfo frame_info;
-        CHECK(!points.empty()) << "The registered frame cannot be empty" << std::endl;
+        CHECK(!timestamps.empty()) << "The registered frame cannot be empty" << std::endl;
         frame_info.registered_fid = registered_fid;
-        frame_info.frame_id = points.front().index_frame;
-        auto min_max_pair = std::minmax_element(points.begin(), points.end(), [](const auto &lhs, const auto &rhs) {
-            return lhs.TimestampConst() < rhs.TimestampConst();
-        });
-        frame_info.begin_timestamp = min_max_pair.first->TimestampConst();
-        frame_info.end_timestamp = min_max_pair.second->TimestampConst();
+        frame_info.frame_id = registered_fid;
+        auto min_max_pair = std::minmax_element(timestamps.cbegin(), timestamps.cend());
+        frame_info.begin_timestamp = *min_max_pair.first;
+        frame_info.end_timestamp = *min_max_pair.second;
         return frame_info;
     };
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    Odometry::RegistrationSummary Odometry::RegisterFrameWithEstimate(const std::vector<slam::WPoint3D> &frame,
-                                                                      const TrajectoryFrame &initial_estimate) {
-        auto frame_info = compute_frame_info(frame, registered_frames_++);
+    Odometry::RegistrationSummary Odometry::RegisterFrame(const PointCloud &frame, slam::frame_id_t frame_id) {
+        CHECK(frame.GetCollection().HasElement(GetRawPointElement()));
+        CHECK(frame.GetCollection().HasElement(GetWorldPointElement()));
+        CHECK(frame.GetCollection().HasProperty(GetTimestampsElement(), GetTimestampsProperty()));
+        CHECK(frame.GetCollection().HasMatchingProperty(GetTimestampsElement(),
+                                                        GetTimestampsProperty(),
+                                                        PROPERTY_TYPE::FLOAT64,
+                                                        1)) << "The property `" << GetTimestampsElement() << "."
+                                                            << GetTimestampsProperty()
+                                                            << "` does not have type FLOAT64 (double) with dimension 1";
+        const auto view_timestamps = frame.PropertyView<double>(GetTimestampsElement(), GetTimestampsProperty());
+        auto frame_info = compute_frame_info(view_timestamps, registered_frames_++);
+        frame_info.frame_id = frame_id;
+        InitializeMotion(frame_info, nullptr);
+        return DoRegister(frame, frame_info);
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    Odometry::RegistrationSummary Odometry::RegisterFrameWithEstimate(const PointCloud &frame,
+                                                                      const TrajectoryFrame &initial_estimate,
+                                                                      slam::frame_id_t frame_id) {
+        CHECK(frame.GetCollection().HasElement(GetRawPointElement()));
+        CHECK(frame.GetCollection().HasElement(GetWorldPointElement()));
+        CHECK(frame.GetCollection().HasProperty(GetTimestampsElement(), GetTimestampsProperty()));
+        CHECK(frame.GetCollection().HasMatchingProperty(GetTimestampsElement(),
+                                                        GetTimestampsProperty(),
+                                                        PROPERTY_TYPE::FLOAT64,
+                                                        1)) << "The property `" << GetTimestampsElement() << "."
+                                                            << GetTimestampsProperty()
+                                                            << "` does not have type FLOAT64 (double) with dimension 1";
+        const auto view_timestamps = frame.PropertyView<double>(GetTimestampsElement(), GetTimestampsProperty());
+        auto frame_info = compute_frame_info(view_timestamps, registered_frames_++);
+        frame_info.frame_id = frame_id;
         InitializeMotion(frame_info, &initial_estimate);
         return DoRegister(frame, frame_info);
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
+    Odometry::RegistrationSummary Odometry::RegisterFrameWithEstimate(const std::vector<slam::WPoint3D> &frame,
+                                                                      const TrajectoryFrame &initial_estimate) {
+        auto pointcloud = slam::PointCloud::WrapVector(const_cast<std::vector<slam::WPoint3D> &>(frame),
+                                                       slam::WPoint3D::DefaultSchema(), "raw_point");
+        const auto view_timestamps = pointcloud.PropertyView<double>("xyzt", "t");
+        auto frame_info = compute_frame_info(view_timestamps, registered_frames_++);
+        InitializeMotion(frame_info, &initial_estimate);
+        return DoRegister(pointcloud, frame_info);
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
     Odometry::RegistrationSummary Odometry::RegisterFrame(const std::vector<slam::WPoint3D> &frame) {
-        auto frame_info = compute_frame_info(frame, registered_frames_++);
+        auto pointcloud = slam::PointCloud::WrapVector(const_cast<std::vector<slam::WPoint3D> &>(frame),
+                                                       slam::WPoint3D::DefaultSchema(), "raw_point");
+        const auto view_timestamps = pointcloud.PropertyView<double>("xyzt", "t");
+        auto frame_info = compute_frame_info(view_timestamps, registered_frames_++);
         InitializeMotion(frame_info, nullptr);
-        return DoRegister(frame, frame_info);
+        return DoRegister(pointcloud, frame_info);
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -247,13 +289,13 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    std::vector<slam::WPoint3D> Odometry::InitializeFrame(const std::vector<slam::WPoint3D> &const_frame,
+    std::vector<slam::WPoint3D> Odometry::InitializeFrame(const slam::PointCloud &const_frame,
                                                           FrameInfo frame_info) {
 
         /// PREPROCESS THE INITIAL FRAME
         double sample_size = frame_info.registered_fid < options_.init_num_frames ?
                              options_.init_voxel_size : options_.voxel_size;
-        std::vector<slam::WPoint3D> frame(const_frame);
+        std::vector<slam::WPoint3D> frame(const_frame.size());
         const auto kIndexFrame = frame_info.registered_fid;
 
         std::mt19937_64 g;
@@ -293,7 +335,7 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    Odometry::RegistrationSummary Odometry::DoRegister(const std::vector<slam::WPoint3D> &const_frame,
+    Odometry::RegistrationSummary Odometry::DoRegister(const slam::PointCloud &const_frame,
                                                        FrameInfo frame_info) {
         auto start = std::chrono::steady_clock::now();
         auto &log_out = *log_out_;
@@ -514,7 +556,15 @@ namespace ct_icp {
         }
 
         summary.corrected_points = frame;
-        summary.all_corrected_points = const_frame;
+        summary.all_corrected_points.resize(const_frame.size());
+        auto raw_points_view = const_frame.XYZConst<double>();
+        auto timestamps_view = const_frame.PropertyProxyView<double>(GetTimestampsElement(),
+                                                                     GetTimestampsProperty());
+        for (auto i(0); i < summary.all_corrected_points.size(); ++i) {
+            summary.all_corrected_points[i].RawPoint() = raw_points_view[i];
+            summary.all_corrected_points[i].Timestamp() = timestamps_view[i];
+            summary.all_corrected_points[i].index_frame = frame_info.frame_id;
+        }
 
         const auto &begin_pose = summary.frame.begin_pose;
         const auto &end_pose = summary.frame.end_pose;

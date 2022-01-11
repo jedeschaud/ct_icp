@@ -110,6 +110,18 @@ namespace ct_icp {
 
 
     class Odometry {
+    private:
+        /// The element of the Raw Point in the input PointCloud schema
+        PARAMETER_GETSET(RawPointElement, std::string, "raw_point");
+    private:
+        /// The element of the World Point in the input PointCloud schema
+        PARAMETER_GETSET(WorldPointElement, std::string, "world_point");
+    private:
+        /// The element of the Timestamp property in the input PointCloud schema
+        PARAMETER_GETSET(TimestampsElement, std::string, "properties");
+    private:
+        /// The property of the timestamp in the Input PointCloud schema
+        PARAMETER_GETSET(TimestampsProperty, std::string, "t")
     public:
 
         // The Output of a registration, including metrics,
@@ -156,6 +168,15 @@ namespace ct_icp {
         explicit Odometry(const OdometryOptions *options) : Odometry(*options) {}
 
         // Registers a new Frame to the Map
+        RegistrationSummary RegisterFrame(const slam::PointCloud &frame,
+                                          slam::frame_id_t frame_id);
+
+        // Registers a new Frame to the Map with an initial estimate
+        RegistrationSummary RegisterFrameWithEstimate(const slam::PointCloud &frame,
+                                                      const TrajectoryFrame &initial_estimate,
+                                                      slam::frame_id_t frame_id);
+
+        // Registers a new Frame to the Map
         RegistrationSummary RegisterFrame(const std::vector<slam::WPoint3D> &frame);
 
         // Registers a new Frame to the Map with an initial estimate
@@ -185,14 +206,16 @@ namespace ct_icp {
         std::ostream *log_out_ = nullptr;
         std::unique_ptr<std::ofstream> log_file_ = nullptr;
 
-        // Initialize the Frame
-        std::vector<slam::WPoint3D> InitializeFrame(const std::vector<slam::WPoint3D> &const_frame,
+        // Initialize the Frame.
+        // Returns the set of selected keypoints sampled via grid sampling
+        std::vector<slam::WPoint3D> InitializeFrame(const slam::PointCloud &const_frame,
                                                     FrameInfo frame_info);
 
         // Registers a frame after the motion was initialized
         // When the Robust Registration profile is activated, it can call TryRegister
         // Multiple times changing the options in order to increase the chance of registration
-        RegistrationSummary DoRegister(const std::vector<slam::WPoint3D> &frame, FrameInfo frame_info);
+        RegistrationSummary DoRegister(const slam::PointCloud &frame,
+                                       FrameInfo frame_info);
 
         // Tries to register a frame given a set of options
         RegistrationSummary TryRegister(std::vector<slam::WPoint3D> &frame,
@@ -202,7 +225,7 @@ namespace ct_icp {
                                         double sample_voxel_size);
 
         // Insert a New Trajectory Frame, and initializes the motion for this new frame
-        void InitializeMotion( FrameInfo frame_info, const TrajectoryFrame *initial_estimate = nullptr);
+        void InitializeMotion(FrameInfo frame_info, const TrajectoryFrame *initial_estimate = nullptr);
 
         // Try to insert Points to the map
         // Returns false if it fails

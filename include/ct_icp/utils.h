@@ -24,4 +24,11 @@ namespace fs = std::experimental::filesystem;
 #endif
 
 
+#define PARAMETER_GETSET(param, type, default_value) \
+        type param ## _= default_value;                                 \
+    public:                                                             \
+        const type& Get ##param() const { return param ## _;};          \
+        void Set ## param(const type& value) { param ## _ = value;};
+
+
 #endif //CT_ICP_UTILS_HPP

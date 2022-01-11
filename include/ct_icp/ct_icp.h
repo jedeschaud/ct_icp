@@ -145,24 +145,18 @@ namespace ct_icp {
      * @class   CT_ICP_Registration
      */
     class CT_ICP_Registration {
-#define PARAMETER_GETSET(param, type, default_value) \
-        type param ## _= default_value;                                 \
-    public:                                                             \
-        const type& Get ##param() const { return param ## _;};          \
-        void Set ## param(const type& value) { param ## _ = value;};
-
     private:
         /// The element of the Raw Point in the input PointCloud schema
-        PARAMETER_GETSET(RawPointElement, std::string, "vertex");
+        PARAMETER_GETSET(RawPointElement, std::string, "raw_point");
     private:
         /// The element of the World Point in the input PointCloud schema
-        PARAMETER_GETSET(WorldPointElement, std::string, "");
+        PARAMETER_GETSET(WorldPointElement, std::string, "world_point");
     private:
         /// The element of the Timestamp property in the input PointCloud schema
-        PARAMETER_GETSET(TimestampsElement, std::string, "");
+        PARAMETER_GETSET(TimestampsElement, std::string, "properties");
     private:
         /// The property of the timestamp in the Input PointCloud schema
-        PARAMETER_GETSET(TimestampsProperty, std::string, "");
+        PARAMETER_GETSET(TimestampsProperty, std::string, "t");
     public:
 
         CTICPOptions &Options() { return options_; }
