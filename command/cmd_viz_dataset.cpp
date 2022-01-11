@@ -2,7 +2,7 @@
 #include <viz3d/engine.h>
 #include <thread>
 #include <ct_icp/dataset.h>
-#include <SlamUtils/viz3d_utils.h>
+#include <SlamCore-viz3d/viz3d_utils.h>
 
 struct Options {
     std::string root_path;

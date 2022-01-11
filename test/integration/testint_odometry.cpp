@@ -37,8 +37,8 @@ std::vector<slam::Pose> GeneratePoses(int num_landmarks, int num_poses_between_l
 }
 
 auto GenerateWorldPoints(const std::vector<slam::Pose> &all_poses,
-                         int num_points_map = 100000,
-                         int num_points_per_frame = 10000) {
+                         int num_points_map = 10000,
+                         int num_points_per_frame = 1000) {
 
     struct ReturnType {
         std::vector<slam::WPoint3D> world_points{};

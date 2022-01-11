@@ -166,11 +166,12 @@ namespace ct_icp {
     const auto compute_frame_info = [](const slam::View<double> &timestamps, auto registered_fid) {
         Odometry::FrameInfo frame_info;
         CHECK(!timestamps.empty()) << "The registered frame cannot be empty" << std::endl;
+        auto begin = timestamps.cbegin();
         frame_info.registered_fid = registered_fid;
         frame_info.frame_id = registered_fid;
         auto min_max_pair = std::minmax_element(timestamps.cbegin(), timestamps.cend());
-        frame_info.begin_timestamp = *min_max_pair.first;
-        frame_info.end_timestamp = *min_max_pair.second;
+        frame_info.begin_timestamp = *(min_max_pair.first);
+        frame_info.end_timestamp = *(min_max_pair.second);
         return frame_info;
     };
 
@@ -291,11 +292,19 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     std::vector<slam::WPoint3D> Odometry::InitializeFrame(const slam::PointCloud &const_frame,
                                                           FrameInfo frame_info) {
+        const auto view_timestamps = const_frame.PropertyView<double>(GetTimestampsElement(), GetTimestampsProperty());
+        const auto view_xyz = const_frame.ElementProxyView<Eigen::Vector3d>(GetRawPointElement());
 
         /// PREPROCESS THE INITIAL FRAME
         double sample_size = frame_info.registered_fid < options_.init_num_frames ?
                              options_.init_voxel_size : options_.voxel_size;
         std::vector<slam::WPoint3D> frame(const_frame.size());
+        for (auto i(0); i < frame.size(); ++i) {
+            frame[i].raw_point.point = view_xyz[i];
+            frame[i].raw_point.timestamp = view_timestamps[i];
+            frame[i].world_point = view_xyz[i];
+            frame[i].index_frame = frame_info.frame_id;
+        }
         const auto kIndexFrame = frame_info.registered_fid;
 
         std::mt19937_64 g;

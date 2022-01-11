@@ -2,7 +2,7 @@
 
 #include <tclap/CmdLine.h>
 #include <yaml-cpp/yaml.h>
-#include <SlamUtils/config_utils.h>
+#include <SlamCore/config_utils.h>
 
 #include "ct_icp/dataset.h"
 #include "ct_icp/config.h"
@@ -10,7 +10,7 @@
 #ifdef SLAM_WITH_VIZ3D
 
 #include <viz3d/engine.h>
-#include <SlamUtils/viz3d_utils.h>
+#include <SlamCore-viz3d/viz3d_utils.h>
 
 #endif
 

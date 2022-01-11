@@ -8,14 +8,18 @@ if (NOT SUPERBUILD_INSTALL_DIR)
 endif ()
 
 # -- Find Slam Lib shared library dependencies
-if (NOT SlamUtils_DIR)
-    set(SlamUtils_DIR ${SUPERBUILD_INSTALL_DIR}/SlamUtils/lib/cmake)
+if (NOT SlamCore_DIR)
+    set(SlamCore_DIR ${SUPERBUILD_INSTALL_DIR}/SlamCore/lib/cmake)
+endif ()
+if (NOT ROSCore_DIR)
+    set(ROSCore_DIR ${SUPERBUILD_INSTALL_DIR}/ROSCore/lib/cmake)
 endif ()
 if (NOT CT_ICP_DIR)
     set(CT_ICP_DIR ${SUPERBUILD_INSTALL_DIR}/CT_ICP/lib/cmake)
 endif ()
 
-find_package(SlamUtils REQUIRED)
+find_package(SlamCore REQUIRED)
+find_package(ROSCore REQUIRED)
 find_package(CT_ICP REQUIRED)
 find_package(OpenMP)
 
@@ -49,8 +53,9 @@ add_executable(odometry_node
 
 target_link_libraries(odometry_node
         PUBLIC
+        Slam::SlamCore
+        Slam::ROSCore
         Slam::CT_ICP
-        Slam::SlamUtils
         ${catkin_LIBRARIES})
 
 # -- Install
