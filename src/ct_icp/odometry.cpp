@@ -178,7 +178,6 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     Odometry::RegistrationSummary Odometry::RegisterFrame(const PointCloud &frame, slam::frame_id_t frame_id) {
         CHECK(frame.GetCollection().HasElement(GetRawPointElement()));
-        CHECK(frame.GetCollection().HasElement(GetWorldPointElement()));
         CHECK(frame.GetCollection().HasProperty(GetTimestampsElement(), GetTimestampsProperty()));
         CHECK(frame.GetCollection().HasMatchingProperty(GetTimestampsElement(),
                                                         GetTimestampsProperty(),
@@ -198,7 +197,6 @@ namespace ct_icp {
                                                                       const TrajectoryFrame &initial_estimate,
                                                                       slam::frame_id_t frame_id) {
         CHECK(frame.GetCollection().HasElement(GetRawPointElement()));
-        CHECK(frame.GetCollection().HasElement(GetWorldPointElement()));
         CHECK(frame.GetCollection().HasProperty(GetTimestampsElement(), GetTimestampsProperty()));
         CHECK(frame.GetCollection().HasMatchingProperty(GetTimestampsElement(),
                                                         GetTimestampsProperty(),

@@ -10,6 +10,7 @@ endif ()
 # -- Find Slam Lib shared library dependencies
 if (NOT SlamCore_DIR)
     set(SlamCore_DIR ${SUPERBUILD_INSTALL_DIR}/SlamCore/lib/cmake)
+    set(SlamCore-viz3d_DIR ${SUPERBUILD_INSTALL_DIR}/SlamCore/lib/cmake)
 endif ()
 if (NOT ROSCore_DIR)
     set(ROSCore_DIR ${SUPERBUILD_INSTALL_DIR}/ROSCore/lib/cmake)
@@ -19,6 +20,7 @@ if (NOT CT_ICP_DIR)
 endif ()
 
 find_package(SlamCore REQUIRED)
+find_package(SlamCore-viz3d REQUIRED)
 find_package(ROSCore REQUIRED)
 find_package(CT_ICP REQUIRED)
 find_package(OpenMP)
@@ -48,15 +50,22 @@ catkin_package(
 include_directories(${catkin_INCLUDE_DIRS})
 
 # -- Build nodes
-add_executable(odometry_node
-        src/odometry_node.cxx)
+add_executable(ct_icp_odometry_node
+        src/ct_icp_odometry_node.cxx)
 
-target_link_libraries(odometry_node
+target_link_libraries(ct_icp_odometry_node
         PUBLIC
         Slam::SlamCore
         Slam::ROSCore
         Slam::CT_ICP
         ${catkin_LIBRARIES})
 
-# -- Install
-#
+add_executable(ct_icp_dataset_node
+        src/ct_icp_dataset_node.cxx)
+
+target_link_libraries(ct_icp_dataset_node
+        PUBLIC
+        Slam::SlamCore
+        Slam::ROSCore
+        Slam::CT_ICP
+        ${catkin_LIBRARIES})

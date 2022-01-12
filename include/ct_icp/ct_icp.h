@@ -179,12 +179,12 @@ namespace ct_icp {
                                    TrajectoryFrame &trajectory_frame,
                                    const TrajectoryFrame *const previous_frame = nullptr);
 
-//        ICPSummary DoRegisterGaussNewton(const VoxelHashMap &voxel_map,
-//                                         slam::ProxyView<Eigen::Vector3d> &raw_kpts,
-//                                         slam::ProxyView<Eigen::Vector3d> &world_kpts,
-//                                         slam::ProxyView<double> &timestamps,
-//                                         TrajectoryFrame &trajectory_frame,
-//                                         const TrajectoryFrame *const previous_frame = nullptr);
+        ICPSummary DoRegisterGaussNewton(const VoxelHashMap &voxel_map,
+                                         slam::ProxyView<Eigen::Vector3d> &raw_kpts,
+                                         slam::ProxyView<Eigen::Vector3d> &world_kpts,
+                                         slam::ProxyView<double> &timestamps,
+                                         TrajectoryFrame &trajectory_frame,
+                                         const TrajectoryFrame *const previous_frame = nullptr);
 
         CTICPOptions options_;
     };

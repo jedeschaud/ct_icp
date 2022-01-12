@@ -1,0 +1,21 @@
+<!-- Launches a Dataset Node and the ct_icp SLAM node -->
+<launch>
+  <arg name="dataset" required="true" doc="The name of the ct_icp dataset"/>
+  <arg name="dataset_path" required="true" doc="Path to the root directory of the CT-ICP dataset"/>
+  <arg name="sequence" required="true" doc="Sequence of the KITTI_360 CT-ICP dataset"/>
+  <arg name="profile" default="driving" doc="The profile of CT-ICP odometry"/>
+
+  <!-- CT-ICP dataset -->
+  <node name="ct_icp_dataset_node" pkg="ct_icp_odometry" type="ct_icp_dataset_node" output="screen">
+      <param name="root_path" value="$(arg dataset_path)"/>
+      <param name="sequence" value="$(arg dataset)_$(arg sequence)"/>
+      <param name="dataset" value="$(arg dataset)"/>
+  </node>
+
+  <!-- CT-ICP SLAM -->
+  <node name="ct_icp_odometry_node" pkg="ct_icp_odometry" type="ct_icp_odometry_node" output="screen">
+    <param name="profile" value="driving"/>
+    <param name="timestamps_element" value="properties"/>
+    <param name="timestamps_property" value="timestamp"/>
+  </node>
+</launch>

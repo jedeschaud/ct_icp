@@ -114,9 +114,6 @@ namespace ct_icp {
         /// The element of the Raw Point in the input PointCloud schema
         PARAMETER_GETSET(RawPointElement, std::string, "raw_point");
     private:
-        /// The element of the World Point in the input PointCloud schema
-        PARAMETER_GETSET(WorldPointElement, std::string, "world_point");
-    private:
         /// The element of the Timestamp property in the input PointCloud schema
         PARAMETER_GETSET(TimestampsElement, std::string, "properties");
     private:
