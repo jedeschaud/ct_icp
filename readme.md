@@ -12,42 +12,11 @@ to more datasets.
 
 # Installation
 
-##### Ubuntu
-
-```bash
-.\ct_icp_build.sh Release "Unix Makefiles" ON ON  # Builds the project in "Release" mode, with "Unix Makefiles" cmake generator, with python binding and with the visualization activated
-source env.sh                                     # Setup the environment (.so locations) 
-.\slam -c default_config.yaml                     # Launches the SLAM
- ```
-
-##### Windows 10 sous PowerShell
-
-```bash
-.\ct_icp_build.bat                  # Builds the project
-.\env.bat                           # Setup the environment (.so locations) 
-.\slam.exe -c default_config.yaml   # Launches the SLAM
- ```
-
-To modify options (for viz3d support, or python binding) for the windows script, you can directly modify
-the `ct_icp_build.bat` file.
+> **TODO**
 
 ### Visualization
 
 > As a debugging/visualization tool (and until we provide a ROS support `rosviz`) we use a home-made/experimental lightweight OpenGL-based pointcloud visualizer **[viz3d](https://github.com/pierdell/viz3d)** designed for our SLAM use case.
-
-# Python binding
-
-> The steps below will install a python package named `pyct_icp`:
-
-- Generate the cmake project with the following arguments (**Modify ct_icp_build.sh**):
-
-    - `-DWITH_PYTHON_BINDING=ON`: Activate the option to build the python binding
-    - `-DPYTHON_EXECUTABLE=<path-to-target-python-exe>`: Path to the target python executable
-- Go into the build folder (e.g `cd ./cmake-Release`)
-- Build the target `pyct_icp` with `make pyct_icp -j6`
-- Install the python project `pip install ./src/binding`
-
-> **Note:** This step is required to use **CT-ICP** with **pyLiDAR-SLAM**.
 
 # Install the Datasets
 
@@ -161,18 +130,12 @@ If you use our work in your research project, please consider citing:
 
 ## TODO
 
-- [x] Refactor CT-ICP for the SlamUtils dependency
-- [x] Add Unit tests and Integration tests
-- [ ] Improve the Dataset (use tinyply to read PLY files)
+- [x] Write ROS packaging
+- [ ] Update the Readme.md
 - [ ] Add regression / performance tests
-- [ ] NCLT Ground truth
 - [ ] Fix the binding (which is now broken)
 - [ ] Add tests/automatic build to the Github CI
-- [ ] Write ROS packaging
  
-- [ ] Extract the VoxelMap into SlamUtils
 - [ ] Add a wiki (documentation on the code)
 - [ ] Add point-to-distribution cost
 - [ ] Improve the robust regime (go faster and find parameters for robust and fast driving profile)
-- [ ] Improve visualization / Interaction for the OpenGL Window
-- [ ] Improve the python binding (reduce the overhead)

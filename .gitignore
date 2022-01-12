@@ -2,6 +2,7 @@
 cmake-*
 cmake-build*
 imgui.ini
+install/*
 
 # Configuration files (e.g. idea)
 .*

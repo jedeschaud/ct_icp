@@ -1,8 +1,9 @@
-# TODO: - Manage better the include directory of target Elastic_ICP
 add_subdirectory(ct_icp)
-if (WITH_PYTHON_BINDING)
-    add_subdirectory(binding)
-endif ()
+
+# TODO Repair the python binding
+#if (WITH_PYTHON_BINDING)
+#    add_subdirectory(binding)
+#endif ()
 
 add_executable(slam slam.cpp)
 
