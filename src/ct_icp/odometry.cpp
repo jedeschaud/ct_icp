@@ -10,7 +10,7 @@
 
 #include <math.h>
 
-#ifdef CT_ICP_WITH_VIZ
+#if CT_ICP_WITH_VIZ
 
 #include <viz3d/engine.h>
 #include <SlamCore-viz3d/viz3d_utils.h>
@@ -594,7 +594,7 @@ namespace ct_icp {
                            kMaxNumPointsInVoxel, kMinDistancePoints);
         }
 
-#ifdef CT_ICP_WITH_VIZ
+#if CT_ICP_WITH_VIZ
         if (options_.debug_viz) {
 
             auto &instance = viz::ExplorationEngine::Instance();

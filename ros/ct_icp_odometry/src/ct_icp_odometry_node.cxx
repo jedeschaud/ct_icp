@@ -12,7 +12,7 @@
 #include <ct_icp/odometry.h>
 #include <ROSCore/pc2_conversion.h>
 
-#if defined(CT_ICP_WITH_VIZ) && defined(SLAM_WITH_VIZ3D)
+#if defined(CT_ICP_WITH_VIZ) && CT_ICP_WITH_VIZ && defined(SLAM_WITH_VIZ3D)
 
 #include <SlamCore-viz3d/viz3d_utils.h>
 #include <viz3d/engine.h>
@@ -108,8 +108,10 @@ void RegisterNewFrameCallback(const sensor_msgs::PointCloud2Ptr &pc_ptr) {
         ROS_INFO("Registration is a success.");
     else {
         ROS_INFO("Registration is a failure");
+#if SLAM_WITH_VIZ3D
         viz::ExplorationEngine::Instance().SignalClose();
         gui_thread->join();
+#endif
         ros::shutdown();
     }
 
@@ -219,6 +221,14 @@ int main(int argc, char **argv) {
     ros::Subscriber pointcloud_subscriber = public_nh.subscribe("ct_icp/pointcloud", 200,
                                                                 &RegisterNewFrameCallback);
     ros::spin();
+
+#if WITH_VIZ3D
+    if (gui_thread) {
+        viz::ExplorationEngine::Instance().SignalClose();
+        gui_thread->join();
+        gui_thread.reset();
+    }
+#endif
 
     return 0;
 }

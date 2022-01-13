@@ -121,7 +121,7 @@ namespace ct_icp {
         Frame NextUnfilteredFrame() override;
 
         // Returns the number of frames (-1 if the total number of frames is unknown)
-        [[nodiscard]] size_t NumFrames() const;
+        [[nodiscard]] size_t NumFrames() const override;
 
         // Returns a frame at `index`. Throws an exception if the dataset does not support Random Access
         [[nodiscard]] Frame GetUnfilteredFrame(size_t index) const override;;
@@ -166,7 +166,7 @@ namespace ct_icp {
         void SetFilePattern(size_t expected_size, std::function<std::string(size_t)> &&file_pattern);
 
         // Returns the number of frames (-1 if the total number of frames is unknown)
-        [[nodiscard]] size_t NumFrames() const;
+        [[nodiscard]] size_t NumFrames() const override;
 
         // Returns a frame at `index`. Throws an exception if the dataset does not support Random Access
         [[nodiscard]] Frame GetUnfilteredFrame(size_t index) const override;;

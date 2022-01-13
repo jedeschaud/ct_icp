@@ -1,17 +1,9 @@
 add_subdirectory(ct_icp)
 
-# TODO Repair the python binding
-#if (WITH_PYTHON_BINDING)
-#    add_subdirectory(binding)
-#endif ()
-
 add_executable(slam slam.cpp)
-
-target_link_libraries(slam PUBLIC CT_ICP Ceres::ceres glog::glog Eigen3::Eigen OpenMP::OpenMP_CXX)
+target_link_libraries(slam PUBLIC Slam::SlamCore CT_ICP Ceres::ceres glog::glog Eigen3::Eigen OpenMP::OpenMP_CXX)
 if (WITH_SUPERBUILD)
     target_link_libraries(slam PUBLIC tclap::tclap)
 else ()
     target_link_libraries(slam PUBLIC tclap::tclap)
 endif ()
-install(TARGETS slam DESTINATION ${CT_ICP_RUNTIME_DESTINATION})
-LINK_WITH_VIZ3D(TARGET slam)

@@ -7,7 +7,7 @@
 #include "ct_icp/dataset.h"
 #include "ct_icp/config.h"
 
-#ifdef SLAM_WITH_VIZ3D
+#if CT_ICP_WITH_VIZ
 
 #include <viz3d/engine.h>
 #include <SlamCore-viz3d/viz3d_utils.h>
@@ -40,7 +40,7 @@ std::vector<ct_icp::DatasetOptions> ReadCommandLine(int argc, char **argv) {
 int main(int argc, char **argv) {
     auto dataset_options = ReadCommandLine(argc, argv);
 
-#ifdef SLAM_WITH_VIZ3D
+#if CT_ICP_WITH_VIZ
     std::thread gui_thread{viz::ExplorationEngine::LaunchMainLoop};
     auto &instance = viz::ExplorationEngine::Instance();
 #endif
@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
             if (gt) {
                 LOG(INFO) << "The sequence contains a ground truth with " << gt.value().size() << " poses.";
                 trajectory.emplace(slam::LinearContinuousTrajectory::Create(std::vector<slam::Pose>(gt.value())));
-#ifdef SLAM_WITH_VIZ3D
+#if CT_ICP_WITH_VIZ
                 {
                     auto data_ptr = std::make_shared<viz::PosesModel>();
                     auto &model_data = data_ptr->ModelData();
@@ -72,12 +72,12 @@ int main(int argc, char **argv) {
                     auto &poses = model_data.instance_model_to_world;
                     instance.AddModel(0, data_ptr);
                 }
-#endif // SLAM_WITH_VIZ3D
+#endif // CT_ICP_WITH_VIZ
             }
-#ifdef SLAM_WITH_VIZ3D
+#if CT_ICP_WITH_VIZ
             else
                 instance.RemoveModel(0);
-#endif // SLAM_WITH_VIZ3D
+#endif // CT_ICP_WITH_VIZ
 
             size_t f_id(0);
             while (seq->HasNext()) {
@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
                 }
 
                 f_id++;
-#ifdef SLAM_WITH_VIZ3D
+#if CT_ICP_WITH_VIZ
                 {
                     auto data_ptr = std::make_shared<viz::PointCloudModel>();
                     auto &model_data = data_ptr->ModelData();
@@ -104,7 +104,7 @@ int main(int argc, char **argv) {
                         instance.SetCameraPose(frame.begin_pose->Matrix().inverse());
                     std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(1.0));
                 }
-#endif // SLAM_WITH_VIZ3D
+#endif // CT_ICP_WITH_VIZ
             }
 
             LOG(INFO) << "Successfully ran all frames of sequence " << seq_info.sequence_name
@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
         }
     }
 
-#ifdef SLAM_WITH_VIZ3D
+#if CT_ICP_WITH_VIZ
     gui_thread.join();
 #endif
 

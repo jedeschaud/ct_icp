@@ -10,7 +10,7 @@
 #include <ct_icp/ct_icp.h>
 #include <ct_icp/cost_functions.h>
 
-#ifdef CT_ICP_WITH_VIZ
+#if CT_ICP_WITH_VIZ
 
 #include <ct_icp/utils.h>
 

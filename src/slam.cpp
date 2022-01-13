@@ -20,7 +20,7 @@
 #include "ct_icp/utils.h"
 #include "ct_icp/config.h"
 
-#ifdef CT_ICP_WITH_VIZ
+#if CT_ICP_WITH_VIZ
 
 #include <viz3d/engine.h>
 #include <imgui.h>
@@ -181,7 +181,7 @@ int main(int argc, char **argv) {
     LOG(INFO) << "Creating directory " << options.output_dir << std::endl;
     fs::create_directories(options.output_dir);
 
-#ifdef CT_ICP_WITH_VIZ
+#if CT_ICP_WITH_VIZ
     std::unique_ptr<std::thread> gui_thread = nullptr;
     std::shared_ptr<ControlSlamWindow> window = nullptr;
     if (options.with_viz3d) {
@@ -254,7 +254,7 @@ int main(int argc, char **argv) {
                         std::cerr << "Error while saving the poses to " << filepath << std::endl;
                         std::cerr << "Make sure output directory " << options.output_dir << " exists" << std::endl;
                         if (options.suspend_on_failure) {
-#ifdef CT_ICP_WITH_VIZ
+#if CT_ICP_WITH_VIZ
                             if (gui_thread) {
                                 gui_thread->join();
                             }
@@ -322,7 +322,7 @@ int main(int argc, char **argv) {
                 registration_elapsed_ms += registration_elapsed.count() * 1000;
                 all_seq_registration_elapsed_ms += registration_elapsed.count() * 1000;
 
-#ifdef CT_ICP_WITH_VIZ
+#if CT_ICP_WITH_VIZ
                 if (options.with_viz3d) {
                     auto &instance = viz::ExplorationEngine::Instance();
                     Eigen::Matrix4d camera_pose = summary.frame.MidPose();
@@ -365,7 +365,7 @@ int main(int argc, char **argv) {
                               ", at frame index " << frame_id << ". Error Message: "
                               << summary.error_message << std::endl;
                     if (options.suspend_on_failure) {
-#ifdef CT_ICP_WITH_VIZ
+#if CT_ICP_WITH_VIZ
                         if (options.with_viz3d) {
                             gui_thread->join();
                         }
@@ -407,7 +407,7 @@ int main(int argc, char **argv) {
 
     }
 
-#ifdef CT_ICP_WITH_VIZ
+#if CT_ICP_WITH_VIZ
     if (gui_thread) {
         gui_thread->join();
     }

@@ -2,9 +2,16 @@ cmake_minimum_required(VERSION 3.14)
 
 project(ct_icp_odometry)
 
+option(WITH_VIZ3D "Whether to compile with viz3d as a debugging tool" OFF)
+
 # -- The Superbuild install dir is required for the SLAM
+get_filename_component(REAL_CURRENT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR} REALPATH)
+include(${REAL_CURRENT_SOURCE_DIR}/../../cmake/viz3d_utils.cmake)
+
 if (NOT SUPERBUILD_INSTALL_DIR)
-    message(FATAL_ERROR "The CMAKE variable `SUPERBUILD_INSTALL_DIR` pointing to the superbuild must be defined")
+    set(SUPERBUILD_INSTALL_DIR ${REAL_CURRENT_SOURCE_DIR}/../../install)
+    get_filename_component(SUPERBUILD_INSTALL_DIR ${SUPERBUILD_INSTALL_DIR} ABSOLUTE)
+    message(INFO "The CMAKE variable `SUPERBUILD_INSTALL_DIR` pointing to the superbuild is not defined. Setting it to:  ${SUPERBUILD_INSTALL_DIR}")
 endif ()
 
 # -- Find Slam Lib shared library dependencies
@@ -19,8 +26,8 @@ if (NOT CT_ICP_DIR)
     set(CT_ICP_DIR ${SUPERBUILD_INSTALL_DIR}/CT_ICP/lib/cmake)
 endif ()
 
+
 find_package(SlamCore REQUIRED)
-find_package(SlamCore-viz3d REQUIRED)
 find_package(ROSCore REQUIRED)
 find_package(CT_ICP REQUIRED)
 find_package(OpenMP)
@@ -29,6 +36,12 @@ find_package(OpenMP)
 SLAM_COMPILER_FLAGS()
 SLAM_DEFAULT_VARIABLES()
 SLAM_INCLUDE_SUPERBUILD()
+
+if (WITH_VIZ3D)
+    find_package(viz3d REQUIRED)
+    find_package(SlamCore-viz3d REQUIRED)
+endif ()
+
 
 # -- Catkin
 find_package(catkin REQUIRED COMPONENTS
@@ -59,6 +72,7 @@ target_link_libraries(ct_icp_odometry_node
         Slam::ROSCore
         Slam::CT_ICP
         ${catkin_LIBRARIES})
+LINK_WITH_VIZ3D(TARGET ct_icp_odometry_node)
 
 add_executable(ct_icp_dataset_node
         src/ct_icp_dataset_node.cxx)
@@ -69,3 +83,4 @@ target_link_libraries(ct_icp_dataset_node
         Slam::ROSCore
         Slam::CT_ICP
         ${catkin_LIBRARIES})
+LINK_WITH_VIZ3D(TARGET ct_icp_dataset_node)

@@ -2,10 +2,16 @@
 #define CT_ICP_TESTINT_UTILS_H
 
 #include <SlamCore/types.h>
-#include <SlamCore-viz3d/viz3d_utils.h>
 #include <ct_icp/ct_icp.h>
 #include <ct_icp/odometry.h>
 #include <iostream>
+
+#if CT_ICP_WITH_VIZ
+
+#include <viz3d/engine.h>
+#include <SlamCore-viz3d/viz3d_utils.h>
+
+#endif
 
 const Eigen::Isometry3d mat = Eigen::Isometry3d([]() {
     Eigen::Matrix4d a;
@@ -90,6 +96,7 @@ auto GeneratePointCloud(const slam::Pose &pose_b,
     return all_points;
 }
 
+#if CT_ICP_WITH_VIZ
 auto add_pc_model = [](int model_id,
                        const std::vector<slam::WPoint3D> &points,
                        int point_size = 3,
@@ -120,6 +127,7 @@ auto add_poses_model = [](int model_id,
         model_data.default_color = *color;
     instance.AddModel(model_id, model_ptr);
 };
+#endif
 
 auto stream = [](const auto &prefix) -> std::ostream & {
     static auto &ostream = (std::cout << "[TEST][INTEGRATION]" << prefix);

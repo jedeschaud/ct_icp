@@ -36,9 +36,9 @@ namespace ct_icp {
             transformed(1, 0) += trans_params[1];
             transformed(2, 0) += trans_params[2];
 
-            residual[0] = weight_ *
-                          (reference_.template cast<T>() - transformed).transpose() *
-                          reference_normal_.template cast<T>();
+            T product = (reference_.template cast<T>() - transformed).transpose() *
+                        reference_normal_.template cast<T>();
+            residual[0] = T(weight_) * product;
             return true;
         }
 
@@ -78,8 +78,9 @@ namespace ct_icp {
             transformed(1, 0) += alpha_m * begin_trans_params[1] + alpha_timestamps_ * end_trans_params[1];
             transformed(2, 0) += alpha_m * begin_trans_params[2] + alpha_timestamps_ * end_trans_params[2];
 
-            residual[0] = weight_ * (reference_point_.template cast<T>() - transformed).transpose() *
-                          reference_normal_.template cast<T>();
+            T product = (reference_point_.template cast<T>() - transformed).transpose() *
+                        reference_normal_.template cast<T>();
+            residual[0] = T(weight_) * product;
 
             return true;
         }
