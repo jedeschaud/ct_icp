@@ -66,7 +66,7 @@ cmake --build . --target install --config Release --parallel 12       #< Build a
 >
 > Then make a symbolic link of the directory `catkin_ws` of this project to the `src` directory of your catkin workspace.
 
-```asm 
+```bash
 cd <path-to-your-catkin-workspace>/src                              #< Move to the Catkin Workspace's src directory
 ln -s <path-to-ct_icp-git-project>/catkin_ws ct_icp_odometry        #< Make a symbolic link to the `catkin_ws` folder
 cd ..                                                               #< Move back to the root of the catkin workspace
