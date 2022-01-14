@@ -8,6 +8,11 @@ This repository implements the SLAM **CT-ICP** (see  [our article](https://arxiv
 It is integrated with the python project **[pyLiDAR-SLAM](https://github.com/Kitware/pyLiDAR-SLAM)** which gives access to more datasets. 
 **pyLiDAR-SLAM** requires the installation of the python binding for **CT-ICP** (see below).
 
+# News
+
+#### [14/01/2022] ROS Plugin on branch `dev`
+> We introduce the ROS plugin on branch dev, it is still experimental. Significant changes in branch `dev` were made compared to `master`, thus to obtain the same results as presented in our paper use please use branch `master`. 
+
 # Installation
 
 ##### Ubuntu
