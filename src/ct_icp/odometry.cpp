@@ -10,14 +10,6 @@
 
 #include <math.h>
 
-#if CT_ICP_WITH_VIZ
-
-#include <viz3d/engine.h>
-#include <SlamCore-viz3d/viz3d_utils.h>
-#include "ct_icp/viz3d_utils.h"
-
-#endif
-
 namespace ct_icp {
     using namespace slam;
 
@@ -594,29 +586,7 @@ namespace ct_icp {
                            kMaxNumPointsInVoxel, kMinDistancePoints);
         }
 
-#if CT_ICP_WITH_VIZ
-        if (options_.debug_viz) {
 
-            auto &instance = viz::ExplorationEngine::Instance();
-            auto model_ptr = std::make_shared<viz::PointCloudModel>();
-            auto &model_data = model_ptr->ModelData();
-            auto map_size = MapSize();
-            model_data.xyz.reserve(map_size);
-            std::vector<double> scalars;
-            scalars.reserve(map_size);
-            for (auto &voxel: voxel_map_) {
-                for (int i(0); i < voxel.second.NumPoints(); ++i) {
-                    auto &point = voxel.second.points[i];
-                    model_data.xyz.push_back(point.cast<float>());
-                    scalars.push_back(point.z());
-                }
-            }
-            model_data.rgb = get_viz3d_color(scalars, true, slam::VIRIDIS);
-            model_data.point_size = 3;
-            model_data.default_color = Eigen::Vector3f::Zero();
-            instance.AddModel(-3, model_ptr);
-        }
-#endif
 
 
         return summary;

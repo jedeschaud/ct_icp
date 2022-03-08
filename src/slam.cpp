@@ -20,30 +20,30 @@
 #include "ct_icp/utils.h"
 #include "ct_icp/config.h"
 
-#if CT_ICP_WITH_VIZ
-
-#include <viz3d/engine.h>
-#include <imgui.h>
-
-
-struct ControlSlamWindow : viz::ExplorationEngine::GUIWindow {
-
-    explicit ControlSlamWindow(std::string &&winname) :
-            viz::ExplorationEngine::GUIWindow(std::move(winname), &open) {}
-
-    void DrawContent() override {
-        ImGui::Checkbox("Pause the SLAM", &pause_button);
-    };
-
-    [[nodiscard]] bool ContinueSLAM() const {
-        return !pause_button;
-    }
-
-    bool pause_button = false;
-    bool open = true;
-};
-
-#endif
+//#if CT_ICP_WITH_VIZ
+//
+//#include <viz3d/engine.h>
+//#include <imgui.h>
+//
+//
+//struct ControlSlamWindow : viz::ExplorationEngine::GUIWindow {
+//
+//    explicit ControlSlamWindow(std::string &&winname) :
+//            viz::ExplorationEngine::GUIWindow(std::move(winname), &open) {}
+//
+//    void DrawContent() override {
+//        ImGui::Checkbox("Pause the SLAM", &pause_button);
+//    };
+//
+//    [[nodiscard]] bool ContinueSLAM() const {
+//        return !pause_button;
+//    }
+//
+//    bool pause_button = false;
+//    bool open = true;
+//};
+//
+//#endif
 
 using namespace ct_icp;
 
@@ -181,16 +181,16 @@ int main(int argc, char **argv) {
     LOG(INFO) << "Creating directory " << options.output_dir << std::endl;
     fs::create_directories(options.output_dir);
 
-#if CT_ICP_WITH_VIZ
-    std::unique_ptr<std::thread> gui_thread = nullptr;
-    std::shared_ptr<ControlSlamWindow> window = nullptr;
-    if (options.with_viz3d) {
-        gui_thread = std::make_unique<std::thread>(viz::ExplorationEngine::LaunchMainLoop);
-        auto &instance = viz::ExplorationEngine::Instance();
-        window = std::make_shared<ControlSlamWindow>("SLAM Controls");
-        instance.AddWindow(window);
-    }
-#endif
+//#if CT_ICP_WITH_VIZ
+//    std::unique_ptr<std::thread> gui_thread = nullptr;
+//    std::shared_ptr<ControlSlamWindow> window = nullptr;
+//    if (options.with_viz3d) {
+//        gui_thread = std::make_unique<std::thread>(viz::ExplorationEngine::LaunchMainLoop);
+//        auto &instance = viz::ExplorationEngine::Instance();
+//        window = std::make_shared<ControlSlamWindow>("SLAM Controls");
+//        instance.AddWindow(window);
+//    }
+//#endif
 
     fs::path options_root_path(options.output_dir);
     for (auto &dataset_option: options.dataset_options_vector) {
@@ -254,11 +254,11 @@ int main(int argc, char **argv) {
                         std::cerr << "Error while saving the poses to " << filepath << std::endl;
                         std::cerr << "Make sure output directory " << options.output_dir << " exists" << std::endl;
                         if (options.suspend_on_failure) {
-#if CT_ICP_WITH_VIZ
-                            if (gui_thread) {
-                                gui_thread->join();
-                            }
-#endif
+//#if CT_ICP_WITH_VIZ
+//                            if (gui_thread) {
+//                                gui_thread->join();
+//                            }
+//#endif
                         }
                         throw;
                     }
@@ -322,54 +322,54 @@ int main(int argc, char **argv) {
                 registration_elapsed_ms += registration_elapsed.count() * 1000;
                 all_seq_registration_elapsed_ms += registration_elapsed.count() * 1000;
 
-#if CT_ICP_WITH_VIZ
-                if (options.with_viz3d) {
-                    auto &instance = viz::ExplorationEngine::Instance();
-                    Eigen::Matrix4d camera_pose = summary.frame.MidPose();
-                    camera_pose = camera_pose.inverse().eval();
-                    instance.SetCameraPose(camera_pose);
-
-                    {
-                        auto model_ptr = std::make_shared<viz::PosesModel>();
-                        auto &model_data = model_ptr->ModelData();
-                        auto trajectory = ct_icp_odometry.Trajectory();
-                        model_data.instance_model_to_world.resize(trajectory.size());
-                        for (size_t i(0); i < trajectory.size(); ++i) {
-                            model_data.instance_model_to_world[i] = trajectory[i].MidPose().cast<float>();
-                        }
-                        instance.AddModel(-11, model_ptr);
-
-                    }
-                    if (options.viz_mode == AGGREGATED) {
-                        {
-                            auto model_ptr = std::make_shared<viz::PointCloudModel>();
-                            auto &model_data = model_ptr->ModelData();
-                            model_data.xyz.resize(summary.all_corrected_points.size());
-                            for (size_t i(0); i < summary.all_corrected_points.size(); ++i) {
-                                model_data.xyz[i] = summary.all_corrected_points[i].WorldPoint().cast<float>();
-                            }
-                            instance.AddModel(frame_id % 500, model_ptr);
-                        }
-
-                    }
-
-                    if (window) {
-                        while (!window->ContinueSLAM()) {
-                            std::this_thread::sleep_for(std::chrono::duration<double>(0.01));
-                        }
-                    }
-                }
-#endif
+//#if CT_ICP_WITH_VIZ
+//                if (options.with_viz3d) {
+//                    auto &instance = viz::ExplorationEngine::Instance();
+//                    Eigen::Matrix4d camera_pose = summary.frame.MidPose();
+//                    camera_pose = camera_pose.inverse().eval();
+//                    instance.SetCameraPose(camera_pose);
+//
+//                    {
+//                        auto model_ptr = std::make_shared<viz::PosesModel>();
+//                        auto &model_data = model_ptr->ModelData();
+//                        auto trajectory = ct_icp_odometry.Trajectory();
+//                        model_data.instance_model_to_world.resize(trajectory.size());
+//                        for (size_t i(0); i < trajectory.size(); ++i) {
+//                            model_data.instance_model_to_world[i] = trajectory[i].MidPose().cast<float>();
+//                        }
+//                        instance.AddModel(-11, model_ptr);
+//
+//                    }
+//                    if (options.viz_mode == AGGREGATED) {
+//                        {
+//                            auto model_ptr = std::make_shared<viz::PointCloudModel>();
+//                            auto &model_data = model_ptr->ModelData();
+//                            model_data.xyz.resize(summary.all_corrected_points.size());
+//                            for (size_t i(0); i < summary.all_corrected_points.size(); ++i) {
+//                                model_data.xyz[i] = summary.all_corrected_points[i].WorldPoint().cast<float>();
+//                            }
+//                            instance.AddModel(frame_id % 500, model_ptr);
+//                        }
+//
+//                    }
+//
+//                    if (window) {
+//                        while (!window->ContinueSLAM()) {
+//                            std::this_thread::sleep_for(std::chrono::duration<double>(0.01));
+//                        }
+//                    }
+//                }
+//#endif
                 if (!summary.success) {
                     std::cerr << "Error while running SLAM for sequence " << sequence_info.sequence_name <<
                               ", at frame index " << frame_id << ". Error Message: "
                               << summary.error_message << std::endl;
                     if (options.suspend_on_failure) {
-#if CT_ICP_WITH_VIZ
-                        if (options.with_viz3d) {
-                            gui_thread->join();
-                        }
-#endif
+//#if CT_ICP_WITH_VIZ
+//                        if (options.with_viz3d) {
+//                            gui_thread->join();
+//                        }
+//#endif
                         exit(1);
                     }
                     break;
@@ -407,11 +407,11 @@ int main(int argc, char **argv) {
 
     }
 
-#if CT_ICP_WITH_VIZ
-    if (gui_thread) {
-        gui_thread->join();
-    }
-#endif
+//#if CT_ICP_WITH_VIZ
+//    if (gui_thread) {
+//        gui_thread->join();
+//    }
+//#endif
 
     return 0;
 }

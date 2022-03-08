@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-#option(WITH_VIZ3D "Search and install viz3d (disabled by default)" OFF)
+option(WITH_VIZ3D "Search and install viz3d (disabled by default)" ON)
 option(WITH_PYTHON_BINDING "Install Python bindings" OFF)
 
 set(LOG_PREFIX " [CT_ICP] -- ")
@@ -45,7 +45,7 @@ if (UNIX)
 endif ()
 
 
-#include(cmake/viz3d_utils.cmake)
+include(cmake/viz3d_utils.cmake)
 SLAM_DEFAULT_VARIABLES()
 SLAM_INCLUDE_SUPERBUILD()
 SLAM_INSTALL_DEFAULT_VARIABLES(TARGET CT_ICP PREFIX CT_ICP)
@@ -60,10 +60,10 @@ if (NOT TARGET OpenMP::OpenMP_CXX)
 endif ()
 
 SLAM_CHECK_TARGETS(Ceres::ceres glog::glog Eigen3::Eigen OpenMP::OpenMP_CXX)
-#if (WITH_VIZ3D)
-#    SLAM_CHECK_TARGETS(viz3d)
-#    find_package(SlamCore-viz3d REQUIRED CONFIG PATHS ${SLAM_CORE_DIR} NO_DEFAULT_PATH)
-#endif ()
+if (WITH_VIZ3D)
+    SLAM_CHECK_TARGETS(viz3d)
+    find_package(SlamCore-viz3d REQUIRED CONFIG PATHS ${SLAM_CORE_DIR} NO_DEFAULT_PATH)
+endif ()
 
 # -- Manually append to the RPATH for CT_ICP shared library the rpath to SlamCore
 set(CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_RPATH} ${SLAM_CORE_RPATH})
@@ -83,7 +83,7 @@ SLAM_INSTALL_TARGET(
         INSTALL_DIR ${CT_ICP_INSTALL_DIR}
         INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 install(TARGETS slam DESTINATION ${CT_ICP_RUNTIME_DESTINATION})
-#LINK_WITH_VIZ3D(TARGET slam)
+LINK_WITH_VIZ3D(TARGET slam)
 
 add_subdirectory(test)
 add_subdirectory(command)

@@ -36,8 +36,7 @@ ExternalProject_Add(
         -DWITH_NANOFLANN=ON
         -DWITH_COLORMAP=ON
         -DWITH_CEREAL=ON
-
-        -DWITH_VIZ3D=OFF
+        -DWITH_VIZ3D=${WITH_VIZ3D}
         BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_BUILD_TYPE} --target install)
 
 # -- Add the MappingResearchKEU SlamCore Library
