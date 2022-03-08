@@ -2,9 +2,9 @@
 #include <SlamCore/types.h>
 #include "testint_utils.h"
 
-#if CT_ICP_WITH_VIZ
-#include <viz3d/engine.h>
-#endif
+//#if CT_ICP_WITH_VIZ
+//#include <viz3d/engine.h>
+//#endif
 
 
 std::vector<slam::Pose> GenerateTrajectory(int num_between_poses, std::vector<slam::Pose> landmarks) {
@@ -59,11 +59,11 @@ int main(int argc, char **argv) {
     auto poses = GeneratePoses(10, 30);
     auto frames = GenerateWorldPoints(poses);
 
-#if CT_ICP_WITH_VIZ
-    std::thread gui_thread{viz::ExplorationEngine::LaunchMainLoop};
-    add_pc_model(0, frames.world_points);
-    add_poses_model(1, poses);
-#endif
+//#if CT_ICP_WITH_VIZ
+//    std::thread gui_thread{viz::ExplorationEngine::LaunchMainLoop};
+//    add_pc_model(0, frames.world_points);
+//    add_poses_model(1, poses);
+//#endif
 
     ct_icp::OdometryOptions options;
     options.debug_viz = true;
@@ -86,9 +86,9 @@ int main(int argc, char **argv) {
         }
         frame_pc = result.all_corrected_points;
 
-#if CT_ICP_WITH_VIZ
-        add_pc_model(-42, frame_pc, 4, Eigen::Vector3f(1.0f, 0.f, 0.f));
-#endif
+//#if CT_ICP_WITH_VIZ
+//        add_pc_model(-42, frame_pc, 4, Eigen::Vector3f(1.0f, 0.f, 0.f));
+//#endif
         auto trajectory = odometry.Trajectory();
         std::vector<slam::Pose> optimized_poses;
         for (auto &frame: trajectory) {
@@ -102,14 +102,14 @@ int main(int argc, char **argv) {
         }
 
         Eigen::Vector3f color{1.f, 0.f, 0.f};
-#if CT_ICP_WITH_VIZ
-        add_poses_model(-1000, optimized_poses, 1., &color);
-#endif
+//#if CT_ICP_WITH_VIZ
+//        add_poses_model(-1000, optimized_poses, 1., &color);
+//#endif
     }
 
-#if CT_ICP_WITH_VIZ
-    gui_thread.join();
-#endif
+//#if CT_ICP_WITH_VIZ
+//    gui_thread.join();
+//#endif
     return 0;
 }
 

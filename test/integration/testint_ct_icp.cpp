@@ -4,11 +4,11 @@
 #include <ct_icp/odometry.h>
 #include "testint_utils.h"
 
-#if CT_ICP_WITH_VIZ
-
-#include <viz3d/engine.h>
-
-#endif
+//#if CT_ICP_WITH_VIZ
+//
+//#include <viz3d/engine.h>
+//
+//#endif
 
 bool TestCT_ICP(const ct_icp::CTICPOptions &options) {
     slam::Pose init_pose(slam::SE3(), 0., 0);
@@ -27,10 +27,10 @@ bool TestCT_ICP(const ct_icp::CTICPOptions &options) {
     for (auto &kpt: keypoints)
         kpt.world_point = init_pose.ContinuousTransform(kpt.raw_point.point, noisy_pose, kpt.raw_point.timestamp);
 
-#if CT_ICP_WITH_VIZ
-    add_pc_model(0, all_points);
-    add_pc_model(1, keypoints, 5, Eigen::Vector3f(1.0, 0.0, 0.0));
-#endif
+//#if CT_ICP_WITH_VIZ
+//    add_pc_model(0, all_points);
+//    add_pc_model(1, keypoints, 5, Eigen::Vector3f(1.0, 0.0, 0.0));
+//#endif
 
     ct_icp::VoxelHashMap map;
     ct_icp::AddPointsToMap(map, all_points,
@@ -45,9 +45,9 @@ bool TestCT_ICP(const ct_icp::CTICPOptions &options) {
     registration.Register(map, keypoints, frame);
 
     auto corrected_keypoints = keypoints;
-#if CT_ICP_WITH_VIZ
-    add_pc_model(2, corrected_keypoints, 6, Eigen::Vector3f(0.f, 1.0f, 0.0f));
-#endif
+//#if CT_ICP_WITH_VIZ
+//    add_pc_model(2, corrected_keypoints, 6, Eigen::Vector3f(0.f, 1.0f, 0.0f));
+//#endif
 
     slam::Pose corrected_pose = frame.end_pose;
 
@@ -73,9 +73,9 @@ bool TestCT_ICP(const ct_icp::CTICPOptions &options) {
 
 
 int main(int argc, char **argv) {
-#if CT_ICP_WITH_VIZ
-    std::thread gui_thread{viz::ExplorationEngine::LaunchMainLoop};
-#endif
+//#if CT_ICP_WITH_VIZ
+//    std::thread gui_thread{viz::ExplorationEngine::LaunchMainLoop};
+//#endif
 
     ct_icp::CTICPOptions options;
     options.num_iters_icp = 100;
@@ -85,8 +85,8 @@ int main(int argc, char **argv) {
     options.ls_max_num_iters = 10;
     CHECK(TestCT_ICP(options)) << "CERES Solver failed" << std::endl;
 
-#if CT_ICP_WITH_VIZ
-    gui_thread.join();
-#endif
+//#if CT_ICP_WITH_VIZ
+//    gui_thread.join();
+//#endif
     return 0;
 }

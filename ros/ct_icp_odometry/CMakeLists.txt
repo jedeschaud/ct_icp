@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.14)
 
 project(ct_icp_odometry)
 
-option(WITH_VIZ3D "Whether to compile with viz3d as a debugging tool" OFF)
+#option(WITH_VIZ3D "Whether to compile with viz3d as a debugging tool" OFF)
 
 # -- The Superbuild install dir is required for the SLAM
 get_filename_component(REAL_CURRENT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR} REALPATH)
@@ -37,10 +37,10 @@ SLAM_COMPILER_FLAGS()
 SLAM_DEFAULT_VARIABLES()
 SLAM_INCLUDE_SUPERBUILD()
 
-if (WITH_VIZ3D)
-    find_package(viz3d REQUIRED)
-    find_package(SlamCore-viz3d REQUIRED)
-endif ()
+#if (WITH_VIZ3D)
+#    find_package(viz3d REQUIRED)
+#    find_package(SlamCore-viz3d REQUIRED)
+#endif ()
 
 
 # -- Catkin
@@ -72,7 +72,7 @@ target_link_libraries(ct_icp_odometry_node
         Slam::ROSCore
         Slam::CT_ICP
         ${catkin_LIBRARIES})
-LINK_WITH_VIZ3D(TARGET ct_icp_odometry_node)
+#LINK_WITH_VIZ3D(TARGET ct_icp_odometry_node)
 
 add_executable(ct_icp_dataset_node
         src/ct_icp_dataset_node.cxx)
@@ -83,4 +83,4 @@ target_link_libraries(ct_icp_dataset_node
         Slam::ROSCore
         Slam::CT_ICP
         ${catkin_LIBRARIES})
-LINK_WITH_VIZ3D(TARGET ct_icp_dataset_node)
+#LINK_WITH_VIZ3D(TARGET ct_icp_dataset_node)

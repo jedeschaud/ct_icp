@@ -12,16 +12,16 @@
 #include <ct_icp/odometry.h>
 #include <ROSCore/pc2_conversion.h>
 
-#if defined(CT_ICP_WITH_VIZ) && CT_ICP_WITH_VIZ && defined(SLAM_WITH_VIZ3D)
-
-#include <SlamCore-viz3d/viz3d_utils.h>
-#include <viz3d/engine.h>
-
-#define WITH_VIZ3D 1
-
-#else
-#define WITH_VIZ3D 0
-#endif
+//#if defined(CT_ICP_WITH_VIZ) && CT_ICP_WITH_VIZ && defined(SLAM_WITH_VIZ3D)
+//
+//#include <SlamCore-viz3d/viz3d_utils.h>
+//#include <viz3d/engine.h>
+//
+//#define WITH_VIZ3D 1
+//
+//#else
+//#define WITH_VIZ3D 0
+//#endif
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /// GLOBAL VARIABLES
@@ -108,10 +108,10 @@ void RegisterNewFrameCallback(const sensor_msgs::PointCloud2Ptr &pc_ptr) {
         ROS_INFO("Registration is a success.");
     else {
         ROS_INFO("Registration is a failure");
-#if SLAM_WITH_VIZ3D
-        viz::ExplorationEngine::Instance().SignalClose();
-        gui_thread->join();
-#endif
+//#if SLAM_WITH_VIZ3D
+//        viz::ExplorationEngine::Instance().SignalClose();
+//        gui_thread->join();
+//#endif
         ros::shutdown();
     }
 
@@ -141,34 +141,34 @@ void RegisterNewFrameCallback(const sensor_msgs::PointCloud2Ptr &pc_ptr) {
     tf_gt.child_frame_id = child_frame_id;
     tfBroadcasterPtr->sendTransform(tf_gt);
 
-#if WITH_VIZ3D
-    // -- DISPLAY RESULTS
-    auto &instance = viz::ExplorationEngine::Instance();
-    Eigen::Matrix4d camera_pose = summary.frame.MidPose();
-    camera_pose = camera_pose.inverse().eval();
-    instance.SetCameraPose(camera_pose);
-
-    {
-        auto model_ptr = std::make_shared<viz::PosesModel>();
-        auto &model_data = model_ptr->ModelData();
-        auto trajectory = odometry_ptr->Trajectory();
-        model_data.instance_model_to_world.resize(trajectory.size());
-        for (size_t i(0); i < trajectory.size(); ++i) {
-            model_data.instance_model_to_world[i] = trajectory[i].MidPose().cast<float>();
-        }
-        instance.AddModel(-11, model_ptr);
-    }
-
-    {
-        auto model_ptr = std::make_shared<viz::PointCloudModel>();
-        auto &model_data = model_ptr->ModelData();
-        model_data.xyz.resize(summary.all_corrected_points.size());
-        for (size_t i(0); i < summary.all_corrected_points.size(); ++i) {
-            model_data.xyz[i] = summary.all_corrected_points[i].WorldPoint().cast<float>();
-        }
-        instance.AddModel(int(frame_id) % 500, model_ptr);
-    }
-#endif
+//#if WITH_VIZ3D
+//    // -- DISPLAY RESULTS
+//    auto &instance = viz::ExplorationEngine::Instance();
+//    Eigen::Matrix4d camera_pose = summary.frame.MidPose();
+//    camera_pose = camera_pose.inverse().eval();
+//    instance.SetCameraPose(camera_pose);
+//
+//    {
+//        auto model_ptr = std::make_shared<viz::PosesModel>();
+//        auto &model_data = model_ptr->ModelData();
+//        auto trajectory = odometry_ptr->Trajectory();
+//        model_data.instance_model_to_world.resize(trajectory.size());
+//        for (size_t i(0); i < trajectory.size(); ++i) {
+//            model_data.instance_model_to_world[i] = trajectory[i].MidPose().cast<float>();
+//        }
+//        instance.AddModel(-11, model_ptr);
+//    }
+//
+//    {
+//        auto model_ptr = std::make_shared<viz::PointCloudModel>();
+//        auto &model_data = model_ptr->ModelData();
+//        model_data.xyz.resize(summary.all_corrected_points.size());
+//        for (size_t i(0); i < summary.all_corrected_points.size(); ++i) {
+//            model_data.xyz[i] = summary.all_corrected_points[i].WorldPoint().cast<float>();
+//        }
+//        instance.AddModel(int(frame_id) % 500, model_ptr);
+//    }
+//#endif
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -206,9 +206,9 @@ void InitializeNode(ros::NodeHandle &public_nh, ros::NodeHandle &nh) {
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 int main(int argc, char **argv) {
-#if WITH_VIZ3D
-    gui_thread = std::make_unique<std::thread>(viz::ExplorationEngine::LaunchMainLoop);
-#endif
+//#if WITH_VIZ3D
+//    gui_thread = std::make_unique<std::thread>(viz::ExplorationEngine::LaunchMainLoop);
+//#endif
 
     ros::init(argc, argv,
               "ct_icp_odometry");
@@ -222,13 +222,13 @@ int main(int argc, char **argv) {
                                                                 &RegisterNewFrameCallback);
     ros::spin();
 
-#if WITH_VIZ3D
-    if (gui_thread) {
-        viz::ExplorationEngine::Instance().SignalClose();
-        gui_thread->join();
-        gui_thread.reset();
-    }
-#endif
+//#if WITH_VIZ3D
+//    if (gui_thread) {
+//        viz::ExplorationEngine::Instance().SignalClose();
+//        gui_thread->join();
+//        gui_thread.reset();
+//    }
+//#endif
 
     return 0;
 }

@@ -24,10 +24,20 @@ ExternalProject_Add(
         INSTALL_DIR ${INSTALL_DIR}
         CMAKE_ARGS
         -DSUPERBUILD_INSTALL_DIR=${INSTALL_DIR}
-        -DWITH_G2O=OFF
-        -DWITH_OPENCV=OFF
-        -DWITH_SQLITE=OFF
-        -DWITH_VIZ3D=${WITH_VIZ3D}
+        -DDEFAULT_LIB_OPTION=OFF
+        -DWITH_GLOG=ON
+        -DWITH_EIGEN=ON
+        -DWITH_CERES=ON
+        -DWITH_YAML_CPP=ON
+        -DWITH_GTEST=ON
+        -DWITH_TCLAP=ON
+        -DWITH_TESSIL=ON
+        -DWITH_TINY_PLY=ON
+        -DWITH_NANOFLANN=ON
+        -DWITH_COLORMAP=ON
+        -DWITH_CEREAL=ON
+
+        -DWITH_VIZ3D=OFF
         BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_BUILD_TYPE} --target install)
 
 # -- Add the MappingResearchKEU SlamCore Library
@@ -44,7 +54,6 @@ ExternalProject_Add(
 
 
 if (WITH_ROS)
-
     # -- Add the MappingResearchKEU ROSCore Library
     ExternalProject_Add(
             MappingResearchKEU_roscore

@@ -16,12 +16,6 @@ dataset_options:
     use_all_datasets: false
     sequence_options:
       - sequence_name: 2012-01-08
-  - dataset: HILTI
-    root_path: .hilti
-    use_all_datasets: false
-    sequence_options:
-      - sequence_name: 02
-
 
 # ODOMETRY OPTIONS ----
 odometry_options:
