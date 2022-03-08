@@ -434,7 +434,7 @@ namespace ct_icp {
             }
 
             Frame frame{std::move(points), {}, {}};
-            if (ground_truth_) {
+            if (ground_truth_ && !frame.points.empty()) {
                 auto min_max = slam::MinMaxTimestamps(frame.points);
                 frame.begin_pose = ground_truth_->InterpolatePose(min_max.first);
                 frame.end_pose = ground_truth_->InterpolatePose(min_max.second);

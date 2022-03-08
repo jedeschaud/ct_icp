@@ -10,6 +10,10 @@ if (NOT INSTALL_DIR)
     set(INSTALL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../install)
 endif ()
 
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif ()
+
 # -- Add the MappingResearchKEU Superbuild
 ExternalProject_Add(
         MappingResearchKEU_superbuild
