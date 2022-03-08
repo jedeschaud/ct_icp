@@ -34,7 +34,7 @@ cd ct_icp
 
 ### Step 1: Superbuild, SlamCore, ROSCore
 
-> CT-ICP uses **Kitware**'s [Superbuild](https://gitlab.kitware.com/keu-computervision/MappingResearchKEU/Superbuild) to build the external dependencies, [SlamCore](https://gitlab.kitware.com/keu-computervision/MappingResearchKEU/SlamCore) the utils library and **[ROSCore](https://gitlab.kitware.com/keu-computervision/MappingResearchKEU/ROSCore)** which defines tools for SLAM and Ros wrappings.
+> CT-ICP uses **Kitware**'s [**Superbuild**](https://gitlab.kitware.com/keu-computervision/MappingResearchKEU/Superbuild) to build the external dependencies, [**SlamCore**](https://gitlab.kitware.com/keu-computervision/MappingResearchKEU/SlamCore) the utils library and **[ROSCore](https://gitlab.kitware.com/keu-computervision/MappingResearchKEU/ROSCore)** which defines tools for SLAM and Ros wrappings.
 >
 > You can either install each individually, or use the script below to install all dependencies:
 
