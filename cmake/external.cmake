@@ -248,7 +248,8 @@ if (WITH_VIZ3D)
     # VIZ 3D (For Visualization)
     FetchContent_Declare(
             viz3d
-            GIT_REPOSITORY ${VIZ3D_GIT_URL})
+            GIT_REPOSITORY ${VIZ3D_GIT_URL}
+            GIT_TAG 2b9f567)
     if (NOT viz3d_POPULATED)
         set(BUILD_TESTING OFF)
         FetchContent_Populate(viz3d)
