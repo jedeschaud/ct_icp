@@ -96,38 +96,38 @@ auto GeneratePointCloud(const slam::Pose &pose_b,
     return all_points;
 }
 
-#if CT_ICP_WITH_VIZ
-auto add_pc_model = [](int model_id,
-                       const std::vector<slam::WPoint3D> &points,
-                       int point_size = 3,
-                       Eigen::Vector3f color = Eigen::Vector3f(0.0, 0.6, 1.0)) {
-    auto &instance = viz::ExplorationEngine::Instance();
-    auto model_ptr = std::make_shared<viz::PointCloudModel>();
-    auto &model_data = model_ptr->ModelData();
-    model_data.xyz = slam::slam_to_viz3d_pc(points);
-    model_data.point_size = point_size;
-    model_data.default_color = color;
-    instance.AddModel(model_id, model_ptr);
-};
-
-auto add_poses_model = [](int model_id,
-                          const std::vector<slam::Pose> &poses,
-                          double scale = 1.0,
-                          const Eigen::Vector3f *const color = nullptr) {
-    auto &instance = viz::ExplorationEngine::Instance();
-    auto model_ptr = std::make_shared<viz::PosesModel>();
-    auto &model_data = model_ptr->ModelData();
-    model_data.instance_model_to_world.resize(poses.size());
-    std::transform(poses.begin(), poses.end(), model_data.instance_model_to_world.begin(), [](auto &pose) {
-        Eigen::Matrix4f mat = pose.Matrix().template cast<float>();
-        return mat;
-    });
-    model_data.scaling = scale;
-    if (color)
-        model_data.default_color = *color;
-    instance.AddModel(model_id, model_ptr);
-};
-#endif
+//#if CT_ICP_WITH_VIZ
+//auto add_pc_model = [](int model_id,
+//                       const std::vector<slam::WPoint3D> &points,
+//                       int point_size = 3,
+//                       Eigen::Vector3f color = Eigen::Vector3f(0.0, 0.6, 1.0)) {
+//    auto &instance = viz::ExplorationEngine::Instance();
+//    auto model_ptr = std::make_shared<viz::PointCloudModel>();
+//    auto &model_data = model_ptr->ModelData();
+//    model_data.xyz = slam::slam_to_viz3d_pc(points);
+//    model_data.point_size = point_size;
+//    model_data.default_color = color;
+//    instance.AddModel(model_id, model_ptr);
+//};
+//
+//auto add_poses_model = [](int model_id,
+//                          const std::vector<slam::Pose> &poses,
+//                          double scale = 1.0,
+//                          const Eigen::Vector3f *const color = nullptr) {
+//    auto &instance = viz::ExplorationEngine::Instance();
+//    auto model_ptr = std::make_shared<viz::PosesModel>();
+//    auto &model_data = model_ptr->ModelData();
+//    model_data.instance_model_to_world.resize(poses.size());
+//    std::transform(poses.begin(), poses.end(), model_data.instance_model_to_world.begin(), [](auto &pose) {
+//        Eigen::Matrix4f mat = pose.Matrix().template cast<float>();
+//        return mat;
+//    });
+//    model_data.scaling = scale;
+//    if (color)
+//        model_data.default_color = *color;
+//    instance.AddModel(model_id, model_ptr);
+//};
+//#endif
 
 auto stream = [](const auto &prefix) -> std::ostream & {
     static auto &ostream = (std::cout << "[TEST][INTEGRATION]" << prefix);

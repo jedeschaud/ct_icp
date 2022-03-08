@@ -33,8 +33,7 @@ bool TestCT_ICP(const ct_icp::CTICPOptions &options) {
 //#endif
 
     ct_icp::VoxelHashMap map;
-    ct_icp::AddPointsToMap(map, all_points,
-                           options.size_voxel_map, 20, 0.1);
+    ct_icp::AddPointsToMap(map, all_points, options.size_voxel_map, 20, 0.1);
 
     ct_icp::TrajectoryFrame frame;
     frame.begin_pose = init_pose;
@@ -45,6 +44,7 @@ bool TestCT_ICP(const ct_icp::CTICPOptions &options) {
     registration.Register(map, keypoints, frame);
 
     auto corrected_keypoints = keypoints;
+
 //#if CT_ICP_WITH_VIZ
 //    add_pc_model(2, corrected_keypoints, 6, Eigen::Vector3f(0.f, 1.0f, 0.0f));
 //#endif
