@@ -84,11 +84,14 @@ catkin_make
 roslaunch ct_icp_odometry launch_slam_dataset.launch dataset_path:=<path-to-dataset-root> dataset:=<dataset_name> sequence:=<sequence_name>
 ```
 
-### Visualization [experimental]
+[//]: # (### Visualization [experimental])
 
-> As a debugging/visualization tool we use a home-made/experimental lightweight OpenGL-based pointcloud visualizer **[viz3d](https://github.com/pierdell/viz3d)** designed for our SLAM use case.
-> 
-> To activate pass the argument `-DWITH_VIZ3D=ON` to the configure steps of the `Superbuild (1)`, `CT_ICP (2)` 
+[//]: # ()
+[//]: # (> As a debugging/visualization tool we use a home-made/experimental lightweight OpenGL-based pointcloud visualizer **[viz3d]&#40;https://github.com/pierdell/viz3d&#41;** designed for our SLAM use case.)
+
+[//]: # (> )
+
+[//]: # (> To activate pass the argument `-DWITH_VIZ3D=ON` to the configure steps of the `Superbuild &#40;1&#41;`, `CT_ICP &#40;2&#41;` )
 
 ### Python bindings
 
