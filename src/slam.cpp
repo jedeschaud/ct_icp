@@ -20,30 +20,13 @@
 #include "ct_icp/utils.h"
 #include "ct_icp/config.h"
 
-//#if CT_ICP_WITH_VIZ
-//
-//#include <viz3d/engine.h>
-//#include <imgui.h>
-//
-//
-//struct ControlSlamWindow : viz::ExplorationEngine::GUIWindow {
-//
-//    explicit ControlSlamWindow(std::string &&winname) :
-//            viz::ExplorationEngine::GUIWindow(std::move(winname), &open) {}
-//
-//    void DrawContent() override {
-//        ImGui::Checkbox("Pause the SLAM", &pause_button);
-//    };
-//
-//    [[nodiscard]] bool ContinueSLAM() const {
-//        return !pause_button;
-//    }
-//
-//    bool pause_button = false;
-//    bool open = true;
-//};
-//
-//#endif
+#if CT_ICP_WITH_VIZ == 1
+
+#include "ct_icp/viz3d_utils.h"
+#include <SlamCore-viz3d/viz3d_utils.h>
+#include <SlamCore-viz3d/viz3d_windows.h>
+
+#endif
 
 using namespace ct_icp;
 
@@ -181,16 +164,18 @@ int main(int argc, char **argv) {
     LOG(INFO) << "Creating directory " << options.output_dir << std::endl;
     fs::create_directories(options.output_dir);
 
-//#if CT_ICP_WITH_VIZ
-//    std::unique_ptr<std::thread> gui_thread = nullptr;
-//    std::shared_ptr<ControlSlamWindow> window = nullptr;
-//    if (options.with_viz3d) {
-//        gui_thread = std::make_unique<std::thread>(viz::ExplorationEngine::LaunchMainLoop);
-//        auto &instance = viz::ExplorationEngine::Instance();
-//        window = std::make_shared<ControlSlamWindow>("SLAM Controls");
-//        instance.AddWindow(window);
-//    }
-//#endif
+#if CT_ICP_WITH_VIZ
+    std::unique_ptr<std::thread> gui_thread = nullptr;
+    std::shared_ptr<slam::MultiPolyDataWindow> window_ptr = nullptr;
+    std::shared_ptr<ct_icp::ShowAggregatedFramesCallback> callback = nullptr;
+    if (options.with_viz3d) {
+        gui_thread = std::make_unique<std::thread>(viz3d::GUI::LaunchMainLoop, "CT-ICP SLAM");
+        auto &instance = viz3d::GUI::Instance();
+        window_ptr = std::make_shared<slam::MultiPolyDataWindow>("Aggregated Point Cloud");
+        instance.AddWindow(window_ptr);
+        callback = std::make_shared<ct_icp::ShowAggregatedFramesCallback>(window_ptr.get());
+    }
+#endif
 
     fs::path options_root_path(options.output_dir);
     for (auto &dataset_option: options.dataset_options_vector) {
@@ -222,6 +207,12 @@ int main(int argc, char **argv) {
             if (dataset.HasGroundTruth(sequence_info.sequence_name))
                 ground_truth.emplace(dataset.GetGroundTruth(sequence_info.sequence_name));
             ct_icp::Odometry ct_icp_odometry(&options.odometry_options);
+
+            // Add Callbacks
+            if (callback) {
+                ct_icp_odometry.RegisterCallback(ct_icp::Odometry::OdometryCallback::FINISHED_REGISTRATION,
+                                                 *callback);
+            }
 
             double registration_elapsed_ms = 0.0;
             double avg_number_of_attempts = 0.0;
@@ -407,11 +398,12 @@ int main(int argc, char **argv) {
 
     }
 
-//#if CT_ICP_WITH_VIZ
-//    if (gui_thread) {
-//        gui_thread->join();
-//    }
-//#endif
+#if CT_ICP_WITH_VIZ
+    if (gui_thread) {
+        viz3d::GUI::Instance().SignalClose();
+        gui_thread->join();
+    }
+#endif
 
     return 0;
 }
