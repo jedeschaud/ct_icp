@@ -11,6 +11,11 @@ on:
       - '.gitignore'
 
 jobs:
+  test:
+    runs-on: ubuntu-18.04
+    steps:
+      - run: echo "branch name = $GITHUB_REF"
+
   build-dev_ci:
     if: ${{ github.ref == 'dev_ci' }}
     runs-on: ubuntu-18.04
