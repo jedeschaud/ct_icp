@@ -13,12 +13,13 @@ on:
 jobs:
   test:
     runs-on: ubuntu-18.04
+    env:
+      base_ref: ${{ github.ref_name }}
     steps:
-      - run: echo "branch name = $GITHUB_REF"
-      - run: echo "base branch name = $GITHUB_BASE_REF"
+      - run: echo "branch name = $base_ref"
 
   build-dev_ci:
-    if: ${{ github.base_ref == 'dev_ci' }}
+    if: ${{ github.ref_name == 'dev_ci' }}
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
