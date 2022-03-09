@@ -1,3 +1,4 @@
+
 #include <iostream>
 #include <string>
 
@@ -13,6 +14,7 @@
 
 #include <SlamCore/eval.h>
 #include <SlamCore/generic_tools.h>
+#include <SlamCore/utils.h>
 
 #include "ct_icp/odometry.h"
 #include "ct_icp/dataset.h"
@@ -27,6 +29,7 @@
 #include <SlamCore-viz3d/viz3d_windows.h>
 
 #endif
+
 
 using namespace ct_icp;
 
@@ -152,6 +155,7 @@ SLAMOptions read_arguments(int argc, char **argv) {
 /* ------------------------------------------------------------------------------------------------------------------ */
 // Run the SLAM on the different sequences
 int main(int argc, char **argv) {
+    slam::setup_signal_handler(argc, argv);
 
     // Read Command line arguments
     const auto options = read_arguments(argc, argv);
@@ -173,7 +177,8 @@ int main(int argc, char **argv) {
         auto &instance = viz3d::GUI::Instance();
         window_ptr = std::make_shared<slam::MultiPolyDataWindow>("Aggregated Point Cloud");
         instance.AddWindow(window_ptr);
-        callback = std::make_shared<ct_icp::ShowAggregatedFramesCallback>(window_ptr.get());
+        callback = std::make_shared<ct_icp::ShowAggregatedFramesCallback>(
+                std::weak_ptr<slam::MultiPolyDataWindow>(window_ptr));
     }
 #endif
 
@@ -245,11 +250,12 @@ int main(int argc, char **argv) {
                         std::cerr << "Error while saving the poses to " << filepath << std::endl;
                         std::cerr << "Make sure output directory " << options.output_dir << " exists" << std::endl;
                         if (options.suspend_on_failure) {
-//#if CT_ICP_WITH_VIZ
-//                            if (gui_thread) {
-//                                gui_thread->join();
-//                            }
-//#endif
+#if CT_ICP_WITH_VIZ
+                            if (gui_thread) {
+                                viz3d::GUI::Instance().SignalClose();
+                                gui_thread->join();
+                            }
+#endif
                         }
                         throw;
                     }
@@ -295,7 +301,6 @@ int main(int argc, char **argv) {
                 }
             };
 
-
             // Launches the iterations
             while (sequence->HasNext()) {
                 auto time_start_frame = std::chrono::steady_clock::now();
@@ -313,54 +318,23 @@ int main(int argc, char **argv) {
                 registration_elapsed_ms += registration_elapsed.count() * 1000;
                 all_seq_registration_elapsed_ms += registration_elapsed.count() * 1000;
 
-//#if CT_ICP_WITH_VIZ
-//                if (options.with_viz3d) {
-//                    auto &instance = viz::ExplorationEngine::Instance();
-//                    Eigen::Matrix4d camera_pose = summary.frame.MidPose();
-//                    camera_pose = camera_pose.inverse().eval();
-//                    instance.SetCameraPose(camera_pose);
-//
-//                    {
-//                        auto model_ptr = std::make_shared<viz::PosesModel>();
-//                        auto &model_data = model_ptr->ModelData();
-//                        auto trajectory = ct_icp_odometry.Trajectory();
-//                        model_data.instance_model_to_world.resize(trajectory.size());
-//                        for (size_t i(0); i < trajectory.size(); ++i) {
-//                            model_data.instance_model_to_world[i] = trajectory[i].MidPose().cast<float>();
-//                        }
-//                        instance.AddModel(-11, model_ptr);
-//
-//                    }
-//                    if (options.viz_mode == AGGREGATED) {
-//                        {
-//                            auto model_ptr = std::make_shared<viz::PointCloudModel>();
-//                            auto &model_data = model_ptr->ModelData();
-//                            model_data.xyz.resize(summary.all_corrected_points.size());
-//                            for (size_t i(0); i < summary.all_corrected_points.size(); ++i) {
-//                                model_data.xyz[i] = summary.all_corrected_points[i].WorldPoint().cast<float>();
-//                            }
-//                            instance.AddModel(frame_id % 500, model_ptr);
-//                        }
-//
-//                    }
-//
-//                    if (window) {
-//                        while (!window->ContinueSLAM()) {
-//                            std::this_thread::sleep_for(std::chrono::duration<double>(0.01));
-//                        }
-//                    }
-//                }
-//#endif
+#if CT_ICP_WITH_VIZ
+                if (options.with_viz3d) {
+                    window_ptr->ApplyTransform(callback->GroupName(),
+                                               slam::slam_to_vtk_transform(summary.frame.begin_pose.pose.Inverse()));
+                }
+#endif
                 if (!summary.success) {
                     std::cerr << "Error while running SLAM for sequence " << sequence_info.sequence_name <<
                               ", at frame index " << frame_id << ". Error Message: "
                               << summary.error_message << std::endl;
                     if (options.suspend_on_failure) {
-//#if CT_ICP_WITH_VIZ
-//                        if (options.with_viz3d) {
-//                            gui_thread->join();
-//                        }
-//#endif
+#if CT_ICP_WITH_VIZ
+                        if (options.with_viz3d) {
+                            viz3d::GUI::Instance().SignalClose();
+                            gui_thread->join();
+                        }
+#endif
                         exit(1);
                     }
                     break;
@@ -373,6 +347,10 @@ int main(int argc, char **argv) {
             }
             finished = true;
             save_trajectory_and_metrics();
+
+#if CT_ICP_WITH_VIZ
+            callback->Clear();
+#endif
         }
 
         if (dataset_with_gt) {
