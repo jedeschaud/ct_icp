@@ -15,9 +15,10 @@ jobs:
     runs-on: ubuntu-18.04
     steps:
       - run: echo "branch name = $GITHUB_REF"
+      - run: echo "base branch name = $GITHUB_BASE_REF"
 
   build-dev_ci:
-    if: ${{ github.ref == 'dev_ci' }}
+    if: ${{ github.base_ref == 'dev_ci' }}
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
