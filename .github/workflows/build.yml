@@ -1,0 +1,31 @@
+# This is a basic workflow to help you get started with Actions
+name: build
+
+on:
+
+  workflow_dispatch:
+  push:
+    branches: [ master, dev ]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+  pull_request:
+    branches: [ master, dev ]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+
+jobs:
+  build-master:
+    if: ${{ github.ref == "master" }}
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-dev gcc-multilib g++-multilib libfreetype6-dev libvulkan-dev freeglut3-dev libxrandr-dev libglfw3-dev
+      - name: Run install script
+        run: ./ct_icp_build.sh Release "Unix Makefiles" OFF OFF
