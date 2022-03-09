@@ -2,21 +2,17 @@
 name: build
 
 on:
+  pull_request:
   push:
     branches: [ master, dev, dev_ci ]
     paths-ignore:
       - '**.md'
       - 'LICENSE'
       - '.gitignore'
-  pull_request:
-    branches: [ master, dev ]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
-      - '.gitignore'
 
 jobs:
-  build:
+  build-dev_ci:
+    if: ${{ github.ref == 'dev_ci' }}
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
