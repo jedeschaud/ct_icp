@@ -3,7 +3,7 @@ name: build
 
 on:
   push:
-    branches: [ master, dev ]
+    branches: [ master, dev, dev_ci ]
     paths-ignore:
       - '**.md'
       - 'LICENSE'
@@ -16,8 +16,7 @@ on:
       - '.gitignore'
 
 jobs:
-  build-master:
-    if: ${{ github.ref == 'master' }}
+  build:
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
