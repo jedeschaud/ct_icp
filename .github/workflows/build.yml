@@ -2,20 +2,21 @@
 name: build
 
 on:
-  push:
-    branches: [ master, dev ]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
-      - '.gitignore'
+
+  workflow_dispatch:
   pull_request:
-    branches: [ master, dev ]
+  push:
+    branches: [ master, dev, dev_ci ]
     paths-ignore:
       - '**.md'
       - 'LICENSE'
       - '.gitignore'
 
 jobs:
+  env:
+    CC: gcc-9
+    CXX: g++-9
+
   master:
     if: ${{ github.ref_name == 'master' }}
     runs-on: ubuntu-18.04
@@ -27,3 +28,18 @@ jobs:
           sudo apt-get install -y libsdl2-dev gcc-multilib g++-multilib libfreetype6-dev libvulkan-dev freeglut3-dev libxrandr-dev libglfw3-dev
       - name: Run install script
         run: ./ct_icp_build.sh Release "Unix Makefiles" OFF OFF
+  dev-linux-noros-noviz3d:
+    if: ${{ github.ref_name != 'master' }}
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install the superbuild
+        run: |
+          mkdir .cmake-build-superbuild && .cmake-build-superbuild
+          cmake ../superbuild
+          cmake --build . --config Release
+      - name: Install CT-ICP
+        run: |
+          mkdir cmake-build-release && cd cmake-build-release
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --target install --config Release --parallel 12
