@@ -2,23 +2,22 @@
 name: build
 
 on:
-  push:
-    branches: [ master, dev ]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
-      - '.gitignore'
   pull_request:
-    branches: [ master, dev ]
+  push:
+    branches: [ master, dev, dev_ci ]
     paths-ignore:
       - '**.md'
       - 'LICENSE'
       - '.gitignore'
 
 jobs:
-  build-master:
-    if: ${{ github.ref == 'master' }}
+  master:
+    if: ${{ github.ref_name == 'master' }}
     runs-on: ubuntu-18.04
+    
+    env:
+      CC: gcc-9
+      CXX: g++-9  
     steps:
       - uses: actions/checkout@v2
       - name: Install Dependencies
