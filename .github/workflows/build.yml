@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: [ master, dev, dev_ci ]
+    branches: [ master, dev ]
     paths-ignore:
       - '**.md'
       - 'LICENSE'
