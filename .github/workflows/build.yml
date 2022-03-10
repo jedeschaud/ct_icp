@@ -16,8 +16,8 @@ on:
       - '.gitignore'
 
 jobs:
-  build-master:
-    if: ${{ github.ref == 'master' }}
+  master:
+    if: ${{ github.ref_name == 'master' }}
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
