@@ -40,7 +40,7 @@ ExternalProject_Add(
         -DWITH_GTEST=ON
         -DWITH_TCLAP=ON
         -DWITH_TESSIL=ON
-        -DWITH_TINY_PLY=ON
+        -DWITH_TINYPLY=ON
         -DWITH_NANOFLANN=ON
         -DWITH_COLORMAP=ON
         -DWITH_CEREAL=ON
