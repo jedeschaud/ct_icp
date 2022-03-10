@@ -13,13 +13,13 @@ on:
       - '.gitignore'
 
 jobs:
-  env:
-    CC: gcc-9
-    CXX: g++-9
 
   master:
     if: ${{ github.ref_name == 'master' }}
     runs-on: ubuntu-18.04
+    env:
+      CC: gcc-9
+      CXX: g++-9  
     steps:
       - uses: actions/checkout@v2
       - name: Install Dependencies
@@ -31,6 +31,9 @@ jobs:
   dev-linux-noros-noviz3d:
     if: ${{ github.ref_name != 'master' }}
     runs-on: ubuntu-18.04
+    env:
+      CC: gcc-9
+      CXX: g++-9
     steps:
       - uses: actions/checkout@v2
       - name: Install the superbuild
