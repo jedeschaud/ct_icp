@@ -11,15 +11,8 @@ on:
       - '.gitignore'
 
 jobs:
-  test:
-    runs-on: ubuntu-18.04
-    env:
-      base_ref: ${{ github.ref_name }}
-    steps:
-      - run: echo "branch name = $base_ref"
-
-  build-dev_ci:
-    if: ${{ github.ref_name == 'dev_ci' }}
+  master:
+    if: ${{ github.ref_name == 'master' }}
     runs-on: ubuntu-18.04
     
     env:
