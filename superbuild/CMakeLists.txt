@@ -53,7 +53,7 @@ ExternalProject_Add(
         MappingResearchKEU_slamcore
         PREFIX MappingResearchKEU_slamcore
         GIT_REPOSITORY ${MAPPING_RESEARCH_GIT_DIR}SlamCore.git
-        GIT_TAG master
+        GIT_TAG dev
         BUILD_ALWAYS ON
         INSTALL_DIR ${INSTALL_DIR}
         CMAKE_ARGS
@@ -67,7 +67,7 @@ if (WITH_ROS)
             MappingResearchKEU_roscore
             PREFIX MappingResearchKEU_roscore
             GIT_REPOSITORY ${MAPPING_RESEARCH_GIT_DIR}ROSCore.git
-            GIT_TAG master
+            GIT_TAG dev
             BUILD_ALWAYS ON
             INSTALL_DIR ${INSTALL_DIR}
             CMAKE_ARGS
