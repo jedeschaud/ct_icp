@@ -1,3 +1,4 @@
+#define MALLOC_CHECK_ 2
 
 #include <iostream>
 #include <string>
@@ -27,6 +28,28 @@
 #include "ct_icp/viz3d_utils.h"
 #include <SlamCore-viz3d/viz3d_utils.h>
 #include <SlamCore-viz3d/viz3d_windows.h>
+
+class SlamControlWindow : public viz3d::ImGuiWindow {
+public:
+    using viz3d::ImGuiWindow::ImGuiWindow;
+
+    void DrawImGUIContent() override {
+        ImGui::Checkbox("Pause", &is_on_pause);
+        if (ImGui::Button("Stop")) {
+            is_stopped = true;
+            std::exit(0);
+        }
+    }
+
+    void WaitIfOnPause() {
+        while (is_on_pause)
+            std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(10.));
+    }
+
+protected:
+    bool is_on_pause = false;
+    bool is_stopped = false;
+};
 
 #endif
 
@@ -172,13 +195,19 @@ int main(int argc, char **argv) {
     std::unique_ptr<std::thread> gui_thread = nullptr;
     std::shared_ptr<slam::MultiPolyDataWindow> window_ptr = nullptr;
     std::shared_ptr<ct_icp::ShowAggregatedFramesCallback> callback = nullptr;
+    std::shared_ptr<SlamControlWindow> ctrl_window_ptr = nullptr;
     if (options.with_viz3d) {
         gui_thread = std::make_unique<std::thread>(viz3d::GUI::LaunchMainLoop, "CT-ICP SLAM");
         auto &instance = viz3d::GUI::Instance();
         window_ptr = std::make_shared<slam::MultiPolyDataWindow>("Aggregated Point Cloud");
+        ctrl_window_ptr = std::make_shared<SlamControlWindow>("Control Window");
         instance.AddWindow(window_ptr);
+        instance.AddWindow(ctrl_window_ptr);
         callback = std::make_shared<ct_icp::ShowAggregatedFramesCallback>(
                 std::weak_ptr<slam::MultiPolyDataWindow>(window_ptr));
+        window_ptr->SetSelectedField(callback->PointCloudGroupName(), "Z");
+        window_ptr->SetSelectedField(callback->PosesGroupName(), "Coordinates");
+
     }
 #endif
 
@@ -320,8 +349,10 @@ int main(int argc, char **argv) {
 
 #if CT_ICP_WITH_VIZ
                 if (options.with_viz3d) {
-                    window_ptr->ApplyTransform(callback->GroupName(),
-                                               slam::slam_to_vtk_transform(summary.frame.begin_pose.pose.Inverse()));
+                    auto transform = slam::slam_to_vtk_transform(summary.frame.begin_pose.pose.Inverse());
+                    window_ptr->ApplyTransform(callback->PointCloudGroupName(), transform);
+                    window_ptr->ApplyTransform(callback->PosesGroupName(), transform);
+                    ctrl_window_ptr->WaitIfOnPause();
                 }
 #endif
                 if (!summary.success) {

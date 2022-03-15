@@ -28,13 +28,17 @@ namespace ct_icp {
         REF_GETTER(MaxNumFrames, max_num_frames_);
 
         // The name of the group of poly data in the slam::MultiPolyDataWindow
-        REF_GETTER(GroupName, group_name_);
+        REF_GETTER(PointCloudGroupName, group_name_);
+
+        // The name of the group of poly data in the slam::MultiPolyDataWindow
+        REF_GETTER(PosesGroupName, poses_group_name_);
 
         // Removes all windows from the callback and the window
         void Clear();
 
     private:
         std::string group_name_ = "AGGREGATED_POINTS";
+        std::string poses_group_name_ = "POSES";
         int max_num_frames_ = 100;
         std::weak_ptr<slam::MultiPolyDataWindow> window_;
         std::set<slam::frame_id_t> frame_ids_;
