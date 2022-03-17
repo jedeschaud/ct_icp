@@ -242,11 +242,13 @@ int main(int argc, char **argv) {
                 ground_truth.emplace(dataset.GetGroundTruth(sequence_info.sequence_name));
             ct_icp::Odometry ct_icp_odometry(&options.odometry_options);
 
+#if CT_ICP_WITH_VIZ
             // Add Callbacks
             if (callback) {
                 ct_icp_odometry.RegisterCallback(ct_icp::Odometry::OdometryCallback::FINISHED_REGISTRATION,
                                                  *callback);
             }
+#endif
 
             double registration_elapsed_ms = 0.0;
             double avg_number_of_attempts = 0.0;
@@ -416,7 +418,3 @@ int main(int argc, char **argv) {
 
     return 0;
 }
-
-
-
-
