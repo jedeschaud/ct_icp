@@ -84,6 +84,8 @@ namespace ct_icp {
 
         bool with_viz3d = true; // Whether to display timing and debug information
 
+        bool with_queue_window = false; // Whether to display the queue window (to save PLY files)
+
         SLAM_VIZ_MODE viz_mode = KEYPOINTS; // The visualization mode for the point clouds (in AGGREGATED, KEYPOINTS)
     };
 
@@ -195,7 +197,9 @@ int main(int argc, char **argv) {
     std::unique_ptr<std::thread> gui_thread = nullptr;
     std::shared_ptr<slam::MultiPolyDataWindow> window_ptr = nullptr;
     std::shared_ptr<ct_icp::ShowAggregatedFramesCallback> callback = nullptr;
+    std::shared_ptr<ct_icp::PushFrameToQueueWindowCallback> queue_callback = nullptr;
     std::shared_ptr<SlamControlWindow> ctrl_window_ptr = nullptr;
+    std::shared_ptr<slam::PointCloudQueueVTKWindow> sliding_window_ptr = nullptr;
     if (options.with_viz3d) {
         gui_thread = std::make_unique<std::thread>(viz3d::GUI::LaunchMainLoop, "CT-ICP SLAM");
         auto &instance = viz3d::GUI::Instance();
@@ -205,9 +209,14 @@ int main(int argc, char **argv) {
         instance.AddWindow(ctrl_window_ptr);
         callback = std::make_shared<ct_icp::ShowAggregatedFramesCallback>(
                 std::weak_ptr<slam::MultiPolyDataWindow>(window_ptr));
+        if (options.with_queue_window) {
+            sliding_window_ptr = std::make_shared<slam::PointCloudQueueVTKWindow>("Sliding VTK Window");
+            instance.AddWindow(sliding_window_ptr);
+            queue_callback = std::make_shared<ct_icp::PushFrameToQueueWindowCallback>(
+                    std::weak_ptr<slam::PointCloudQueueVTKWindow>(sliding_window_ptr));
+        }
         window_ptr->SetSelectedField(callback->PointCloudGroupName(), "Z");
         window_ptr->SetSelectedField(callback->PosesGroupName(), "Coordinates");
-
     }
 #endif
 
@@ -248,6 +257,9 @@ int main(int argc, char **argv) {
                 ct_icp_odometry.RegisterCallback(ct_icp::Odometry::OdometryCallback::FINISHED_REGISTRATION,
                                                  *callback);
             }
+            if (queue_callback)
+                ct_icp_odometry.RegisterCallback(ct_icp::Odometry::OdometryCallback::FINISHED_REGISTRATION,
+                                                 *queue_callback);
 #endif
 
             double registration_elapsed_ms = 0.0;

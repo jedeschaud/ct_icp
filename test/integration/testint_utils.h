@@ -8,7 +8,6 @@
 
 #if CT_ICP_WITH_VIZ
 
-#include <viz3d/engine.h>
 #include <SlamCore-viz3d/viz3d_utils.h>
 
 #endif
