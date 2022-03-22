@@ -160,6 +160,25 @@ namespace ct_icp {
             double begin_timestamp = -1., end_timestamp = -1.;
         };
 
+        // @brief   An abstract Callback which can be registered to the Odometry and will be called at a specified
+        //          Stages of the pipeline
+        struct OdometryCallback {
+
+            enum EVENT {
+                BEFORE_ITERATION, //< Runs the callback before the iteration
+                ITERATION_COMPLETED, //< Run the callback once an iteration has been completed
+                FINISHED_REGISTRATION //< Runs the callback after the end of the iterations
+            };
+
+            // @brief   Execution method of the Callback with the instance who called the callback as argument
+            virtual bool Run(
+                    const Odometry &odometry,
+                    const std::vector<slam::WPoint3D> &current_frame,
+                    const std::vector<slam::WPoint3D> *keypoints = nullptr,
+                    const RegistrationSummary *summary = nullptr) = 0;
+
+        };
+
         explicit Odometry(const OdometryOptions &options);
 
         explicit Odometry(const OdometryOptions *options) : Odometry(*options) {}
@@ -190,9 +209,13 @@ namespace ct_icp {
         // Note: This requires a traversal of the whole map which is in O(n)
         [[nodiscard]] size_t MapSize() const;
 
+        // Registers a Callback to the Odometry
+        void RegisterCallback(OdometryCallback::EVENT event, OdometryCallback &callback);
+
         REF_GETTER(Map, voxel_map_)
 
     private:
+        std::map<OdometryCallback::EVENT, std::vector<OdometryCallback *>> callbacks_;
         std::vector<TrajectoryFrame> trajectory_;
         VoxelHashMap voxel_map_;
         int registered_frames_ = 0;
@@ -202,6 +225,13 @@ namespace ct_icp {
         OdometryOptions options_;
         std::ostream *log_out_ = nullptr;
         std::unique_ptr<std::ofstream> log_file_ = nullptr;
+
+
+        // Iterate over the callbacks registered
+        void IterateOverCallbacks(OdometryCallback::EVENT event,
+                                  const std::vector<slam::WPoint3D> &current_frame,
+                                  const std::vector<slam::WPoint3D> *keypoints = nullptr,
+                                  const RegistrationSummary *summary = nullptr);
 
         // Initialize the Frame.
         // Returns the set of selected keypoints sampled via grid sampling
@@ -229,6 +259,7 @@ namespace ct_icp {
         bool AssessRegistration(const std::vector<slam::WPoint3D> &points, RegistrationSummary &summary,
                                 std::ostream *log_stream = nullptr) const;
 
+        friend class OdometryCallback;
     };
 
 } // namespace ct_icp

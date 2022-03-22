@@ -10,14 +10,6 @@
 
 #include <math.h>
 
-#if CT_ICP_WITH_VIZ
-
-#include <viz3d/engine.h>
-#include <SlamCore-viz3d/viz3d_utils.h>
-#include "ct_icp/viz3d_utils.h"
-
-#endif
-
 namespace ct_icp {
     using namespace slam;
 
@@ -468,6 +460,7 @@ namespace ct_icp {
                         good_enough_registration = true;
                     }
                 }
+
             } while (!good_enough_registration);
 
             if (!summary.success) {
@@ -540,9 +533,7 @@ namespace ct_icp {
                     next_robust_level_ = options_.robust_minimal_level + 1;
                 }
             }
-
         }
-
 
         // Remove voxels too far from actual position of the vehicule
         const double kMaxDistance = options_.max_distance;
@@ -594,30 +585,8 @@ namespace ct_icp {
                            kMaxNumPointsInVoxel, kMinDistancePoints);
         }
 
-#if CT_ICP_WITH_VIZ
-        if (options_.debug_viz) {
-
-            auto &instance = viz::ExplorationEngine::Instance();
-            auto model_ptr = std::make_shared<viz::PointCloudModel>();
-            auto &model_data = model_ptr->ModelData();
-            auto map_size = MapSize();
-            model_data.xyz.reserve(map_size);
-            std::vector<double> scalars;
-            scalars.reserve(map_size);
-            for (auto &voxel: voxel_map_) {
-                for (int i(0); i < voxel.second.NumPoints(); ++i) {
-                    auto &point = voxel.second.points[i];
-                    model_data.xyz.push_back(point.cast<float>());
-                    scalars.push_back(point.z());
-                }
-            }
-            model_data.rgb = get_viz3d_color(scalars, true, slam::VIRIDIS);
-            model_data.point_size = 3;
-            model_data.default_color = Eigen::Vector3f::Zero();
-            instance.AddModel(-3, model_ptr);
-        }
-#endif
-
+        IterateOverCallbacks(OdometryCallback::FINISHED_REGISTRATION,
+                             frame, nullptr, &summary);
 
         return summary;
     }
@@ -645,20 +614,17 @@ namespace ct_icp {
                 options.num_iters_icp = std::max(options.num_iters_icp, 15);
             }
 
+            // Iterate over the callbacks with the keypoints
+            IterateOverCallbacks(OdometryCallback::BEFORE_ITERATION,
+                                 frame, &keypoints);
+
             //CT ICP
             ICPSummary icp_summary;
-//            if (options_.ct_icp_options.solver == CT_ICP_SOLVER::GN) {
             CT_ICP_Registration registration;
             registration.Options() = options;
             icp_summary = registration.Register(voxel_map_,
                                                 keypoints,
                                                 registration_summary.frame, previous_frame);
-//                icp_summary = CT_ICP_GN(options, voxel_map_, keypoints,
-//                                        registration_summary.frame, previous_frame);
-//            } else {
-//                icp_summary = CT_ICP_CERES(options, voxel_map_, keypoints,
-//                                           registration_summary.frame, previous_frame);
-//            }
 
             registration_summary.success = icp_summary.success;
             registration_summary.number_of_residuals = icp_summary.num_residuals_used;
@@ -678,6 +644,10 @@ namespace ct_icp {
 
             registration_summary.keypoints = keypoints;
         }
+
+        IterateOverCallbacks(OdometryCallback::ITERATION_COMPLETED,
+                             frame, &keypoints, nullptr);
+
         return registration_summary;
     }
 
@@ -799,6 +769,21 @@ namespace ct_icp {
             log_out_ = &std::cout;
     }
 
+    /* -------------------------------------------------------------------------------------------------------------- */
+    void Odometry::RegisterCallback(Odometry::OdometryCallback::EVENT event, Odometry::OdometryCallback &callback) {
+        callbacks_[event].push_back(&callback);
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    void Odometry::IterateOverCallbacks(Odometry::OdometryCallback::EVENT event,
+                                        const std::vector<slam::WPoint3D> &current_frame,
+                                        const std::vector<slam::WPoint3D> *keypoints,
+                                        const RegistrationSummary *summary) {
+        if (callbacks_.find(event) != callbacks_.end()) {
+            for (auto &callback: callbacks_[event])
+                CHECK(callback->Run(*this, current_frame, keypoints)) << "Callback returned false";
+        }
+    }
 
     /* -------------------------------------------------------------------------------------------------------------- */
     ArrayVector3d MapAsPointcloud(const VoxelHashMap &map) {

@@ -10,15 +10,6 @@
 #include <ct_icp/ct_icp.h>
 #include <ct_icp/cost_functions.h>
 
-#if CT_ICP_WITH_VIZ
-
-#include <ct_icp/utils.h>
-
-#include <viz3d/engine.h>
-#include <colormap/colormap.hpp>
-#include <colormap/color.hpp>
-
-#endif
 namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -394,84 +385,6 @@ namespace ct_icp {
                 }
             }
 
-
-#if CT_ICP_WITH_VIZ
-            // Adds to the visualizer keypoints colored by timestamp value
-            if (options_->debug_viz) {
-                auto palette = colormap::palettes.at("jet").rescale(0, 1);
-                auto &instance = viz::ExplorationEngine::Instance();
-                auto model_ptr = std::make_shared<viz::PointCloudModel>();
-                auto &model_data = model_ptr->ModelData();
-                model_data.xyz.reserve(world_points_.size());
-                model_data.point_size = 6;
-                model_data.default_color = Eigen::Vector3f(1, 0, 0);
-                model_data.rgb.reserve(world_points_.size());
-                std::vector<double> scalars(world_points_.size());
-
-                double s_min = 0.0;
-                double s_max = 1.0;
-                std::vector<double> s_values;
-                if (options_->viz_mode == WEIGHT || options_->viz_mode == TIMESTAMP) {
-                    s_min = std::numeric_limits<double>::max();
-                    s_max = std::numeric_limits<double>::min();
-                    s_values.resize(world_points_.size());
-                    for (int i(0); i < world_points_.size(); ++i) {
-                        double new_s;
-                        auto *ptr = vector_cost_functors_[i];
-                        if (ptr != nullptr) {
-                            CTPointToPlaneFunctor *ct_ptr;
-                            PointToPlaneFunctor *pt_to_pl_ptr;
-
-                            switch (options_->distance) {
-                                case CT_POINT_TO_PLANE:
-                                    ct_ptr = static_cast<CTPointToPlaneFunctor *>(ptr);
-                                    new_s = options_->viz_mode == WEIGHT ? ct_ptr->weight_ : ct_ptr->alpha_timestamps_;
-                                    break;
-                                case POINT_TO_PLANE:
-                                    pt_to_pl_ptr = static_cast<PointToPlaneFunctor *>(ptr);
-                                    new_s = options_->viz_mode == WEIGHT ? pt_to_pl_ptr->weight_ : 1.0;
-                                    break;
-                            }
-                            if (new_s < s_min)
-                                s_min = new_s;
-                            if (new_s > s_max)
-                                s_max = new_s;
-                            s_values[i] = new_s;
-                        }
-
-                    }
-                }
-
-                for (size_t i(0); i < world_points_.size(); ++i) {
-                    void *ptr = vector_cost_functors_[i];
-                    if (!ptr)
-                        continue;
-                    model_data.xyz.push_back(world_points_[i].operator Eigen::Vector3d().cast<float>());
-                    scalars[i] = timestamps_[i].operator double();
-                    if (options_->viz_mode == NORMAL) {
-                        switch (options_->distance) {
-                            case CT_POINT_TO_PLANE:
-                                model_data.rgb.push_back(
-                                        static_cast<CTPointToPlaneFunctor *>(ptr)->reference_normal_.cwiseAbs().cast<float>());
-                                break;
-                            case POINT_TO_PLANE:
-                                model_data.rgb.push_back(
-                                        static_cast<PointToPlaneFunctor *>(ptr)->reference_normal_.cwiseAbs().cast<float>());
-                                break;
-                        }
-                    } else {
-                        double s = s_min == s_max ? 1.0 : (s_values[i] - s_min) / (s_max - s_min);
-                        colormap::rgb value = palette(s);
-                        std::uint8_t *rgb_color_ptr = reinterpret_cast<std::uint8_t *>(&value);
-                        Eigen::Vector3f rgb((float) rgb_color_ptr[0] / 255.0f,
-                                            (float) rgb_color_ptr[1] / 255.0f, (float) rgb_color_ptr[2] / 255.0f);
-                        model_data.rgb.push_back(rgb);
-                    }
-                }
-
-                instance.AddModel(-2, model_ptr);
-            }
-#endif
             std::fill(vector_cost_functors_.begin(), vector_cost_functors_.end(), nullptr);
             std::fill(vector_ct_icp_residuals_.begin(), vector_ct_icp_residuals_.end(), nullptr);
 
