@@ -63,5 +63,19 @@ namespace ct_icp {
             frame_ids_.clear();
         }
     }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    bool PushFrameToQueueWindowCallback::Run(const Odometry &,
+                                             const std::vector<slam::WPoint3D> &current_frame,
+                                             const std::vector<slam::WPoint3D> *,
+                                             const Odometry::RegistrationSummary *) {
+        auto window_ptr = window_.lock();
+        if (current_frame.empty() || !window_ptr)
+            return true;
+        auto pc = slam::PointCloud::WrapConstVector(current_frame, slam::WPoint3D::DefaultSchema(), "raw_point");
+        auto copy = pc.DeepCopyPtr();
+        window_ptr->PushNewFrame(copy);
+        return true;
+    }
 }
 

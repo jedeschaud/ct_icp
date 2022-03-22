@@ -11,7 +11,7 @@
 namespace ct_icp {
 
     /*!
-     * A callback which displays frames
+     * @brief A callback which pushes corrected frames in a slam::MultiPolyDataWindow
      */
     class ShowAggregatedFramesCallback : public Odometry::OdometryCallback {
     public:
@@ -41,6 +41,27 @@ namespace ct_icp {
         std::string poses_group_name_ = "POSES";
         int max_num_frames_ = 100;
         std::weak_ptr<slam::MultiPolyDataWindow> window_;
+        std::set<slam::frame_id_t> frame_ids_;
+    };
+
+    /*!
+     * @brief   Pushes an aggregated frame to a Sliding Window
+     */
+    class PushFrameToQueueWindowCallback : public Odometry::OdometryCallback {
+    public:
+
+        // Pushes current_frame to the slam::SlidingWindow this callback points to
+        bool Run(const Odometry &,
+                 const std::vector<slam::WPoint3D> &current_frame,
+                 const std::vector<slam::WPoint3D> * = nullptr,
+                 const Odometry::RegistrationSummary * = nullptr) override;;
+
+
+        explicit PushFrameToQueueWindowCallback(std::weak_ptr<slam::PointCloudQueueVTKWindow> window)
+                : window_(window) {}
+
+    private:
+        std::weak_ptr<slam::PointCloudQueueVTKWindow> window_;
         std::set<slam::frame_id_t> frame_ids_;
     };
 

@@ -747,7 +747,7 @@ namespace ct_icp {
         auto file_path = file_pattern_.has_value() ?
                          (root_dir_path_ / file_pattern_.value()(index)).string() :
                          (root_dir_path_ / file_names_[index]).string();
-        frame.points = slam::ReadPLYFromFile(file_path, schema_);
+        frame.points = slam::ReadWPoint3DVectorFromPLYFile(file_path, mapper_);
         std::for_each(frame.points.begin(), frame.points.end(),
                       [index](auto &point) { point.index_frame = static_cast<slam::frame_id_t >(index); });
 
@@ -981,7 +981,6 @@ namespace ct_icp {
                 ply_directory_ptr->SetGroundTruth(std::move(*gt_poses));
                 seq_info.with_ground_truth = true;
             }
-            ply_directory_ptr->Schema().timestamp_element_and_property = {"vertex", "timestamp"};
             dataset_sequence = std::move(ply_directory_ptr);
         };
 

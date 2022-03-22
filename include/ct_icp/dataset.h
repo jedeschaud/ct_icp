@@ -177,18 +177,18 @@ namespace ct_icp {
         // Returns the ground truth if the dataset has a ground truth
         std::optional<std::vector<slam::Pose>> GroundTruth() override;;
 
-        REF_GETTER(Schema, schema_)
-
         explicit PLYDirectory(fs::path &&root_path,
                               std::vector<std::string> &&file_names);
 
         void SetInitFrame(int frame_index) override;
 
+        REF_GETTER(GetSchemaMapper, mapper_)
+
     private:
+        slam::PLYSchemaMapper mapper_ = slam::WPoint3D::FloatSchemaMapper(); //< The default Schema Mapper.
         size_t full_sequence_size_ = -1;
         std::vector<std::string> file_names_;
         fs::path root_dir_path_;
-        slam::PointCloudSchema schema_;
         std::optional<slam::LinearContinuousTrajectory> ground_truth_{};
         std::optional<FilePatternFunctionType> file_pattern_{};
     };
