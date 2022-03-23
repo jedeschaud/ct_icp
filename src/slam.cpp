@@ -111,6 +111,7 @@ SLAMOptions read_config(const std::string &config_path) {
         OPTION_CLAUSE(slam_node, options, sequence, std::string);
         OPTION_CLAUSE(slam_node, options, all_sequences, bool);
         OPTION_CLAUSE(slam_node, options, with_viz3d, bool);
+        OPTION_CLAUSE(slam_node, options, with_queue_window, bool);
 
 
         if (!options.output_dir.empty() && options.output_dir[options.output_dir.size() - 1] != '/')
