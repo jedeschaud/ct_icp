@@ -35,8 +35,10 @@ namespace ct_icp {
             frame_ids_.erase(frame_idx);
         }
         frame_ids_.insert(frame_idx);
+
         window_ptr->AddPolyData(std::string(group_name_), (int) frame_idx,
                                 slam::polydata_from_points(current_frame, true));
+
 
         while (frame_ids_.size() > std::max(max_num_frames_, 0)) {
             auto begin_idx = *frame_ids_.begin();

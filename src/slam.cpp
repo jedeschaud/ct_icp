@@ -26,6 +26,7 @@
 #if CT_ICP_WITH_VIZ == 1
 
 #include "ct_icp/viz3d_utils.h"
+#include <viz3d/imgui_utils.h>
 #include <SlamCore-viz3d/viz3d_utils.h>
 #include <SlamCore-viz3d/viz3d_windows.h>
 
@@ -34,11 +35,16 @@ public:
     using viz3d::ImGuiWindow::ImGuiWindow;
 
     void DrawImGUIContent() override {
-        ImGui::Checkbox("Pause", &is_on_pause);
-        if (ImGui::Button("Stop")) {
+        if (viz3d::ImGui_HorizontalButton(is_on_pause ? "Play" : "Pause"))
+            is_on_pause = !is_on_pause;
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8, 0.f, 0.f, 1.f));
+        if (viz3d::ImGui_HorizontalButton("Stop")) {
             is_stopped = true;
+
+            ImGui::PopStyleColor();
             std::exit(0);
         }
+        ImGui::PopStyleColor();
     }
 
     void WaitIfOnPause() {
@@ -198,7 +204,6 @@ int main(int argc, char **argv) {
     std::unique_ptr<std::thread> gui_thread = nullptr;
     std::shared_ptr<slam::MultiPolyDataWindow> window_ptr = nullptr;
     std::shared_ptr<ct_icp::ShowAggregatedFramesCallback> callback = nullptr;
-    std::shared_ptr<ct_icp::PushFrameToQueueWindowCallback> queue_callback = nullptr;
     std::shared_ptr<SlamControlWindow> ctrl_window_ptr = nullptr;
     std::shared_ptr<slam::PointCloudQueueVTKWindow> sliding_window_ptr = nullptr;
     if (options.with_viz3d) {
@@ -212,9 +217,8 @@ int main(int argc, char **argv) {
                 std::weak_ptr<slam::MultiPolyDataWindow>(window_ptr));
         if (options.with_queue_window) {
             sliding_window_ptr = std::make_shared<slam::PointCloudQueueVTKWindow>("Sliding VTK Window");
+            sliding_window_ptr->SetSchemaMapper(slam::WPoint3D::FloatSchemaMapper());
             instance.AddWindow(sliding_window_ptr);
-            queue_callback = std::make_shared<ct_icp::PushFrameToQueueWindowCallback>(
-                    std::weak_ptr<slam::PointCloudQueueVTKWindow>(sliding_window_ptr));
         }
         window_ptr->SetSelectedField(callback->PointCloudGroupName(), "Z");
         window_ptr->SetSelectedField(callback->PosesGroupName(), "Coordinates");
@@ -258,9 +262,6 @@ int main(int argc, char **argv) {
                 ct_icp_odometry.RegisterCallback(ct_icp::Odometry::OdometryCallback::FINISHED_REGISTRATION,
                                                  *callback);
             }
-            if (queue_callback)
-                ct_icp_odometry.RegisterCallback(ct_icp::Odometry::OdometryCallback::FINISHED_REGISTRATION,
-                                                 *queue_callback);
 #endif
 
             double registration_elapsed_ms = 0.0;
@@ -368,7 +369,16 @@ int main(int argc, char **argv) {
                     window_ptr->ApplyTransform(callback->PointCloudGroupName(), transform);
                     window_ptr->ApplyTransform(callback->PosesGroupName(), transform);
                     ctrl_window_ptr->WaitIfOnPause();
+
+                    if (options.with_queue_window && sliding_window_ptr) {
+                        auto pc = slam::PointCloud::WrapConstVector(summary.all_corrected_points,
+                                                                    slam::WPoint3D::DefaultSchema(), "raw_point");
+                        auto copy = pc.DeepCopyPtr();
+                        sliding_window_ptr->PushNewFrame(copy);
+                    }
                 }
+
+
 #endif
                 if (!summary.success) {
                     std::cerr << "Error while running SLAM for sequence " << sequence_info.sequence_name <<
