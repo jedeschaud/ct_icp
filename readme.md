@@ -34,7 +34,7 @@ To modify options (for viz3d support, or python binding) for the windows script,
 
 ### Visualization
 
-> As a debugging/visualization tool (and until we provide a ROS support `rosviz`) we use a home-made/experimental lightweight OpenGL-based pointcloud visualizer **[viz3d](https://github.com/pierdell/viz3d)** designed for our SLAM use case. 
+> As a debugging/visualization tool (and until we provide a ROS support `rosviz`) we use a home-made/experimental lightweight OpenGL-based pointcloud visualizer **[viz3d](https://github.com/pierdell/viz3d/tree/viz3d-old)** designed for our SLAM use case. 
 
 
 # Python binding
