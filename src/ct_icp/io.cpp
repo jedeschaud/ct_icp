@@ -64,7 +64,6 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     std::vector<TrajectoryFrame> LoadTrajectory(const std::string &file_path) {
         std::vector<TrajectoryFrame> frames;
-
         std::ifstream pFile(file_path);
         if (pFile.is_open()) {
             Eigen::Quaterniond begin_quat, end_quat;
@@ -91,6 +90,7 @@ namespace ct_icp {
             std::cout << "Unable to open file" << std::endl;
             return frames;
         }
+        return frames;
     }
 
 

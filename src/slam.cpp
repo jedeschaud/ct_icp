@@ -70,7 +70,7 @@ namespace ct_icp {
     };
 
     // Parameters to run the SLAM
-    struct SLAMOptions {
+    struct RegressionSessionOptions {
 
         std::vector<DatasetOptions> dataset_options_vector;
 
@@ -103,8 +103,8 @@ option_name . param_name = node_name [ #param_name ] . as < type >();\
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
-SLAMOptions read_config(const std::string &config_path) {
-    ct_icp::SLAMOptions options;
+RegressionSessionOptions read_config(const std::string &config_path) {
+    ct_icp::RegressionSessionOptions options;
 
     try {
         YAML::Node slam_node = YAML::LoadFile(config_path);
@@ -160,7 +160,7 @@ SLAMOptions read_config(const std::string &config_path) {
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 // Parse Program Arguments
-SLAMOptions read_arguments(int argc, char **argv) {
+RegressionSessionOptions read_arguments(int argc, char **argv) {
 
     try {
         TCLAP::CmdLine cmd("Runs the Elastic_ICP-SLAM on all sequences of the selected odometry dataset", ' ', "0.9");
@@ -248,14 +248,12 @@ int main(int argc, char **argv) {
         int nb_seq_with_gt = 0;
 
         for (int i = 0; i < num_sequences; ++i) { //num_sequences
-
             auto &sequence_info = sequence_infos[i];
             auto &sequence = sequences[i];
             ground_truth.reset();
             if (dataset.HasGroundTruth(sequence_info.sequence_name))
                 ground_truth.emplace(dataset.GetGroundTruth(sequence_info.sequence_name));
             ct_icp::Odometry ct_icp_odometry(&options.odometry_options);
-
 #if CT_ICP_WITH_VIZ
             // Add Callbacks
             if (callback) {
