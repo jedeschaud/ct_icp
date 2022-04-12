@@ -226,6 +226,73 @@ namespace ct_icp {
         std::ostream *log_out_ = nullptr;
         std::unique_ptr<std::ofstream> log_file_ = nullptr;
 
+        // A Helper class which pilots the robustness of the
+        // By evaluating the quality of the registration
+        struct RobustRegistrationAttempt {
+
+            // Sets an initial Robust Level
+            void SetRobustLevel(int level) {
+                while (robust_level < level) {
+                    IncreaseRobustnessLevel();
+                }
+            }
+
+            // Heuristic to increase the robustness level by doing more work
+            // Todo : Seriously need to improve the paradigm of robustness !
+            void IncreaseRobustnessLevel() {
+                sample_voxel_size = index_frame < options_.init_num_frames ?
+                                    options_.init_sample_voxel_size : options_.sample_voxel_size;
+                double min_voxel_size = std::min(options_.init_voxel_size, options_.voxel_size);
+
+                previous_frame = current_frame;
+                // Handle the failure cases
+                current_frame = initial_estimate_;
+                registration_options.voxel_neighborhood = std::min(++registration_options.voxel_neighborhood,
+                                                                   options_.robust_max_voxel_neighborhood);
+                registration_options.ls_max_num_iters += 30;
+                if (registration_options.max_num_residuals > 0)
+                    registration_options.max_num_residuals = registration_options.max_num_residuals * 2;
+                registration_options.num_iters_icp = std::min(registration_options.num_iters_icp + 20, 50);
+                registration_options.threshold_orientation_norm = std::max(
+                        registration_options.threshold_orientation_norm / 10, 1.e-5);
+                registration_options.threshold_translation_norm = std::max(
+                        registration_options.threshold_orientation_norm / 10, 1.e-4);
+                sample_voxel_size = std::max(options_.sample_voxel_size / 1.5, double(min_voxel_size));
+                registration_options.ls_sigma *= 1.2;
+                registration_options.max_dist_to_plane_ct_icp *= 1.5;
+                robust_level++;
+            }
+
+
+            RobustRegistrationAttempt(
+                    int index_frame,
+                    const OdometryOptions &options,
+                    const TrajectoryFrame &initial_estimate) : index_frame(index_frame),
+                                                               options_(options),
+                                                               initial_estimate_(initial_estimate) {
+                registration_options = options_.ct_icp_options;
+                robust_level = 0;
+                sample_voxel_size = index_frame < options_.init_num_frames ?
+                                    options_.init_sample_voxel_size : options_.sample_voxel_size;
+            }
+
+            int robust_level = 0;
+            double sample_voxel_size;
+            slam::frame_id_t index_frame;
+            TrajectoryFrame current_frame, previous_frame;
+
+            const TrajectoryFrame &initial_estimate_;
+            const ct_icp::OdometryOptions &options_;
+            ct_icp::CTICPOptions registration_options;
+            RegistrationSummary summary;
+        };
+
+
+        void RobustRegistration(std::vector<slam::WPoint3D> &frame, FrameInfo frame_info,
+                                RegistrationSummary &registration_summary);
+
+        void LogInitialization(std::vector<slam::WPoint3D> &sampled_frame,
+                               FrameInfo &frame_info, std::ostream *out) const;
 
         // Iterate over the callbacks registered
         void IterateOverCallbacks(OdometryCallback::EVENT event,
@@ -258,6 +325,9 @@ namespace ct_icp {
         // Returns false if it fails
         bool AssessRegistration(const std::vector<slam::WPoint3D> &points, RegistrationSummary &summary,
                                 std::ostream *log_stream = nullptr) const;
+
+        // Inspect the Summary to determine whether point should be added to the map
+        void UpdateMap(const RegistrationSummary &summary);
 
         friend class OdometryCallback;
     };

@@ -13,6 +13,7 @@
 namespace ct_icp {
     using namespace slam;
 
+
     /* -------------------------------------------------------------------------------------------------------------- */
     OdometryOptions OdometryOptions::DefaultDrivingProfile() {
         return OdometryOptions{};
@@ -124,6 +125,9 @@ namespace ct_icp {
 
         return default_options;
     }
+
+#define ODOMETRY_LOG_IF_AVAILABLE \
+        if (options_.debug_print && log_out_) (*log_out_)
 
     /* -------------------------------------------------------------------------------------------------------------- */
     size_t Odometry::MapSize() const {
@@ -341,218 +345,48 @@ namespace ct_icp {
         bool kDisplay = options_.debug_print;
         CTICPOptions ct_icp_options = options_.ct_icp_options; // Make a copy of the options
         const double kSizeVoxelInitSample = options_.voxel_size;
-
         const double kSizeVoxelMap = options_.ct_icp_options.size_voxel_map;
-        const double kMinDistancePoints = options_.min_distance_points;
-        const int kMaxNumPointsInVoxel = options_.max_num_points_in_voxel;
-
         const auto kIndexFrame = frame_info.registered_fid;
-        if (kDisplay) {
-            log_out << "/* ------------------------------------------------------------------------ */" << std::endl;
-            log_out << "/* ------------------------------------------------------------------------ */" << std::endl;
-            log_out << "REGISTRATION OF FRAME number " << kIndexFrame << " (Fid:" << frame_info.frame_id << ") with "
-                    << (options_.ct_icp_options.solver == CERES ? "CERES" : "GN") << " solver" << std::endl;
-        }
 
         auto frame = InitializeFrame(const_frame, frame_info);
-        if (kDisplay)
-            log_out << "Number of points in sub-sampled frame: " << frame.size() << " / " << const_frame.size()
-                    << std::endl;
-        if (kIndexFrame > 0) {
-            Eigen::Vector3d t_diff = trajectory_[kIndexFrame].EndTr() - trajectory_[kIndexFrame].BeginTr();
-            if (kDisplay)
-                log_out << "Initial ego-motion distance: " << t_diff.norm() << std::endl;
-        }
+
+        // LOG INITIALIZATION
+        LogInitialization(frame, frame_info, log_out_);
 
         const auto initial_estimate = trajectory_.back();
         RegistrationSummary summary;
         summary.frame = initial_estimate;
         auto &current_frame = summary.frame;
-        auto previous_frame = initial_estimate;
 
         if (kIndexFrame > 0) {
             bool good_enough_registration = false;
-            summary.number_of_attempts = 1;
-            double sample_voxel_size = kIndexFrame < options_.init_num_frames ?
-                                       options_.init_sample_voxel_size : options_.sample_voxel_size;
-            double min_voxel_size = std::min(options_.init_voxel_size, options_.voxel_size);
-
-            auto increase_robustness_level = [&]() {
-                previous_frame = current_frame;
-                // Handle the failure cases
-                current_frame = initial_estimate;
-                ct_icp_options.voxel_neighborhood = std::min(++ct_icp_options.voxel_neighborhood,
-                                                             options_.robust_max_voxel_neighborhood);
-                ct_icp_options.ls_max_num_iters += 30;
-                if (ct_icp_options.max_num_residuals > 0)
-                    ct_icp_options.max_num_residuals = ct_icp_options.max_num_residuals * 2;
-                ct_icp_options.num_iters_icp = std::min(ct_icp_options.num_iters_icp + 20, 50);
-                ct_icp_options.threshold_orientation_norm = std::max(
-                        ct_icp_options.threshold_orientation_norm / 10, 1.e-5);
-                ct_icp_options.threshold_translation_norm = std::max(
-                        ct_icp_options.threshold_orientation_norm / 10, 1.e-4);
-                sample_voxel_size = std::max(sample_voxel_size / 1.5, min_voxel_size);
-                ct_icp_options.ls_sigma *= 1.2;
-                ct_icp_options.max_dist_to_plane_ct_icp *= 1.5;
-            };
-
-            summary.robust_level = 0;
-            do {
-                if (summary.robust_level < next_robust_level_) {
-                    // Increase the robustness for the first iteration after a failure
-                    summary.robust_level++;
-                    increase_robustness_level();
-                    continue;
-                }
+            if (options_.robust_registration) {
+                RobustRegistration(frame, frame_info, summary);
+            } else {
+                double sample_voxel_size = kIndexFrame < options_.init_num_frames ?
+                                           options_.init_sample_voxel_size : options_.sample_voxel_size;
                 auto start_ct_icp = std::chrono::steady_clock::now();
                 TryRegister(frame, frame_info, ct_icp_options, summary, sample_voxel_size);
                 auto end_ct_icp = std::chrono::steady_clock::now();
-                std::chrono::duration<double> elapsed_icp = (end_ct_icp - start);
-                if (kDisplay) {
-                    log_out << "Elapsed Elastic_ICP: " << (elapsed_icp.count()) * 1000.0 << std::endl;
-                    log_out << "Number of Keypoints extracted: " << summary.sample_size <<
-                            " / Actual number of residuals: " << summary.number_of_residuals << std::endl;
-                }
-
-                // Compute Modification of trajectory
-                if (kIndexFrame > 0) {
-                    summary.distance_correction = (current_frame.BeginTr() -
-                                                   trajectory_[kIndexFrame - 1].EndTr()).norm();
-
-                    auto norm = ((trajectory_[kIndexFrame - 1].EndQuat().normalized().toRotationMatrix() *
-                                  current_frame.EndQuat().normalized().toRotationMatrix().transpose()).trace() - 1.) /
-                                2.;
-                    if (std::abs(norm) > 1. + 1.e-8) {
-                        std::cout << "Not a rotation matrix " << norm << std::endl;
-                    }
-
-                    summary.relative_orientation = AngularDistance(trajectory_[kIndexFrame - 1].end_pose.pose,
-                                                                   current_frame.end_pose.pose);
-
-
-                    summary.ego_orientation = summary.frame.EgoAngularDistance();
-
-                }
-                summary.relative_distance = (current_frame.EndTr() -
-                                             current_frame.BeginTr()).norm();
-
-                good_enough_registration = AssessRegistration(frame, summary,
-                                                              kDisplay ? &log_out : nullptr);
-                if (options_.robust_fail_early)
-                    summary.success = good_enough_registration;
-
-                if (!good_enough_registration) {
-                    if (options_.robust_registration && summary.number_of_attempts < options_.robust_num_attempts) {
-                        // Either fail or
-                        if (kDisplay)
-                            log_out << "Registration Attempt n°" << summary.number_of_attempts
-                                    << " failed with message: "
-                                    << summary.error_message << std::endl;
-                        double trans_distance = previous_frame.TranslationDistance(summary.frame);
-                        double rot_distance = previous_frame.RotationDistance(summary.frame);
-                        if (kDisplay)
-                            log_out << "Distance to previous trans : " << trans_distance <<
-                                    " rot distance " << rot_distance << std::endl;
-                        increase_robustness_level();
-                        summary.robust_level++;
-                        summary.number_of_attempts++;
-                    } else {
-                        good_enough_registration = true;
-                    }
-                }
-
-            } while (!good_enough_registration);
-
-            if (!summary.success) {
-                if (kDisplay)
-                    log_out << "Failure to register, after " << summary.number_of_attempts << std::endl;
-                return summary;
             }
 
-            if (summary.number_of_attempts >= options_.robust_num_attempts)
-                robust_num_consecutive_failures_++;
-            else
-                robust_num_consecutive_failures_ = 0;
-
+            // Update the trajectory
             trajectory_[kIndexFrame] = summary.frame;
         }
 
-        if (kDisplay) {
-            if (kIndexFrame > 0) {
-                log_out << "Trajectory correction [begin(t) - end(t-1)]: "
-                        << summary.distance_correction << std::endl;
-                log_out << "Final ego-motion distance: " << summary.relative_distance << std::endl;
-            }
-        }
-
-//        if (kIndexFrame == 0) {
-//            voxel_map_.clear();
-//        }
-
-        bool add_points = true;
-
-        if (options_.robust_registration) {
-
-            // Communicate whether we suspect an error due to too many attempts
-            suspect_registration_error_ = summary.number_of_attempts >= options_.robust_num_attempts;
-            if (kDisplay) {
-                log_out << "[Robust Registration] "
-                        << (suspect_registration_error_ ? "Suspect Registration due to a large number of attempts."
-                                                        : "")
-                        << "Might be failing. Consecutive failures: " << robust_num_consecutive_failures_ << std::endl;
-                log_out << "[Robust Registration] The rotation ego motion is "
-                        << summary.ego_orientation << " (deg)/ " << " relative orientation "
-                        << summary.relative_orientation << " (deg) " << std::endl;
-            }
-
-            if (summary.ego_orientation > options_.robust_threshold_ego_orientation ||
-                summary.relative_orientation > options_.robust_threshold_relative_orientation) {
-                if (kDisplay)
-                    log_out << "[Robust Registration] Change in orientation too important. "
-                               "Points will not be added." << std::endl;
-                add_points = false;
-            }
-
-            if (suspect_registration_error_) {
-                if (robust_num_consecutive_failures_ > 5) {
-                    if (kDisplay)
-                        log_out << "Adding points despite failure" << std::endl;
-                }
-                add_points |= (robust_num_consecutive_failures_ > 5);
-            }
-
-            next_robust_level_ = add_points ? options_.robust_minimal_level : options_.robust_minimal_level + 1;
-            if (!summary.success)
-                next_robust_level_ = options_.robust_minimal_level + 2;
-            else {
-                if (summary.relative_orientation > options_.robust_threshold_relative_orientation ||
-                    summary.ego_orientation > options_.robust_threshold_ego_orientation) {
-                    next_robust_level_ = options_.robust_minimal_level + 1;
-                }
-                if (summary.number_of_attempts > 1) {
-                    next_robust_level_ = options_.robust_minimal_level + 1;
-                }
-            }
-        }
-
-        // Remove voxels too far from actual position of the vehicule
-        const double kMaxDistance = options_.max_distance;
-        const Eigen::Vector3d location = trajectory_[kIndexFrame].EndTr();
-        RemovePointsFarFromLocation(voxel_map_, location, kMaxDistance);
-
-
-        if (kDisplay) {
-            log_out << "Average Load Factor (Map): " << voxel_map_.load_factor() << std::endl;
-            log_out << "Number of Buckets (Map): " << voxel_map_.bucket_count() << std::endl;
-            log_out << "Number of points (Map): " << MapSize() << std::endl;
+        if (kIndexFrame > 0) {
+            ODOMETRY_LOG_IF_AVAILABLE << "Trajectory correction [begin(t) - end(t-1)]: "
+                                      << summary.distance_correction << std::endl;
+            ODOMETRY_LOG_IF_AVAILABLE << "Final ego-motion distance: " << summary.relative_distance << std::endl;
         }
 
         auto end = std::chrono::steady_clock::now();
         std::chrono::duration<double> elapsed_seconds = end - start;
-        if (kDisplay) {
-            log_out << "Elapsed Time: " << elapsed_seconds.count() * 1000.0 << " (ms)" << std::endl;
-        }
+        ODOMETRY_LOG_IF_AVAILABLE
+            << "Elapsed Time: " << elapsed_seconds.count() * 1000.0 << " (ms)" << std::endl;
 
+
+        // Distort the Frame using the current estimate
         summary.corrected_points = frame;
         summary.all_corrected_points.resize(const_frame.size());
         auto raw_points_view = const_frame.XYZConst<double>();
@@ -579,12 +413,7 @@ namespace ct_icp {
                                                                 point.Timestamp());
         }
 
-        if (add_points) {
-            //Update Voxel Map+
-            AddPointsToMap(voxel_map_, summary.corrected_points, kSizeVoxelMap,
-                           kMaxNumPointsInVoxel, kMinDistancePoints);
-        }
-
+        UpdateMap(summary);
         IterateOverCallbacks(OdometryCallback::FINISHED_REGISTRATION,
                              frame, nullptr, &summary);
 
@@ -786,6 +615,164 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
+    void Odometry::LogInitialization(std::vector<slam::WPoint3D> &sampled_frame, Odometry::FrameInfo &frame_info,
+                                     std::ostream *out) const {
+        auto kDisplay = options_.debug_print && out;
+        if (kDisplay) {
+            auto &log_out = *out;
+            log_out << "/* ------------------------------------------------------------------------ */"
+                    << std::endl;
+            log_out << "/* ------------------------------------------------------------------------ */"
+                    << std::endl;
+            log_out << "REGISTRATION OF FRAME number " << frame_info.registered_fid << " (Fid:"
+                    << frame_info.frame_id
+                    << ") with "
+                    << (options_.ct_icp_options.solver == CERES ? "CERES" : "GN") << " solver" << std::endl;
+            log_out << "Number of points in sub-sampled frame: " << sampled_frame.size() << std::endl;
+            if (frame_info.registered_fid > 0) {
+                Eigen::Vector3d t_diff = trajectory_[frame_info.registered_fid].EndTr() -
+                                         trajectory_[frame_info.registered_fid].BeginTr();
+                if (kDisplay)
+                    log_out << "Initial ego-motion distance: " << t_diff.norm() << std::endl;
+            }
+        }
+    }
+
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    void Odometry::RobustRegistration(std::vector<slam::WPoint3D> &frame, Odometry::FrameInfo frame_info,
+                                      Odometry::RegistrationSummary &registration_summary) {
+
+        RobustRegistrationAttempt attempt(frame_info.registered_fid,
+                                          options_,
+                                          registration_summary.frame);
+        attempt.summary = registration_summary;
+        attempt.summary.number_of_attempts = 0;
+
+        bool good_enough_registration = false;
+        if (next_robust_level_ > 0)
+            attempt.SetRobustLevel(next_robust_level_);
+
+        do {
+            auto start_ct_icp = std::chrono::steady_clock::now();
+            TryRegister(frame, frame_info, attempt.registration_options,
+                        attempt.summary, attempt.sample_voxel_size);
+            auto end_ct_icp = std::chrono::steady_clock::now();
+            std::chrono::duration<double> elapsed_icp = (end_ct_icp - start_ct_icp);
+            // Compute Modification of trajectory
+            if (attempt.index_frame > 0) {
+                auto kIndexFrame = attempt.index_frame;
+                attempt.summary.distance_correction = (attempt.current_frame.BeginTr() -
+                                                       trajectory_[kIndexFrame - 1].EndTr()).norm();
+
+                auto norm = ((trajectory_[kIndexFrame - 1].EndQuat().normalized().toRotationMatrix() *
+                              attempt.current_frame.EndQuat().normalized().toRotationMatrix().transpose()).trace() -
+                             1.) /
+                            2.;
+                if (std::abs(norm) > 1. + 1.e-8) {
+                    std::cout << "Not a rotation matrix " << norm << std::endl;
+                }
+
+                attempt.summary.relative_orientation = AngularDistance(trajectory_[kIndexFrame - 1].end_pose.pose,
+                                                                       attempt.current_frame.end_pose.pose);
+                attempt.summary.ego_orientation = attempt.summary.frame.EgoAngularDistance();
+            }
+
+            attempt.summary.relative_distance = (attempt.current_frame.EndTr() -
+                                                 attempt.current_frame.BeginTr()).norm();
+
+            good_enough_registration = AssessRegistration(frame, attempt.summary,
+                                                          options_.debug_print ? log_out_ : nullptr);
+            attempt.summary.number_of_attempts++;
+
+            if (!good_enough_registration) {
+                if (attempt.summary.number_of_attempts < options_.robust_num_attempts) {
+                    auto &previous_frame = attempt.previous_frame;
+                    double trans_distance = previous_frame.TranslationDistance(attempt.summary.frame);
+                    double rot_distance = attempt.previous_frame.RotationDistance(attempt.summary.frame);
+
+                    ODOMETRY_LOG_IF_AVAILABLE << "Registration Attempt n°"
+                                              << registration_summary.number_of_attempts
+                                              << " failed with message: "
+                                              << registration_summary.error_message << std::endl;
+                    ODOMETRY_LOG_IF_AVAILABLE << "Distance to previous trans : " << trans_distance <<
+                                              " rot distance " << rot_distance << std::endl;
+                    attempt.IncreaseRobustnessLevel();
+                } else {
+                    good_enough_registration = true;
+                }
+            }
+        } while (!good_enough_registration);
+
+        registration_summary = attempt.summary;
+        if (registration_summary.number_of_attempts > options_.robust_num_attempts)
+            robust_num_consecutive_failures_++;
+        else
+            robust_num_consecutive_failures_ = 0;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    void Odometry::UpdateMap(const Odometry::RegistrationSummary &summary) {
+        const double kMinDistancePoints = options_.min_distance_points;
+        const int kMaxNumPointsInVoxel = options_.max_num_points_in_voxel;
+        const double kSizeVoxelMap = options_.ct_icp_options.size_voxel_map;
+        bool add_points = true;
+        if (options_.robust_registration) {
+            // Communicate whether we suspect an error due to too many attempts
+            suspect_registration_error_ = summary.number_of_attempts >= options_.robust_num_attempts;
+            ODOMETRY_LOG_IF_AVAILABLE
+                << "[Robust Registration] "
+                << (suspect_registration_error_ ? "Suspect Registration due to a large number of attempts." : "")
+                << "Might be failing. Consecutive failures: " << robust_num_consecutive_failures_ << std::endl;
+            ODOMETRY_LOG_IF_AVAILABLE
+                << "[Robust Registration] The rotation ego motion is "
+                << summary.ego_orientation << " (deg)/ " << " relative orientation "
+                << summary.relative_orientation << " (deg) " << std::endl;
+
+
+            if (summary.ego_orientation > options_.robust_threshold_ego_orientation ||
+                summary.relative_orientation > options_.robust_threshold_relative_orientation) {
+                ODOMETRY_LOG_IF_AVAILABLE
+                    << "[Robust Registration] Change in orientation too important. "
+                       "Points will not be added." << std::endl;
+                add_points = false;
+            }
+
+            if (suspect_registration_error_) {
+                if (robust_num_consecutive_failures_ > 5) {
+                    ODOMETRY_LOG_IF_AVAILABLE
+                        << "Adding points despite failure" << std::endl;
+                }
+                add_points |= (robust_num_consecutive_failures_ > 5);
+            }
+
+            next_robust_level_ = add_points ? options_.robust_minimal_level : options_.robust_minimal_level + 1;
+            if (!summary.success)
+                next_robust_level_ = options_.robust_minimal_level + 2;
+            else {
+                if (summary.relative_orientation > options_.robust_threshold_relative_orientation ||
+                    summary.ego_orientation > options_.robust_threshold_ego_orientation) {
+                    next_robust_level_ = options_.robust_minimal_level + 1;
+                }
+                if (summary.number_of_attempts > 1) {
+                    next_robust_level_ = options_.robust_minimal_level + 1;
+                }
+            }
+        }
+
+        auto kIndexFrame = summary.frame.begin_pose.dest_frame_id;
+        // Remove voxels too far from actual position of the vehicule
+        const double kMaxDistance = options_.max_distance;
+        const Eigen::Vector3d location = trajectory_.back().EndTr();
+        RemovePointsFarFromLocation(voxel_map_, location, kMaxDistance);
+        if (add_points) {
+            //Update Voxel Map+
+            AddPointsToMap(voxel_map_, summary.corrected_points, kSizeVoxelMap,
+                           kMaxNumPointsInVoxel, kMinDistancePoints);
+        }
+    }
+
+/* -------------------------------------------------------------------------------------------------------------- */
     ArrayVector3d MapAsPointcloud(const VoxelHashMap &map) {
         ArrayVector3d points;
         points.reserve(MapSize(map));
@@ -796,7 +783,7 @@ namespace ct_icp {
         return points;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     size_t MapSize(const VoxelHashMap &map) {
         size_t map_size(0);
         for (auto &itr_voxel_map: map) {
@@ -805,7 +792,7 @@ namespace ct_icp {
         return map_size;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     void RemovePointsFarFromLocation(VoxelHashMap &map, const Eigen::Vector3d &location, double distance) {
         std::vector<Voxel> voxels_to_erase;
         for (auto &pair: map) {
@@ -818,7 +805,7 @@ namespace ct_icp {
             map.erase(vox);
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     inline void AddPointToMap(VoxelHashMap &map, const Eigen::Vector3d &point, double voxel_size,
                               int max_num_points_in_voxel, double min_distance_points, int min_num_points = 0) {
         short kx = static_cast<short>(point[0] / voxel_size);
@@ -856,7 +843,7 @@ namespace ct_icp {
 
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     void AddPointsToMap(VoxelHashMap &map, const std::vector<slam::WPoint3D> &points, double voxel_size,
                         int max_num_points_in_voxel, double min_distance_points, int min_num_points) {
         //Update Voxel Map
@@ -866,13 +853,13 @@ namespace ct_icp {
         }
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     void AddPointsToMap(VoxelHashMap &map, const ArrayVector3d &points, double voxel_size,
                         int max_num_points_in_voxel, double min_distance_points) {
         for (const auto &point: points)
             AddPointToMap(map, point, voxel_size, max_num_points_in_voxel, min_distance_points);
     }
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
 
 
 } // namespace ct_icp

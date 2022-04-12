@@ -319,6 +319,7 @@ int main(int argc, char **argv) {
                 SLAM_LOG(INFO) << "Dataset: " << dataset_option.dataset << " / sequence: "
                                << seq_option.sequence_name << " / Number of Frames: " << seq_option.max_num_frames;
 
+                const auto kNumFrames = std::min(sequence_data->NumFrames(), size_t(seq_option.max_num_frames));
                 while (sequence_data->HasNext()) {
                     auto next_frame = sequence_data->NextFrame();
 
@@ -334,6 +335,19 @@ int main(int argc, char **argv) {
                         }
                     }
                     frame_idx++;
+
+                    if (kNumFrames > 0) {
+                        auto percent = 10;
+                        auto step = percent * kNumFrames / 100;
+                        if (frame_idx % step == 0) {
+                            int q = (int(frame_idx) / int(step)) * percent;
+                            SLAM_LOG(INFO) << q << "% Complete" << std::endl;
+                        }
+                    } else {
+                        if (frame_idx % 100 == 0) {
+                            SLAM_LOG(INFO) << frame_idx << " Finished frame " << frame_idx << std::endl;
+                        }
+                    }
                     if (seq_option.max_num_frames <= frame_idx)
                         break;
                 }

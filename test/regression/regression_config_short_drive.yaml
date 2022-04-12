@@ -1,7 +1,7 @@
 # -------------------------------------------------------------------------------------------------------------------- #
 # SESSION CONFIGURATION
 # -------------------------------------------------------------------------------------------------------------------- #
-regression_test: false # Tests that there are no regressions
+regression_test: true # Tests that there are no regressions
 fail_early: true      # Fails early if a regression was detected
 produce_output: true  # Produces an output (which formats the runs)
 output_file: /tmp/output.yaml
