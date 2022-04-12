@@ -161,7 +161,7 @@ Where:
 -c <string>,  --config <string>
 Path to the yaml configuration file on disk
 
--o <string>,  --output_dir <string>
+-o <string>,  --output_file <string>
 The Output Directory
 
 -p <bool>,  --debug <bool>

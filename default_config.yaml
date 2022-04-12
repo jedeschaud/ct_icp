@@ -52,4 +52,3 @@ odometry_options:
     ls_num_threads: 4 # The number of threads to build and solve the least square system (for CERES solver)
     ls_sigma: 0.1 # The sigma parameter for loss CAUCHY, HUBER, TOLERANT, TRUNCATED (for CERES solver)
     ls_tolerant_min_threshold: 0.05 # The tolerant parameter for loss TOLERANT (for CERES solver)
-
