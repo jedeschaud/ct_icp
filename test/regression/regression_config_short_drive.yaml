@@ -37,8 +37,8 @@ runs:
         sequences:
           - sequence_name: Town01
             max_num_frames: 500
-            avg_runtime_sec: 0.07
-            kitti_Tr: 0.016
+            avg_runtime_sec: 0.08
+            kitti_Tr: 0.022
       - dataset_name: kitti_360
         root_path: .kitti_360
         sequences:
@@ -61,7 +61,7 @@ runs:
       ct_icp_options:
         size_voxel_map: 1.0 # The voxel size of in the voxel map
         num_iters_icp: 5 # The number of iterations of the ICP
-        min_number_neighbors: 20 # The minimum number of neighbor points to define a valid neighborhood
+        min_number_neighbors: 10 # The minimum number of neighbor points to define a valid neighborhood
         voxel_neighborhood: 1
         max_number_neighbors: 20
         max_dist_to_plane_ct_icp: 0.3

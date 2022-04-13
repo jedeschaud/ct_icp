@@ -1,7 +1,7 @@
 #ifndef CT_ICP_ODOMETRY_H
 #define CT_ICP_ODOMETRY_H
 
-#include "ct_icp.h"
+#include "ct_icp/ct_icp.h"
 #include <map>
 
 namespace ct_icp {
@@ -94,13 +94,6 @@ namespace ct_icp {
     void AddPointsToMap(VoxelHashMap &map, const std::vector<slam::WPoint3D> &points,
                         double voxel_size, int max_num_points_in_voxel,
                         double min_distance_points, int min_num_points = 0);
-
-    // Add Points To the Map
-    void AddPointsToMap(VoxelHashMap &map, const ArrayVector3d &points, double voxel_size,
-                        int max_num_points_in_voxel, double min_distance_points);
-
-    // Remove voxels far from the given location
-    void RemovePointsFarFromLocation(VoxelHashMap &map, const Eigen::Vector3d &location, double distance);
 
     // Extracts points of the local map into a PointCloud
     ArrayVector3d MapAsPointcloud(const VoxelHashMap &map);
@@ -237,31 +230,11 @@ namespace ct_icp {
                 }
             }
 
+            TrajectoryFrame &CurrentFrame() { return summary.frame; }
+
             // Heuristic to increase the robustness level by doing more work
             // Todo : Seriously need to improve the paradigm of robustness !
-            void IncreaseRobustnessLevel() {
-                sample_voxel_size = index_frame < options_.init_num_frames ?
-                                    options_.init_sample_voxel_size : options_.sample_voxel_size;
-                double min_voxel_size = std::min(options_.init_voxel_size, options_.voxel_size);
-
-                previous_frame = current_frame;
-                // Handle the failure cases
-                current_frame = initial_estimate_;
-                registration_options.voxel_neighborhood = std::min(++registration_options.voxel_neighborhood,
-                                                                   options_.robust_max_voxel_neighborhood);
-                registration_options.ls_max_num_iters += 30;
-                if (registration_options.max_num_residuals > 0)
-                    registration_options.max_num_residuals = registration_options.max_num_residuals * 2;
-                registration_options.num_iters_icp = std::min(registration_options.num_iters_icp + 20, 50);
-                registration_options.threshold_orientation_norm = std::max(
-                        registration_options.threshold_orientation_norm / 10, 1.e-5);
-                registration_options.threshold_translation_norm = std::max(
-                        registration_options.threshold_orientation_norm / 10, 1.e-4);
-                sample_voxel_size = std::max(options_.sample_voxel_size / 1.5, double(min_voxel_size));
-                registration_options.ls_sigma *= 1.2;
-                registration_options.max_dist_to_plane_ct_icp *= 1.5;
-                robust_level++;
-            }
+            void IncreaseRobustnessLevel();
 
 
             RobustRegistrationAttempt(
@@ -272,6 +245,8 @@ namespace ct_icp {
                                                                initial_estimate_(initial_estimate) {
                 registration_options = options_.ct_icp_options;
                 robust_level = 0;
+                summary.frame = initial_estimate;
+                previous_frame = initial_estimate;
                 sample_voxel_size = index_frame < options_.init_num_frames ?
                                     options_.init_sample_voxel_size : options_.sample_voxel_size;
             }
@@ -279,7 +254,7 @@ namespace ct_icp {
             int robust_level = 0;
             double sample_voxel_size;
             slam::frame_id_t index_frame;
-            TrajectoryFrame current_frame, previous_frame;
+            TrajectoryFrame previous_frame;
 
             const TrajectoryFrame &initial_estimate_;
             const ct_icp::OdometryOptions &options_;

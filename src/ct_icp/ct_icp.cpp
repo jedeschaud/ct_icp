@@ -52,62 +52,6 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-
-    struct Neighborhood {
-        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
-        Eigen::Vector3d center = Eigen::Vector3d::Zero();
-
-        Eigen::Vector3d normal = Eigen::Vector3d::Zero();
-
-        Eigen::Matrix3d covariance = Eigen::Matrix3d::Identity();
-
-        double a2D = 1.0; // Planarity coefficient
-    };
-
-    // Computes normal and planarity coefficient
-    Neighborhood compute_neighborhood_distribution(const ArrayVector3d &points) {
-        Neighborhood neighborhood;
-        // Compute the normals
-        Eigen::Vector3d barycenter(Eigen::Vector3d(0, 0, 0));
-        for (auto &point: points) {
-            barycenter += point;
-        }
-        barycenter /= (double) points.size();
-        neighborhood.center = barycenter;
-
-        Eigen::Matrix3d covariance_Matrix(Eigen::Matrix3d::Zero());
-        for (auto &point: points) {
-            for (int k = 0; k < 3; ++k)
-                for (int l = k; l < 3; ++l)
-                    covariance_Matrix(k, l) += (point(k) - barycenter(k)) *
-                                               (point(l) - barycenter(l));
-        }
-        covariance_Matrix(1, 0) = covariance_Matrix(0, 1);
-        covariance_Matrix(2, 0) = covariance_Matrix(0, 2);
-        covariance_Matrix(2, 1) = covariance_Matrix(1, 2);
-        neighborhood.covariance = covariance_Matrix;
-        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es(covariance_Matrix);
-        Eigen::Vector3d normal(es.eigenvectors().col(0).normalized());
-        neighborhood.normal = normal;
-
-        // Compute planarity from the eigen values
-        double sigma_1 = sqrt(std::abs(
-                es.eigenvalues()[2])); //Be careful, the eigenvalues are not correct with the iterative way to compute the covariance matrix
-        double sigma_2 = sqrt(std::abs(es.eigenvalues()[1]));
-        double sigma_3 = sqrt(std::abs(es.eigenvalues()[0]));
-        neighborhood.a2D = (sigma_2 - sigma_3) / sigma_1;
-
-        if (neighborhood.a2D != neighborhood.a2D) {
-            LOG(ERROR) << "FOUND NAN!!!";
-            throw std::runtime_error("error");
-        }
-
-        return neighborhood;
-    }
-
-
-    /* -------------------------------------------------------------------------------------------------------------- */
     // Search Neighbors with VoxelHashMap lookups
     using pair_distance_t = std::tuple<double, Eigen::Vector3d, Voxel>;
 
@@ -119,7 +63,7 @@ namespace ct_icp {
 
     using priority_queue_t = std::priority_queue<pair_distance_t, std::vector<pair_distance_t>, Comparator>;
 
-    inline ArrayVector3d
+    inline slam::Neighborhood
     search_neighbors(const VoxelHashMap &map,
                      const Eigen::Vector3d &point,
                      int nb_voxels_visited,
@@ -127,59 +71,7 @@ namespace ct_icp {
                      int max_num_neighbors,
                      int threshold_voxel_capacity = 1,
                      std::vector<Voxel> *voxels = nullptr) {
-
-        if (voxels != nullptr)
-            voxels->reserve(max_num_neighbors);
-
-        short kx = static_cast<short>(point[0] / size_voxel_map);
-        short ky = static_cast<short>(point[1] / size_voxel_map);
-        short kz = static_cast<short>(point[2] / size_voxel_map);
-
-        priority_queue_t priority_queue;
-
-        Voxel voxel(kx, ky, kz);
-        for (short kxx = kx - nb_voxels_visited; kxx < kx + nb_voxels_visited + 1; ++kxx) {
-            for (short kyy = ky - nb_voxels_visited; kyy < ky + nb_voxels_visited + 1; ++kyy) {
-                for (short kzz = kz - nb_voxels_visited; kzz < kz + nb_voxels_visited + 1; ++kzz) {
-                    voxel.x = kxx;
-                    voxel.y = kyy;
-                    voxel.z = kzz;
-
-                    auto search = map.find(voxel);
-                    if (search != map.end()) {
-                        const auto &voxel_block = search.value();
-                        if (voxel_block.NumPoints() < threshold_voxel_capacity)
-                            continue;
-                        for (int i(0); i < voxel_block.NumPoints(); ++i) {
-                            auto &neighbor = voxel_block.points[i];
-                            double distance = (neighbor - point).norm();
-                            if (priority_queue.size() == max_num_neighbors) {
-                                if (distance < std::get<0>(priority_queue.top())) {
-                                    priority_queue.pop();
-                                    priority_queue.emplace(distance, neighbor, voxel);
-                                }
-                            } else
-                                priority_queue.emplace(distance, neighbor, voxel);
-                        }
-                    }
-                }
-            }
-        }
-
-        auto size = priority_queue.size();
-        ArrayVector3d closest_neighbors(size);
-        if (voxels != nullptr) {
-            voxels->resize(size);
-        }
-        for (auto i = 0; i < size; ++i) {
-            closest_neighbors[size - 1 - i] = std::get<1>(priority_queue.top());
-            if (voxels != nullptr)
-                (*voxels)[size - 1 - i] = std::get<2>(priority_queue.top());
-            priority_queue.pop();
-        }
-
-
-        return closest_neighbors;
+        return map.ComputeNeighborhood(point, max_num_neighbors);
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -478,18 +370,18 @@ namespace ct_icp {
             }
         };
 
-        auto estimate_point_neighborhood = [&](ArrayVector3d &vector_neighbors,
-                                               Eigen::Vector3d &location,
-                                               double &planarity_weight) {
-
-            auto neighborhood = compute_neighborhood_distribution(vector_neighbors);
-            planarity_weight = std::pow(neighborhood.a2D, options.power_planarity);
-
-            if (neighborhood.normal.dot(frame_to_optimize.BeginTr() - location) < 0) {
-                neighborhood.normal = -1.0 * neighborhood.normal;
-            }
-            return neighborhood;
-        };
+//        auto estimate_point_neighborhood = [&](ArrayVector3d &vector_neighbors,
+//                                               Eigen::Vector3d &location,
+//                                               double &planarity_weight) {
+//
+//            auto neighborhood = compute_neighborhood_distribution(vector_neighbors);
+//            planarity_weight = std::pow(neighborhood.a2D, options.power_planarity);
+//
+//            if (neighborhood.normal.dot(frame_to_optimize.BeginTr() - location) < 0) {
+//                neighborhood.normal = -1.0 * neighborhood.normal;
+//            }
+//            return neighborhood;
+//        };
 
         double lambda_weight = std::abs(options.weight_alpha);
         double lambda_neighborhood = std::abs(options.weight_neighborhood);
@@ -517,21 +409,23 @@ namespace ct_icp {
 
                 // Neighborhood search
                 std::vector<Voxel> voxels;
-                auto vector_neighbors = search_neighbors(voxels_map, world_point,
-                                                         nb_voxels_visited, options.size_voxel_map,
-                                                         options.max_number_neighbors, kThresholdCapacity,
-                                                         options.estimate_normal_from_neighborhood ? nullptr : &voxels);
+                auto neighborhood = search_neighbors(voxels_map, world_point,
+                                                     nb_voxels_visited, options.size_voxel_map,
+                                                     options.max_number_neighbors, kThresholdCapacity,
+                                                     options.estimate_normal_from_neighborhood ? nullptr : &voxels);
 
-                if (vector_neighbors.size() < kMinNumNeighbors)
+                if (neighborhood.points.size() < kMinNumNeighbors)
                     continue;
 
-                double weight;
-                auto neighborhood = estimate_point_neighborhood(vector_neighbors,
-                                                                raw_point,
-                                                                weight);
+                neighborhood.ComputeNeighborhood(slam::NORMAL | slam::A2D);
+                if (neighborhood.description.normal.dot(frame_to_optimize.BeginTr() - frame_to_optimize.BeginTr()) <
+                    0) {
+                    neighborhood.description.normal = -1.0 * neighborhood.description.normal;
+                }
+                double weight = std::pow(neighborhood.description.a2D, options.power_planarity);;
 
                 weight = lambda_weight * weight +
-                         lambda_neighborhood * std::exp(-(vector_neighbors[0] -
+                         lambda_neighborhood * std::exp(-(neighborhood.points[0] -
                                                           world_point).norm() /
                                                         (kMaxPointToPlane * kMinNumNeighbors));
 
@@ -539,11 +433,11 @@ namespace ct_icp {
                 std::set<Voxel> neighbor_voxels;
                 for (int i(0); i < options.num_closest_neighbors; ++i) {
                     point_to_plane_dist = std::abs(
-                            (world_point - vector_neighbors[i]).transpose() * neighborhood.normal);
+                            (world_point - neighborhood.points[i]).transpose() * neighborhood.description.normal);
                     if (point_to_plane_dist < options.max_dist_to_plane_ct_icp) {
                         builder.SetResidualBlock(options.num_closest_neighbors * k + i, k,
-                                                 vector_neighbors[i],
-                                                 neighborhood.normal, weight,
+                                                 neighborhood.points[i],
+                                                 neighborhood.description.normal, weight,
                                                  begin_pose.GetAlphaTimestamp(timestamp, end_pose));
                     }
                 }
@@ -705,15 +599,15 @@ namespace ct_icp {
 
 
                 // Neighborhood search
-                ArrayVector3d vector_neighbors = search_neighbors(voxels_map, pt_keypoint,
-                                                                  nb_voxels_visited, options.size_voxel_map,
-                                                                  options.max_number_neighbors);
+                auto neighborhood = search_neighbors(voxels_map, pt_keypoint,
+                                                     nb_voxels_visited, options.size_voxel_map,
+                                                     options.max_number_neighbors);
                 auto step1 = std::chrono::steady_clock::now();
                 std::chrono::duration<double> _elapsed_search_neighbors = step1 - start;
                 elapsed_search_neighbors += _elapsed_search_neighbors.count() * 1000.0;
 
 
-                if (vector_neighbors.size() < kMinNumNeighbors) {
+                if (neighborhood.points.size() < kMinNumNeighbors) {
                     continue;
                 }
 
@@ -722,9 +616,9 @@ namespace ct_icp {
                 elapsed_select_closest_neighbors += _elapsed_neighbors_selection.count() * 1000.0;
 
                 // Compute normals from neighbors
-                auto neighborhood = compute_neighborhood_distribution(vector_neighbors);
-                double planarity_weight = neighborhood.a2D;
-                auto &normal = neighborhood.normal;
+                neighborhood.ComputeNeighborhood(slam::A2D | slam::NORMAL);
+                double planarity_weight = neighborhood.description.a2D;
+                auto &normal = neighborhood.description.normal;
 
                 if (normal.dot(frame_to_optimize.BeginTr() - pt_keypoint) < 0) {
                     normal = -1.0 * normal;
@@ -735,7 +629,7 @@ namespace ct_icp {
                                 planarity_weight; //planarity_weight**2 much better than planarity_weight (planarity_weight**3 is not working)
                 Eigen::Vector3d closest_pt_normal = weight * normal;
 
-                Eigen::Vector3d closest_point = vector_neighbors[0];
+                Eigen::Vector3d closest_point = neighborhood.points[0];
 
                 double dist_to_plane = normal[0] * (pt_keypoint[0] - closest_point[0]) +
                                        normal[1] * (pt_keypoint[1] - closest_point[1]) +

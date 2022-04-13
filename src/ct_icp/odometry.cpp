@@ -9,6 +9,7 @@
 #define _USE_MATH_DEFINES
 
 #include <math.h>
+#include <SlamCore/experimental/iterator/transform_iterator.h>
 
 namespace ct_icp {
     using namespace slam;
@@ -359,7 +360,6 @@ namespace ct_icp {
         auto &current_frame = summary.frame;
 
         if (kIndexFrame > 0) {
-            bool good_enough_registration = false;
             if (options_.robust_registration) {
                 RobustRegistration(frame, frame_info, summary);
             } else {
@@ -413,6 +413,7 @@ namespace ct_icp {
                                                                 point.Timestamp());
         }
 
+        // Updates the Map
         UpdateMap(summary);
         IterateOverCallbacks(OdometryCallback::FINISHED_REGISTRATION,
                              frame, nullptr, &summary);
@@ -508,18 +509,17 @@ namespace ct_icp {
         if (do_neighbor_assessment && registered_frames_ > options_.init_num_frames) {
             if (options_.robust_registration) {
                 const double kSizeVoxelMap = options_.ct_icp_options.size_voxel_map;
-                Voxel voxel;
+                slam::Voxel voxel;
                 double ratio_empty_voxel = 0;
                 double ratio_half_full_voxel = 0;
 
                 for (auto &point: points) {
-                    voxel = Voxel::Coordinates(point.world_point, kSizeVoxelMap);
-                    if (voxel_map_.find(voxel) == voxel_map_.end())
+                    voxel = slam::Voxel::Coordinates(point.world_point, kSizeVoxelMap);
+                    if (!voxel_map_.HasVoxel(voxel))
                         ratio_empty_voxel += 1;
-                    if (voxel_map_.find(voxel) != voxel_map_.end() &&
-                        voxel_map_.at(voxel).NumPoints() > options_.max_num_points_in_voxel / 2) {
-                        // Only count voxels which have at least
-                        ratio_half_full_voxel += 1;
+                    else {
+                        if (voxel_map_.at(voxel).size() > options_.max_num_points_in_voxel / 2)
+                            ratio_half_full_voxel += 1;
                     }
                 }
 
@@ -566,7 +566,8 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     Odometry::Odometry(
-            const OdometryOptions &options) {
+            const OdometryOptions &options) : voxel_map_({options.ct_icp_options.size_voxel_map,
+                                                          options.ct_icp_options.max_number_neighbors}) {
         options_ = options;
         // Update the motion compensation
         switch (options_.motion_compensation) {
@@ -657,29 +658,30 @@ namespace ct_icp {
             auto start_ct_icp = std::chrono::steady_clock::now();
             TryRegister(frame, frame_info, attempt.registration_options,
                         attempt.summary, attempt.sample_voxel_size);
+
             auto end_ct_icp = std::chrono::steady_clock::now();
             std::chrono::duration<double> elapsed_icp = (end_ct_icp - start_ct_icp);
             // Compute Modification of trajectory
             if (attempt.index_frame > 0) {
                 auto kIndexFrame = attempt.index_frame;
-                attempt.summary.distance_correction = (attempt.current_frame.BeginTr() -
+                attempt.summary.distance_correction = (attempt.CurrentFrame().BeginTr() -
                                                        trajectory_[kIndexFrame - 1].EndTr()).norm();
 
                 auto norm = ((trajectory_[kIndexFrame - 1].EndQuat().normalized().toRotationMatrix() *
-                              attempt.current_frame.EndQuat().normalized().toRotationMatrix().transpose()).trace() -
+                        attempt.CurrentFrame().EndQuat().normalized().toRotationMatrix().transpose()).trace() -
                              1.) /
                             2.;
                 if (std::abs(norm) > 1. + 1.e-8) {
                     std::cout << "Not a rotation matrix " << norm << std::endl;
                 }
 
-                attempt.summary.relative_orientation = AngularDistance(trajectory_[kIndexFrame - 1].end_pose.pose,
-                                                                       attempt.current_frame.end_pose.pose);
+                attempt.summary.relative_orientation = slam::AngularDistance(trajectory_[kIndexFrame - 1].end_pose.pose,
+                                                                             attempt.CurrentFrame().end_pose.pose);
                 attempt.summary.ego_orientation = attempt.summary.frame.EgoAngularDistance();
             }
 
-            attempt.summary.relative_distance = (attempt.current_frame.EndTr() -
-                                                 attempt.current_frame.BeginTr()).norm();
+            attempt.summary.relative_distance = (attempt.CurrentFrame().EndTr() -
+                                                 attempt.CurrentFrame().BeginTr()).norm();
 
             good_enough_registration = AssessRegistration(frame, attempt.summary,
                                                           options_.debug_print ? log_out_ : nullptr);
@@ -689,12 +691,13 @@ namespace ct_icp {
                 if (attempt.summary.number_of_attempts < options_.robust_num_attempts) {
                     auto &previous_frame = attempt.previous_frame;
                     double trans_distance = previous_frame.TranslationDistance(attempt.summary.frame);
-                    double rot_distance = attempt.previous_frame.RotationDistance(attempt.summary.frame);
+                    double rot_distance = previous_frame.RotationDistance(attempt.summary.frame);
 
                     ODOMETRY_LOG_IF_AVAILABLE << "Registration Attempt n°"
-                                              << registration_summary.number_of_attempts
+                                              << attempt.summary.number_of_attempts
+                                              << " for frame n°" << attempt.index_frame
                                               << " failed with message: "
-                                              << registration_summary.error_message << std::endl;
+                                              << attempt.summary.error_message << std::endl;
                     ODOMETRY_LOG_IF_AVAILABLE << "Distance to previous trans : " << trans_distance <<
                                               " rot distance " << rot_distance << std::endl;
                     attempt.IncreaseRobustnessLevel();
@@ -764,7 +767,7 @@ namespace ct_icp {
         // Remove voxels too far from actual position of the vehicule
         const double kMaxDistance = options_.max_distance;
         const Eigen::Vector3d location = trajectory_.back().EndTr();
-        RemovePointsFarFromLocation(voxel_map_, location, kMaxDistance);
+        voxel_map_.RemoveElementsFarFromLocation(location, kMaxDistance);
         if (add_points) {
             //Update Voxel Map+
             AddPointsToMap(voxel_map_, summary.corrected_points, kSizeVoxelMap,
@@ -777,7 +780,7 @@ namespace ct_icp {
         ArrayVector3d points;
         points.reserve(MapSize(map));
         for (auto &voxel: map) {
-            for (int i(0); i < voxel.second.NumPoints(); ++i)
+            for (int i(0); i < voxel.second.size(); ++i)
                 points.push_back(voxel.second.points[i]);
         }
         return points;
@@ -787,79 +790,44 @@ namespace ct_icp {
     size_t MapSize(const VoxelHashMap &map) {
         size_t map_size(0);
         for (auto &itr_voxel_map: map) {
-            map_size += (itr_voxel_map.second).NumPoints();
+            map_size += (itr_voxel_map.second).size();
         }
         return map_size;
     }
 
-/* -------------------------------------------------------------------------------------------------------------- */
-    void RemovePointsFarFromLocation(VoxelHashMap &map, const Eigen::Vector3d &location, double distance) {
-        std::vector<Voxel> voxels_to_erase;
-        for (auto &pair: map) {
-            Eigen::Vector3d pt = pair.second.points[0];
-            if ((pt - location).squaredNorm() > (distance * distance)) {
-                voxels_to_erase.push_back(pair.first);
-            }
-        }
-        for (auto &vox: voxels_to_erase)
-            map.erase(vox);
-    }
-
-/* -------------------------------------------------------------------------------------------------------------- */
-    inline void AddPointToMap(VoxelHashMap &map, const Eigen::Vector3d &point, double voxel_size,
-                              int max_num_points_in_voxel, double min_distance_points, int min_num_points = 0) {
-        short kx = static_cast<short>(point[0] / voxel_size);
-        short ky = static_cast<short>(point[1] / voxel_size);
-        short kz = static_cast<short>(point[2] / voxel_size);
-
-        VoxelHashMap::iterator search = map.find(Voxel(kx, ky, kz));
-        if (search != map.end()) {
-            auto &voxel_block = (search.value());
-
-            if (!voxel_block.IsFull()) {
-                double sq_dist_min_to_points = 10 * voxel_size * voxel_size;
-                for (int i(0); i < voxel_block.NumPoints(); ++i) {
-                    auto &_point = voxel_block.points[i];
-                    double sq_dist = (_point - point).squaredNorm();
-                    if (sq_dist < sq_dist_min_to_points) {
-                        sq_dist_min_to_points = sq_dist;
-                    }
-                }
-                if (sq_dist_min_to_points > (min_distance_points * min_distance_points)) {
-                    if (min_num_points <= 0 || voxel_block.NumPoints() >= min_num_points) {
-                        voxel_block.AddPoint(point);
-                    }
-                }
-            }
-        } else {
-            if (min_num_points <= 0) {
-                // Do not add points (avoids polluting the map)
-                VoxelBlock block(max_num_points_in_voxel);
-                block.AddPoint(point);
-                map[Voxel(kx, ky, kz)] = std::move(block);
-            }
-
-        }
-
-    }
 
 /* -------------------------------------------------------------------------------------------------------------- */
     void AddPointsToMap(VoxelHashMap &map, const std::vector<slam::WPoint3D> &points, double voxel_size,
                         int max_num_points_in_voxel, double min_distance_points, int min_num_points) {
-        //Update Voxel Map
-        for (const auto &point: points) {
-            AddPointToMap(map, point.world_point, voxel_size, max_num_points_in_voxel, min_distance_points,
-                          min_num_points);
-        }
+
+        auto begin = slam::make_transform(points.begin(), WorldPointConversion());
+        auto end = slam::make_transform(points.end(), WorldPointConversion());
+        map.InsertPoints(begin, end);
     }
 
-/* -------------------------------------------------------------------------------------------------------------- */
-    void AddPointsToMap(VoxelHashMap &map, const ArrayVector3d &points, double voxel_size,
-                        int max_num_points_in_voxel, double min_distance_points) {
-        for (const auto &point: points)
-            AddPointToMap(map, point, voxel_size, max_num_points_in_voxel, min_distance_points);
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    void Odometry::RobustRegistrationAttempt::IncreaseRobustnessLevel() {
+        sample_voxel_size = index_frame < options_.init_num_frames ?
+                            options_.init_sample_voxel_size : options_.sample_voxel_size;
+        double min_voxel_size = std::min(options_.init_voxel_size, options_.voxel_size);
+
+        previous_frame = summary.frame;
+        // Handle the failure cases
+        summary.frame = initial_estimate_;
+        registration_options.voxel_neighborhood = std::min(++registration_options.voxel_neighborhood,
+                                                           options_.robust_max_voxel_neighborhood);
+        registration_options.ls_max_num_iters += 30;
+        if (registration_options.max_num_residuals > 0)
+            registration_options.max_num_residuals = registration_options.max_num_residuals * 2;
+        registration_options.num_iters_icp = std::min(registration_options.num_iters_icp + 20, 50);
+        registration_options.threshold_orientation_norm = std::max(
+                registration_options.threshold_orientation_norm / 10, 1.e-5);
+        registration_options.threshold_translation_norm = std::max(
+                registration_options.threshold_orientation_norm / 10, 1.e-4);
+        sample_voxel_size = std::max(options_.sample_voxel_size / 1.5, double(min_voxel_size));
+        registration_options.ls_sigma *= 1.2;
+        registration_options.max_dist_to_plane_ct_icp *= 1.5;
+        robust_level++;
     }
-/* -------------------------------------------------------------------------------------------------------------- */
-
-
 } // namespace ct_icp

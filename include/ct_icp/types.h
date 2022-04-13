@@ -10,9 +10,11 @@
 #include <Eigen/Dense>
 #include <Eigen/StdVector>
 #include <glog/logging.h>
-#include <SlamCore/types.h>
 
-#include "utils.h"
+#include <SlamCore/types.h>
+#include <SlamCore/experimental/map.h>
+
+#include "ct_icp/utils.h"
 
 #define _USE_MATH_DEFINES
 
@@ -109,7 +111,8 @@ namespace ct_icp {
     };
 
 
-    typedef tsl::robin_map<Voxel, VoxelBlock> VoxelHashMap;
+    typedef slam::VoxelHashMapVec3d VoxelHashMap;
+//    typedef tsl::robin_map<Voxel, VoxelBlock> VoxelHashMap;
 
 
 } // namespace Elastic_ICP

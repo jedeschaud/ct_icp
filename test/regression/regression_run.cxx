@@ -143,7 +143,7 @@ struct RegressionSessionOptions {
     bool all_runs = true;
 
     double tolerance_tr = 1.e-5; //< The tolerance for the kitti metric to determine a regression or not
-    double tolerance_time_sec = 1.e-2; //< The tolerance for the average runtime to determine a regression (in seconds)
+    double tolerance_time_sec = 1.e-3; //< The tolerance for the average runtime to determine a regression (in seconds)
     std::string selected_run;
     std::string output_file = "/tmp/output.yaml";
 
@@ -394,6 +394,9 @@ int main(int argc, char **argv) {
                         SLAM_LOG(WARNING) << "[REGRESSION FOUND]The difference in score is : " << diff
                                           << " (or " << diff_percent << "% of the score)";
                         has_precision_regression = true;
+
+                        if (options.fail_early)
+                            return exit_failure();
                     } else
                         SLAM_LOG(WARNING) << "No precision regression for sequence " << seq_option.sequence_name
                                           << " old score: "
@@ -405,14 +408,15 @@ int main(int argc, char **argv) {
                         auto diff = std::abs(seq_option.avg_runtime_sec - copy_sequence_option.avg_runtime_sec);
                         auto diff_percent = (diff / seq_option.avg_runtime_sec) * 100;
 
-                        if (options.fail_early)
-                            return exit_failure();
                         SLAM_LOG(WARNING)
                                 << "[REGRESSION FOUND] The runtime is slower for the new execution than the previous"
                                 << std::endl;
                         SLAM_LOG(WARNING) << "[REGRESSION FOUND]The difference in score is : " << diff
                                           << " (or " << diff_percent << "% of the score)";
                         has_performance_regression = true;
+
+                        if (options.fail_early)
+                            return exit_failure();
                     } else
                         SLAM_LOG(WARNING) << "No performance regression for sequence " << seq_option.sequence_name
                                           << " old score: "
