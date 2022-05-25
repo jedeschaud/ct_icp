@@ -54,7 +54,8 @@ To modify options (for viz3d support, or python binding) for the windows script,
 
 The Datasets are publicly available at:
 https://cloud.mines-paristech.fr/index.php/s/UwgVFtiTOmrgKp5
-The folder is protected by a password : *npm3d*
+
+The folder is protected by the following password : **npm3d**
 
 Each dataset is a .zip archive containing the PLY scan file with the relative timestamps for each point in the frame, and if available, the ground truth poses.
 
