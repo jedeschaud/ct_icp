@@ -67,8 +67,8 @@ int main(int argc, char **argv) {
 
     ct_icp::OdometryOptions options;
     options.debug_viz = true;
-    options.ct_icp_options.debug_viz = true;
-    options.ct_icp_options.size_voxel_map = 2.0;
+//    options.ct_icp_options.debug_viz = true;
+//    options.ct_icp_options.size_voxel_map = 2.0;
     options.ct_icp_options.solver = ct_icp::CERES;
     options.initialization = ct_icp::INIT_NONE;
     options.debug_print = true;

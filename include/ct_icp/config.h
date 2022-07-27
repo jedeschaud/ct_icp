@@ -6,7 +6,7 @@
 #include "ct_icp/ct_icp.h"
 #include "ct_icp/odometry.h"
 #include "ct_icp/dataset.h"
-
+#include "ct_icp/motion_model.h"
 
 namespace ct_icp {
 
@@ -24,6 +24,9 @@ namespace ct_icp {
 
     // Returns an DatasetOptions from a YAML::Node
     ct_icp::DatasetOptions yaml_to_dataset_options(const YAML::Node &node);
+
+    // Returns the motion model options from a YAML::Node
+    ct_icp::PreviousFrameMotionModel::Options yaml_to_motion_model_options(const YAML::Node &node);;
 
     // Returns a vector of DatasetOptions from a YAML::Node
     std::vector<ct_icp::DatasetOptions> yaml_to_dataset_options_vector(const YAML::Node &node);

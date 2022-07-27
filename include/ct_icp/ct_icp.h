@@ -19,7 +19,9 @@
 
 #include "ct_icp/types.h"
 #include "ct_icp/cost_functions.h"
-
+#include "ct_icp/motion_model.h"
+#include "ct_icp/map.h"
+#include "ct_icp/neighborhood_strategy.h"
 
 namespace ct_icp {
 
@@ -32,7 +34,8 @@ namespace ct_icp {
 
     enum CT_ICP_SOLVER {
         GN,
-        CERES
+        CERES,
+        ROBUST
     };
 
     enum LEAST_SQUARES {
@@ -41,12 +44,6 @@ namespace ct_icp {
         HUBER,
         TOLERANT,
         TRUNCATED
-    };
-
-    enum VIZ_MODE {
-        TIMESTAMP,
-        WEIGHT,
-        NORMAL
     };
 
     enum WEIGHTING_SCHEME {
@@ -58,49 +55,21 @@ namespace ct_icp {
     // Options for the Elastic_ICP
     struct CTICPOptions {
 
-        // The threshold on the voxel occupancy
-        // To be considered in the neighbor search, a voxel must have at least threshold_voxel_occupancy points
-        int threshold_voxel_occupancy = 1;
-
-        double size_voxel_map = 1.0; //Max Voxel : -32767 to 32767 then 32km map for SIZE_VOXEL_MAP = 1m
-
+        /* ---------------------------------------------------------------------------------------------------------- */
+        /* Main Params                                                                                                */
         int num_iters_icp = 5; // The Maximum number of ICP iterations performed
 
-        int min_number_neighbors = 20;
+        POSE_PARAMETRIZATION parametrization = CONTINUOUS_TIME;
 
-        short voxel_neighborhood = 1; // Visits the (3 * voxel_neighborhood)^3 neighboring voxels
+        ICP_DISTANCE distance = POINT_TO_PLANE;
 
-        double power_planarity = 2.0; // The power of planarity defined in the weighting scheme
+        CT_ICP_SOLVER solver = CERES;
 
-        // Whether to estimate the normal of the key point or the closest neighbor
-        bool estimate_normal_from_neighborhood = true;
-
-        int max_number_neighbors = 20;
-
-        double max_dist_to_plane_ct_icp = 0.3; // The maximum distance point-to-plane (OLD Version of ICP)
-
-        double threshold_orientation_norm = 0.0001; // Threshold on rotation (deg) for ICP's stopping criterion
-
-        double threshold_translation_norm = 0.001; // Threshold on translation (deg) for ICP's stopping criterion
-
-        bool point_to_plane_with_distortion = true; // Whether to distort the frames at each ICP iteration
-
+        /* ---------------------------------------------------------------------------------------------------------- */
+        /*  Robustness Scheme                                                                                         */
         int max_num_residuals = -1; // The maximum number of keypoints used
 
-        int min_num_residuals = 100; // Below this number, CT_ICP will crash
-
-        ICP_DISTANCE distance = CT_POINT_TO_PLANE;
-
-        int num_closest_neighbors = 1; // The number of closest neighbors considered as residuals
-
-        // TODO : Add Trajectory Constraints Options
-        double beta_location_consistency = 0.001; // Constraints on location
-
-        double beta_constant_velocity = 0.001; // Constraint on velocity
-
-        double beta_small_velocity = 0.0; // Constraint on the relative motion
-
-        double beta_orientation_consistency = 0.0; // Constraint on the orientation consistency
+        int min_num_residuals = 100; // Below this number, CT_ICP will return a failure
 
         WEIGHTING_SCHEME weighting_scheme = ALL;
 
@@ -108,10 +77,43 @@ namespace ct_icp {
 
         double weight_neighborhood = 0.1;
 
-        CT_ICP_SOLVER solver = GN;
+        /* ---------------------------------------------------------------------------------------------------------- */
+        /* Neighborhood Params                                                                                        */
+
+        // TODO
+        //  - Multiple Schemes for radius search
+        //  - Grow linearly / Quadratically with distance
+        //  - Graduated Convexity (Decrease with the convergence)
+        //  - Coarse-To-Fine (Keep the Coarse Residuals (lower their weights))
+
+        double power_planarity = 2.0; // The power of planarity defined in the weighting scheme
+
+        int max_number_neighbors = 20; // Maximum number of points to define a valid neighborhood
+
+        int min_number_neighbors = 20; // Minimum number of points to define a valid neighborhood
+
+        // The threshold on the voxel occupancy
+        // To be considered in the neighbor search, a voxel must have at least threshold_voxel_occupancy points
+        int threshold_voxel_occupancy = 1;
+
+        // Whether to estimate the normal of the key point or the closest neighbor
+        bool estimate_normal_from_neighborhood = true;
+
+        int num_closest_neighbors = 1; // The number of closest neighbors considered as residuals
 
         /* ---------------------------------------------------------------------------------------------------------- */
-        /* LEAST SQUARE OPTIMIZATION PARAMETERS                                                                       */
+        /* Stop Criterion Params                                                                                      */
+        double threshold_orientation_norm = 0.0001; // Threshold on rotation (deg) for ICP's stopping criterion
+
+        double threshold_translation_norm = 0.001; // Threshold on translation (deg) for ICP's stopping criterion
+
+        /* ---------------------------------------------------------------------------------------------------------- */
+        /*  Continuous Time Trajectory Constraint Params                                                              */
+
+        bool point_to_plane_with_distortion = true; // Whether to distort the frames at each ICP iteration
+
+        /* ---------------------------------------------------------------------------------------------------------- */
+        /* CERES Solver Specific params                                                                               */
 
         LEAST_SQUARES loss_function = CAUCHY;
 
@@ -123,12 +125,31 @@ namespace ct_icp {
 
         double ls_tolerant_min_threshold = 0.05; // The Tolerant
 
+        /* ---------------------------------------------------------------------------------------------------------- */
+        /* GN Solver params                                                                                           */
+
+        double max_dist_to_plane_ct_icp = 0.3; // The maximum distance point-to-plane (OLD Version of ICP)
+
+        /* ---------------------------------------------------------------------------------------------------------- */
+        /* ROBUST Solver params                                                                                           */
+        double threshold_linearity = 0.8; //< Threshold on linearity to for the classification of the neighborhood
+        double threshold_planarity = 0.8; //< Threshold on planarity for the classification of the neighborhood
+        double weight_point_to_point = 0.1; //< Weighting scheme for point-to-point residuals
+        double outlier_distance = 1.0; //< Maximum distance to consider adding the residual
+        bool use_barycenter = false; //< Whether to use the barycenter or the nearest neighbor for the association
+        bool use_lines = true;
+        bool use_distribution = true;
+
+        /* ---------------------------------------------------------------------------------------------------------- */
+        /*  OUTPUT / DEBUG OPTIONS                                                                                    */
+        bool output_residuals = false;
+        bool output_weights = false;
+        bool output_neighborhood_info = false;
+        bool output_normals = false;
+        bool output_lines = false;
+
         // Debug params
         bool debug_print = true; // Whether to output debug information to std::cout
-
-        bool debug_viz = false; // Whether to pass the key points to the ExplorationEngine
-
-        VIZ_MODE viz_mode = TIMESTAMP;
     };
 
     struct ICPSummary {
@@ -136,90 +157,70 @@ namespace ct_icp {
         bool success = false; // Whether the registration succeeded
 
         int num_residuals_used = 0;
+        int num_iters = 0;
 
         std::string error_log;
-    };
 
+        double duration_total = 0.;
+        double duration_init = 0.;
+        double avg_duration_iter = 0.;
+        double avg_duration_neighborhood = 0.;
+        double avg_duration_solve = 0.;
+    };
 
     /*!
      * @class   CT_ICP_Registration
      */
     class CT_ICP_Registration {
-    private:
-        /// The element of the Raw Point in the input PointCloud schema
-        PARAMETER_GETSET(RawPointElement, std::string, "raw_point");
-    private:
-        /// The element of the World Point in the input PointCloud schema
-        PARAMETER_GETSET(WorldPointElement, std::string, "world_point");
-    private:
-        /// The element of the Timestamp property in the input PointCloud schema
-        PARAMETER_GETSET(TimestampsElement, std::string, "properties");
-    private:
-        /// The property of the timestamp in the Input PointCloud schema
-        PARAMETER_GETSET(TimestampsProperty, std::string, "t");
     public:
-
         CTICPOptions &Options() { return options_; }
 
-        ICPSummary Register(const VoxelHashMap &voxel_map,
+        const CTICPOptions &Options() const { return options_; }
+
+        ICPSummary Register(const ct_icp::ISlamMap &voxel_map,
                             std::vector<slam::WPoint3D> &keypoints,
                             TrajectoryFrame &trajectory_frame,
-                            const TrajectoryFrame *const previous_frame = nullptr);
+                            const AMotionModel *motion_model = nullptr,
+                            ANeighborhoodStrategy * = nullptr);
 
-        ICPSummary Register(const VoxelHashMap &voxel_map,
+        ICPSummary Register(const ct_icp::ISlamMap &voxel_map,
                             slam::PointCloud &keypoints,
                             TrajectoryFrame &trajectory_frame,
-                            const TrajectoryFrame *const previous_frame = nullptr);
+                            const AMotionModel *motion_model = nullptr,
+                            ANeighborhoodStrategy * = nullptr);
 
     private:
-        ICPSummary DoRegisterCeres(const VoxelHashMap &voxel_map,
+        ICPSummary DoRegisterCeres(const ct_icp::ISlamMap &voxel_map,
                                    slam::ProxyView<Eigen::Vector3d> &raw_kpts,
                                    slam::ProxyView<Eigen::Vector3d> &world_kpts,
                                    slam::ProxyView<double> &timestamps,
                                    TrajectoryFrame &trajectory_frame,
-                                   const TrajectoryFrame *const previous_frame = nullptr);
+                                   const AMotionModel *motion_model = nullptr,
+                                   ANeighborhoodStrategy * = nullptr);
 
-        ICPSummary DoRegisterGaussNewton(const VoxelHashMap &voxel_map,
+        ICPSummary DoRegisterGaussNewton(const ct_icp::ISlamMap &voxel_map,
                                          slam::ProxyView<Eigen::Vector3d> &raw_kpts,
                                          slam::ProxyView<Eigen::Vector3d> &world_kpts,
                                          slam::ProxyView<double> &timestamps,
                                          TrajectoryFrame &trajectory_frame,
-                                         const TrajectoryFrame *const previous_frame = nullptr);
+                                         const AMotionModel *motion_model = nullptr,
+                                         ANeighborhoodStrategy * = nullptr);
+
+        ICPSummary DoRegisterRobust(const ct_icp::ISlamMap &voxel_map,
+                                    slam::ProxyView<Eigen::Vector3d> &raw_kpts,
+                                    slam::ProxyView<Eigen::Vector3d> &world_kpts,
+                                    slam::ProxyView<double> &timestamps,
+                                    TrajectoryFrame &frame_to_optimize,
+                                    const AMotionModel *motion_model = nullptr,
+                                    ANeighborhoodStrategy * = nullptr);
+
+        void TransformKeyPoints(TrajectoryFrame &frame,
+                                slam::ProxyView<Eigen::Vector3d> &raw_kpts,
+                                slam::ProxyView<Eigen::Vector3d> &world_kpts,
+                                slam::ProxyView<double> &timestamps) const;
 
         CTICPOptions options_;
     };
-
-    // CT_ICP_CERES : Registers keypoints into the voxel_map taking into account the motion of the
-    //               Sensor during the acquisition of the LiDAR Frame
-    //
-    // Refines the estimate of `trajectory[index_frame]` by registering the points of vector `keypoints`
-    // Into the voxel map `voxels_map`. The points of the vector `keypoints` are also modified by interpolation
-    // of the beginning and end pose of the associated trajectory frame, using the timestamp alpha_timestamp.
-    //
-    // For distance CT_POINT_TO_PLANE:
-    //      Both the beginning and end pose of the trajectory are chosen as parameters
-    //      Each residual is the point-to-plane residual of the point transformed using the interpolated pose
-    //      Note:
-    //          CT_POINT_TO_PLANE requires meaningful timestamps. When timestamps are not known, they should
-    //          all be set to 1.0, and the distance POINT_TO_PLANE should be selected.
-    //
-    // For distance POINT_TO_PLANE:
-    //      Only the end pose of the trajectory is optimized (the beginning of the trajectory is not refined).
-    //      If `options.point_to_plane_with_distortion` is true, then at each step, the keypoints are distorted
-    //      At each iteration, after refinement of the estimate of the end pose of the trajectory frame
-    //
-    // Note: CT_ICP_CERES will modify the last TrajectoryFrame of the trajectory vector
-//    ICPSummary CT_ICP_CERES(const CTICPOptions &options,
-//                            const VoxelHashMap &voxels_map,
-//                            std::vector<slam::WPoint3D> &keypoints,
-//                            TrajectoryFrame &trajectory_frame,
-//                            const TrajectoryFrame *const previous_frame = nullptr);
-
-
-//    ICPSummary CT_ICP_GN(const CTICPOptions &options,
-//                         const VoxelHashMap &voxels_map, std::vector<slam::WPoint3D> &keypoints,
-//                         TrajectoryFrame &trajectory_frame,
-//                         const TrajectoryFrame *const previous_frame = nullptr);
 
 } // namespace Elastic_ICP
 

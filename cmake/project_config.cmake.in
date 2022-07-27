@@ -1,0 +1,7 @@
+# This module sets the following variables:
+# * @SLAM_TARGET@_FOUND - true if @SLAM_TARGET@ found on the system
+@PACKAGE_INIT@
+
+if (NOT TARGET Slam::@SLAM_TARGET@)
+    include("${CMAKE_CURRENT_LIST_DIR}/@SLAM_TARGET@Targets.cmake")
+endif()

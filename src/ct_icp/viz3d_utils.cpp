@@ -1,4 +1,4 @@
-#include "ct_icp/viz3d_utils.h"
+#include "ct_icp-viz3d/viz3d_utils.h"
 #include <SlamCore/experimental/iterator/transform_iterator.h>
 #include <SlamCore/conversion.h>
 
@@ -45,13 +45,13 @@ namespace ct_icp {
             frame_ids_.erase(frame_ids_.begin());
             window_ptr->RemovePolyData(group_name_, (int) begin_idx);
         }
-
-        auto frames = odometry.Trajectory();
-        auto pose_from_frame = [](auto &pose) { return pose.begin.pose; };
-        auto begin = slam::make_transform(frames.begin(), slam::TrajectoryFrameBeginPoseConversion());
-        auto end = slam::make_transform(frames.end(), slam::TrajectoryFrameBeginPoseConversion());
-        auto pose_poly_data = slam::polydata_from_poses(begin, end, 0.5);
-        window_ptr->AddPolyData(std::string(PosesGroupNameConst()), 0, pose_poly_data);
+//
+//        auto frames = odometry.Trajectory();
+//        auto pose_from_frame = [](auto &pose) { return pose.begin.pose; };
+//        auto begin = slam::make_transform(frames.begin(), slam::TrajectoryFrameBeginPoseConversion());
+//        auto end = slam::make_transform(frames.end(), slam::TrajectoryFrameBeginPoseConversion());
+//        auto pose_poly_data = slam::polydata_from_poses(begin, end, 0.5);
+//        window_ptr->AddPolyData(std::string(PosesGroupNameConst()), 0, pose_poly_data);
 
         return true;
     }

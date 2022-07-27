@@ -1,0 +1,101 @@
+with_viz3d: true
+generate_directory_prefix: true # Whether to generate a directory prefix for each iteration (yyyy-mm-dd_hh-mm-ss)
+progress_bar: true # Whether to display progress with a progress bar
+debug_information: false # Whether to display debug information (incompatible with progress_bar)
+output_results: true # Whether to output results to disk
+exit_early: true # Whether to exit early upon a detected failure
+output_dir: .outputs
+
+# ---- DATASET OPTIONS ----
+dataset_options:
+  - dataset: KITTI_raw
+    root_path: .kitti_raw
+    use_all_datasets: false
+    sequence_options:
+      - sequence_name: 00
+
+# ---- ODOMETRY OPTIONS ----
+odometry_options:
+  # -- Output Options
+  debug_print: true
+
+  # -- Main Options
+  motion_compensation: CONTINUOUS # The profile of the motion compensation (NONE, CONSTANT_VELOCITY, ITERATIVE, CONTINUOUS)
+  initialization: INIT_CONSTANT_VELOCITY
+
+  # -- Sampling Options
+  sample_voxel_size: 1.5 # The size of a voxel for the selection of `keypoints` by grid sampling
+
+  # -- Frame Options
+  voxel_size: 0.5 # The voxel size for the grid sampling of the new frame (before keypoints extraction)
+  max_distance: 100.0 # The threshold of the distance to suppress voxels from the map
+  distance_error_threshold: 5.0 # The motion of the sensor between two frames which is considered erroneous (stops the odometry)
+
+  # -- Map Options
+  neighborhood_strategy:
+    type: NEAREST_NEIGHBOR_STRATEGY
+    max_num_neighbors: 20
+    min_num_neighbors: 10
+
+  map_options:
+    map_type: MULTI_RESOLUTION_VOXEL_HASHMAP
+    default_radius: 0.75
+    resolutions:
+      - resolution: 0.8
+        max_num_points: 30
+        min_distance_between_points: 0.1
+
+  # ---- CT_ICP OPTIONS ----
+  ct_icp_options:
+    # -- Output Options
+    debug_print: false
+    output_weights: false
+
+    # -- Main Params
+    num_iters_icp: 5 # The number of iterations of the ICP
+    parametrization: CONTINUOUS_TIME
+    distance: POINT_TO_PLANE
+    solver: CERES
+
+    # -- Robustness scheme
+    max_num_residuals: 900
+    min_num_residuals: 100
+    weighting_scheme: ALL
+    weight_alpha: 0.9
+    weight_neighborhood: 0.1
+
+    # -- Neighborhood params
+    min_number_neighbors: 20 # The minimum number of neighbor points to define a valid neighborhood
+    max_number_neighbors: 20
+    num_closest_neighbors: 1
+    power_planarity: 2
+    threshold_voxel_occupancy: 1
+
+    # -- Stop Criterion Params
+    threshold_orientation_norm: 0.1
+    threshold_translation_norm: 0.01
+
+    # -- CT Trajectory constraint (if parametrizaton == CONTINUOUS_TIME)
+    point_to_plane_with_distortion: true
+    beta_location_consistency: 0.001
+    beta_constant_velocity: 0.001
+    beta_small_velocity: 0.
+    beta_orientation_consistency: 0.
+
+    # -- CERES Solver Specific Params
+    loss_function: CAUCHY # Options: [STANDARD, CAUCHY, HUBER, TOLERANT, TRUNCATED] (for CERES solver)
+    ls_max_num_iters: 5 # The number of steps performed for each iteration of the ICP (for CERES solver)
+    ls_num_threads: 6 # The number of threads to build and solve the least square system (for CERES solver)
+    ls_sigma: 0.1 # The sigma parameter for loss CAUCHY, HUBER, TOLERANT, TRUNCATED (for CERES solver)
+    ls_tolerant_min_threshold: 0.05 # The tolerant parameter for loss TOLERANT (for CERES solver)
+
+    # -- GN Solver Specific Params
+    #    max_dist_to_plane_ct_icp: 0.3
+    #    norm_x_end_iteration_ct_icp: 0.001
+
+    # -- ROBUST Solver Specific Params
+#    threshold_linearity: 0.8 # Threshold on linearity to for the classification of the neighborhood
+#    threshold_planarity: 0.8 # Threshold on planarity for the classification of the neighborhood
+#    weight_point_to_point: 0.1 # Weighting scheme for point-to-point residuals
+#    outlier_distance: 1.0 # Maximum distance to consider adding the residual
+#    use_barycenter: false # Whether to use the barycenter or the nearest neighbor for the association

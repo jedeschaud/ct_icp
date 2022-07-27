@@ -84,12 +84,6 @@ int main(int argc, char **argv) {
                 auto frame = seq->NextFrame();
                 bool world_points = false;
                 if (trajectory) {
-
-                    for (auto &point: frame.points) {
-                        point.WorldPoint() = trajectory->TransformPoint(point.RawPoint(),
-                                                                        point.Timestamp());
-                    }
-                    world_points = true;
                 }
 
                 f_id++;

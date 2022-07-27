@@ -3,6 +3,7 @@ cmake-*
 cmake-build*
 imgui.ini
 install/*
+wandb*
 
 # Configuration files (e.g. idea)
 .*

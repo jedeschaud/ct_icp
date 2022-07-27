@@ -82,24 +82,31 @@ namespace ct_icp {
         return _map;
     }();
 
-    auto kitti_frame_filter = [](std::vector<slam::WPoint3D> &points) {
-        std::vector<slam::WPoint3D> copy;
+    auto kitti_frame_filter = [](slam::PointCloud &pointcloud) {
         const double KITTI_MIN_Z = -5.0; //Bad returns under the ground
         const double KITTI_GLOBAL_VERTICAL_ANGLE_OFFSET = 0.205; //Issue in the intrinsic calibration of the KITTI Velodyne HDL64
-        copy.reserve(points.size());
-        for (auto &point: points) {
-            const Eigen::Vector3d uz(0., 0., 1.);
-            if (point.RawPoint()[2] > KITTI_MIN_Z) {
-                Eigen::Vector3d rotationVector = point.RawPoint().cross(uz);
+
+        std::vector<size_t> indices;
+        indices.reserve(pointcloud.size());
+        auto points = pointcloud.XYZ<double>();
+        const Eigen::Vector3d uz(0., 0., 1.);
+        size_t idx = 0;
+        for (auto proxy: points) {
+            Eigen::Vector3d old_pt = proxy;
+            if (old_pt[2] > KITTI_MIN_Z) {
+                Eigen::Vector3d rotationVector = old_pt.cross(uz);
                 rotationVector.normalize();
                 Eigen::Matrix3d rotationScan;
                 rotationScan = Eigen::AngleAxisd(KITTI_GLOBAL_VERTICAL_ANGLE_OFFSET * M_PI / 180.0, rotationVector);
                 // Filter points below the ground
-                point.RawPoint() = rotationScan * point.RawPoint();
-                copy.push_back(point);
+                old_pt = rotationScan * old_pt;
+                proxy = old_pt; // Modify the point
+                indices.push_back(idx);
+            } else {
+                proxy = Eigen::Vector3d::Zero();
             }
+            idx++;
         }
-        std::swap(points, copy);
     };
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -206,14 +213,16 @@ namespace ct_icp {
         return map;
     }();
 
-    const slam::SE3 kHILTI_Calib = slam::SE3(Eigen::Quaterniond(-0.00016947759535612024,
-                                                                0.999993918507834,
-                                                                0.0012283821413574625,
-                                                                -0.0032596475280467258
-                                             ).normalized(),
-                                             Eigen::Vector3d(0.01001966915517371,
-                                                             -0.006645473484212856,
-                                                             0.09473042428051345));
+    const slam::SE3 kHILTI_2021_Calib = slam::SE3(Eigen::Quaterniond(-0.00016947759535612024,
+                                                                     0.999993918507834,
+                                                                     0.0012283821413574625,
+                                                                     -0.0032596475280467258).normalized(),
+                                                  Eigen::Vector3d(0.01001966915517371,
+                                                                  -0.006645473484212856,
+                                                                  0.09473042428051345));
+
+    const slam::SE3 kHILTI_2022_Lidar_To_Imu = slam::SE3(Eigen::Quaterniond(0, 0.7071068, -0.7071068, 0).normalized(),
+                                                         Eigen::Vector3d(-0.001, -0.00855, 0.055));
 
 
     const char *HILTI_SEQUENCE_NAMES[] = {
@@ -236,12 +245,12 @@ namespace ct_icp {
             case KITTI_CARLA:
             case KITTI:
             case KITTI_360:
-            case HILTI:
                 folder_path += sequence_name + "/frames/";
                 break;
             case PLY_DIRECTORY:
                 folder_path += "frames/";
                 break;
+            default:
             case NCLT:
                 throw std::runtime_error("Not Implemented!");
         };
@@ -260,13 +269,12 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     ADatasetSequence::Frame ADatasetSequence::NextFrame() {
         auto frame = NextUnfilteredFrame();
-        if (filter_)
-            filter_.value()(frame.points);
+        ProcessFrame(frame);
         return frame;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    void ADatasetSequence::SetFilter(std::function<void(std::vector<slam::WPoint3D> &)> &&filter) {
+    void ADatasetSequence::SetFilter(std::function<void(slam::PointCloud &)> &&filter) {
         filter_.reset();
         filter_.emplace(std::move(filter));
     }
@@ -285,8 +293,7 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     ADatasetSequence::Frame ADatasetSequence::GetFrame(size_t index) const {
         auto frame = GetUnfilteredFrame(index);
-        if (filter_)
-            filter_.value()(frame.points);
+        ProcessFrame(frame);
         return frame;
     }
 
@@ -294,6 +301,19 @@ namespace ct_icp {
     void ADatasetSequence::SkipFrame() {
         CHECK(HasNext()) << "Cannot skip frame. No more frames in the iterator" << std::endl;
         current_frame_id_++;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    void ADatasetSequence::ProcessFrame(ADatasetSequence::Frame &frame) const {
+        frame.pointcloud->RegisterFieldsFromSchema();
+        if (filter_)
+            filter_.value()(*frame.pointcloud);
+        if (frame.pointcloud->HasTimestamps()) {
+            auto timestamps = frame.pointcloud->TimestampsProxy<double>();
+            auto [min_it, max_it] = std::minmax_element(timestamps.begin(), timestamps.end());
+            frame.timestamp_min = *min_it;
+            frame.timestamp_max = *max_it;
+        }
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -366,9 +386,28 @@ namespace ct_icp {
     class NCLTIterator final : public ADatasetSequence {
     public:
 
-        explicit NCLTIterator(const DatasetOptions &options, int sequence_id) :
-                num_aggregated_pc_(options.nclt_num_aggregated_pc) {
-            sequence_name_ = std::string(NCLT_SEQUENCE_NAMES[sequence_id]);
+        struct LidarPoint {
+            Eigen::Vector3d xyz;
+            double timestamp = -1.;
+
+            static slam::ItemSchema DefaultSchema() {
+                return slam::ItemSchema::Builder(sizeof(LidarPoint))
+                        .AddElement("vertex", offsetof(LidarPoint, xyz))
+                        .AddElement("properties", 0)
+                        .AddScalarProperty<double>("vertex", "xyz", 0, 3)
+                        .AddScalarProperty<double>("properties", "x", 0)
+                        .AddScalarProperty<double>("properties", "y", sizeof(double))
+                        .AddScalarProperty<double>("properties", "z", sizeof(double) * 2)
+                        .AddScalarProperty<double>("properties", "timestamp", offsetof(LidarPoint, timestamp))
+                        .Build();
+            }
+
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+        };
+
+        explicit NCLTIterator(const DatasetOptions &options, SequenceInfo &&seq_info) : ct_icp::ADatasetSequence(
+                std::move(seq_info)), num_aggregated_pc_(options.nclt_num_aggregated_pc) {
+            sequence_name_ = std::string(NCLT_SEQUENCE_NAMES[seq_info_.sequence_id]);
             root_path_ = options.root_path;
             OpenFile();
         }
@@ -407,7 +446,9 @@ namespace ct_icp {
         }
 
         Frame DoNext(bool jump_frame = false) {
-            std::vector<WPoint3D> points;
+            auto pc_ptr = slam::PointCloud::MakeEmptyPointCloud<LidarPoint, double>({LidarPoint::DefaultSchema()},
+                                                                                    "vertex");
+            pc_ptr->RegisterFieldsFromSchema();
             // Normalize timestamps
             double min_timestamp = std::numeric_limits<double>::infinity(), max_timestamp = std::numeric_limits<double>::lowest();
             for (int iter(0); iter < num_aggregated_pc_; ++iter) {
@@ -419,25 +460,29 @@ namespace ct_icp {
                 if (jump_frame)
                     continue;
 
-                auto old_size = points.size();
+                auto old_size = pc_ptr->size();
 
                 if (!next_batch.empty()) {
-                    auto timestamp = next_batch[0].Timestamp();
+                    auto timestamp = next_batch[0].timestamp;
                     if (timestamp < min_timestamp)
                         min_timestamp = timestamp;
                     if (timestamp > max_timestamp)
                         max_timestamp = timestamp;
                 }
 
-                points.resize(old_size + next_batch.size());
-                std::copy(next_batch.begin(), next_batch.end(), points.begin() + old_size);
+                pc_ptr->resize(old_size + next_batch.size());
+                auto points_view = pc_ptr->GetCollection().item<LidarPoint>(0);
+                std::copy(next_batch.begin(), next_batch.end(), points_view.begin() + old_size);
             }
 
-            Frame frame{std::move(points), {}, {}};
-            if (ground_truth_ && !frame.points.empty()) {
-                auto min_max = slam::MinMaxTimestamps(frame.points);
-                frame.begin_pose = ground_truth_->InterpolatePose(min_max.first);
-                frame.end_pose = ground_truth_->InterpolatePose(min_max.second);
+            Frame frame{pc_ptr, {}, {}};
+            if (ground_truth_ && frame.pointcloud->size() > 0) {
+                auto timestamps = frame.pointcloud->PropertyView<double>("properties", "timestamp");
+                auto min_max = std::minmax(timestamps.begin(), timestamps.end());
+                double min_t = *min_max.first;
+                double max_t = *min_max.second;
+                frame.begin_pose = ground_truth_->InterpolatePose(*min_max.first);
+                frame.end_pose = ground_truth_->InterpolatePose(*min_max.second);
             }
             current_frame_id_++;
             return frame;
@@ -447,9 +492,9 @@ namespace ct_icp {
             return DoNext();
         }
 
-        std::vector<WPoint3D> NextBatch(bool jump_batch) {
+        std::vector<LidarPoint> NextBatch(bool jump_batch) {
             CHECK(HasNext()) << "No more points to read" << std::endl;
-            std::vector<WPoint3D> points;
+            std::vector<LidarPoint> points;
 
             unsigned short magic[4];
             const unsigned short magic_number = 44444;
@@ -473,7 +518,6 @@ namespace ct_icp {
             }
             points.resize(num_hits);
 
-            WPoint3D point;
             double _x, _y, _z;
             for (int pid(0); pid < num_hits; pid++) {
                 file->read(reinterpret_cast<char *>(xyz), sizeof(xyz));
@@ -484,10 +528,8 @@ namespace ct_icp {
                 _z = ((double) xyz[2]) * 0.005 - 100.0;
 
                 auto &point_3d = points[pid];
-                point_3d.RawPoint() = Eigen::Vector3d(_x, _y, _z);
-                point_3d.Timestamp() = (double) utime;
-                point_3d.WorldPoint() = point_3d.RawPoint();
-                point_3d.index_frame = current_frame_id_;
+                point_3d.xyz = Eigen::Vector3d(_x, _y, _z);
+                point_3d.timestamp = (double) utime; // TODO: Convert the time in seconds
             }
             return points;
         }
@@ -538,8 +580,10 @@ namespace ct_icp {
             return KITTI_360;
         else if (lc_string == "kitti")
             return KITTI;
-        else if (lc_string == "hilti")
-            return HILTI;
+        else if (lc_string == "hilti" || lc_string == "hilti_2021")
+            return HILTI_2021;
+        else if (lc_string == "hilti_2022")
+            return HILTI_2022;
         else if (lc_string == "kitti_raw")
             return KITTI_raw;
         else if (lc_string == "nclt")
@@ -550,7 +594,7 @@ namespace ct_icp {
             return PLY_DIRECTORY;
         else {
             LOG(ERROR) << "[Dataset] Unrecognised Dataset option " << dataset << std::endl;
-            throw std::runtime_error("Unrecognised DATASET option '" + dataset + "'");
+            return INVALID;
         }
     }
 
@@ -563,8 +607,10 @@ namespace ct_icp {
                 return "KITTI";
             case KITTI_raw:
                 return "KITTI_raw";
-            case HILTI:
-                return "HILTI";
+            case HILTI_2021:
+                return "HILTI_2021";
+            case HILTI_2022:
+                return "HILTI_2022";
             case NCLT:
                 return "NCLT";
             case KITTI_360:
@@ -573,6 +619,8 @@ namespace ct_icp {
                 return "PLY_DIRECTORY";
             case SYNTHETIC:
                 return "SYNTHETIC";
+            case CUSTOM:
+                return "CUSTOM";
             default:
                 throw std::runtime_error("Unsupported");
         }
@@ -581,7 +629,8 @@ namespace ct_icp {
     /* -------------------------------------------------------------------------------------------------------------- */
     bool IsDrivingDataset(DATASET dataset) {
         switch (dataset) {
-            case HILTI:
+            case HILTI_2021:
+            case HILTI_2022:
             case NCLT:
                 return false;
             default:
@@ -590,10 +639,54 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
+    std::vector<slam::Pose> ReadHILTIPosesInIMUFrame(const std::string &file_path) {
+        std::ifstream input_file(file_path);
+        std::vector<slam::Pose> poses;
+        std::string line;
+        while (std::getline(input_file, line)) {
+            std::stringstream line_str(line);
+
+            slam::Pose pose;
+            line_str >> pose.dest_timestamp;
+            line_str >> pose.pose.tr.x();
+            line_str >> pose.pose.tr.y();
+            line_str >> pose.pose.tr.z();
+            line_str >> pose.pose.quat.x();
+            line_str >> pose.pose.quat.y();
+            line_str >> pose.pose.quat.z();
+            line_str >> pose.pose.quat.w();
+            pose.pose.quat.normalized();
+            poses.push_back(pose);
+        }
+        return poses;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    std::vector<slam::Pose> ReadHILTIPosesInLidarFrame(const std::string &file_path, DATASET hilti_dataset) {
+        SLAM_CHECK_STREAM(hilti_dataset == HILTI_2021 || hilti_dataset == HILTI_2022,
+                          "The dataset is not a HILTI dataset!");
+        auto poses = ReadHILTIPosesInIMUFrame(file_path);
+        // Apply the conversion
+        auto lidar_to_imu = hilti_dataset == HILTI_2021 ? kHILTI_2021_Calib : kHILTI_2022_Lidar_To_Imu;
+        auto imu_to_lidar = lidar_to_imu.Inverse();
+        for (auto &pose: poses) {
+            pose.pose = imu_to_lidar * pose.pose * lidar_to_imu;
+        }
+
+        return poses;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
     SyntheticSequence::SyntheticSequence(slam::SyntheticSensorAcquisition &&sensor_acquisition,
-                                         std::vector<slam::Pose> &&gt_poses) {
+                                         SequenceInfo &&seq_info,
+                                         std::vector<slam::Pose> &&gt_poses) :
+            ct_icp::ADatasetSequence(std::move(seq_info)) {
         acquisition_ = std::move(sensor_acquisition);
         ground_truth_poses_ = std::move(gt_poses);
+        auto max_possible_num_frames = std::max(static_cast<int>(ground_truth_poses_.size()) - init_frame_id_, 0);
+        seq_info_.sequence_size = max_num_frames_ < 0 ? max_possible_num_frames :
+                                  std::min(max_possible_num_frames, max_num_frames_);
+        seq_info_.with_ground_truth = true;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -613,6 +706,9 @@ namespace ct_icp {
         FIND_OPTION(root_node, options, sample_frequency, double)
         FIND_OPTION(root_node, options, max_lidar_distance, double)
         FIND_OPTION(root_node, options, num_points_per_primitives, size_t)
+        std::string name = "Synthetic Scene";
+        if (root_node["sequence_name"])
+            name = root_node["sequence_name"].as<std::string>();
 
         auto poses = acquisition.GeneratePoses(options.sample_frequency);
         slam::frame_id_t fid(0);
@@ -624,6 +720,8 @@ namespace ct_icp {
         double max_t = acquisition.GetTrajectory().MaxTimestamp();
         auto _poses = acquisition.GetTrajectory().Poses();
         auto ptr = std::make_shared<SyntheticSequence>(std::move(acquisition),
+                                                       SequenceInfo{name, "Synthetic_" + name,
+                                                                    -1, int(poses.size()), true},
                                                        std::move(poses));
         ptr->options_ = options;
         return ptr;
@@ -643,8 +741,7 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     size_t SyntheticSequence::NumFrames() const {
-        auto max_possible_num_frames = std::max(static_cast<int>(ground_truth_poses_.size()) - init_frame_id_, 0);
-        return max_num_frames_ < 0 ? max_possible_num_frames : std::min(max_possible_num_frames, max_num_frames_);
+        return seq_info_.sequence_size;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -655,11 +752,13 @@ namespace ct_icp {
         frame.end_pose = ground_truth_poses_[index + 1];
         CHECK(frame.begin_pose->dest_timestamp <= frame.end_pose->dest_timestamp)
                         << "Error at Index: " << index << " / Max num frames: " << max_num_frames_ << std::endl;
-        frame.points = acquisition_.GenerateFrame(options_.num_points_per_primitives,
-                                                  ground_truth_poses_[index].dest_timestamp,
-                                                  ground_truth_poses_[index + 1].dest_timestamp,
-                                                  index,
-                                                  options_.max_lidar_distance);
+        auto points = acquisition_.GenerateFrame(options_.num_points_per_primitives,
+                                                 ground_truth_poses_[index].dest_timestamp,
+                                                 ground_truth_poses_[index + 1].dest_timestamp,
+                                                 index,
+                                                 options_.max_lidar_distance);
+        auto pc = slam::PointCloud::WrapVector(points, slam::WPoint3D::DefaultSchema(), "raw_point");
+        frame.pointcloud = pc.DeepCopyPtr();
         return frame;
     }
 
@@ -671,11 +770,31 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    PLYDirectory::PLYDirectory(fs::path &&root_path,
+    PLYDirectory::PLYDirectory(std::string &&root_path, SequenceInfo &&seq_info,
                                size_t expected_size,
-                               PLYDirectory::FilePatternFunctionType &&optional_pattern) :
-            root_dir_path_(std::move(root_path)) {
-        SetFilePattern(expected_size, std::move(optional_pattern));
+                               AFileSequence::FilePatternFunctionType &&optional_pattern) :
+            AFileSequence(std::move(root_path), std::move(seq_info), expected_size, std::move(optional_pattern)) {
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    ADatasetSequence::Frame PLYDirectory::ReadFrame(const std::string &filename) const {
+        slam::PointCloudPtr pc = mapper_ ? slam::ReadPointCloudFromPLY(filename, *mapper_) :
+                                 slam::ReadPointCloudFromPLY(filename);
+        pc->RegisterFieldsFromSchema();
+        Frame new_frame;
+        new_frame.pointcloud = pc;
+        if (pc->HasTimestamps()) {
+            auto timestamps = pc->TimestampsProxy<double>();
+            auto [min, max] = std::minmax_element(timestamps.begin(), timestamps.end());
+            new_frame.timestamp_min = *min;
+            new_frame.timestamp_max = *max;
+        }
+        if (HasGroundTruth()) {
+            new_frame.begin_pose = ground_truth_->InterpolatePose(new_frame.timestamp_min);
+            new_frame.end_pose = ground_truth_->InterpolatePose(new_frame.timestamp_max);
+        }
+
+        return new_frame;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
@@ -698,84 +817,91 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    std::shared_ptr<PLYDirectory> PLYDirectory::PtrFromDirectoryPath(const std::string &dir_path) {
-        auto[path, filenames] = find_filenames(dir_path);
-        return std::make_shared<PLYDirectory>(std::move(path), std::move(filenames));
+    std::shared_ptr<PLYDirectory> PLYDirectory::PtrFromDirectoryPath(const std::string &dir_path,
+                                                                     std::optional<SequenceInfo> seq_info) {
+        auto [path, filenames] = find_filenames(dir_path);
+        return std::make_shared<PLYDirectory>(std::move(path), seq_info ? *seq_info : SequenceInfo{"Unnamed Sequence"},
+                                              std::move(filenames));
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    PLYDirectory PLYDirectory::FromDirectoryPath(const std::string &dir_path) {
-        auto[path, filenames] = find_filenames(dir_path);
+    PLYDirectory PLYDirectory::FromDirectoryPath(const std::string &dir_path,
+                                                 std::optional<SequenceInfo> seq_info) {
+        auto [path, filenames] = find_filenames(dir_path);
         fs::path root_path(dir_path);
         CHECK(fs::exists(root_path) && fs::is_directory(root_path));
 
-        return PLYDirectory(std::move(path), std::move(filenames));
+        return PLYDirectory(std::move(path), seq_info ? *seq_info : SequenceInfo{"Unnamed Sequence"},
+                            std::move(filenames));
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    bool PLYDirectory::HasNext() const {
+    bool AFileSequence::HasNext() const {
         return current_frame_id_ < full_sequence_size_ &&
                (max_num_frames_ < 0 || current_frame_id_ - init_frame_id_ < max_num_frames_);
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    ADatasetSequence::Frame PLYDirectory::NextUnfilteredFrame() {
+    ADatasetSequence::Frame AFileSequence::NextUnfilteredFrame() {
         return GetUnfilteredFrame(current_frame_id_++);
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    void PLYDirectory::SetGroundTruth(std::vector<Pose> &&poses) {
+    void AFileSequence::SetGroundTruth(std::vector<Pose> &&poses) {
         ground_truth_.reset();
         ground_truth_.emplace(slam::LinearContinuousTrajectory::Create(std::move(poses)));
+        seq_info_.with_ground_truth = true;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
-    void PLYDirectory::SetFilePattern(size_t expected_size, std::function<std::string(size_t)> &&file_pattern) {
-        full_sequence_size_ = expected_size;
-        file_pattern_.emplace(file_pattern);
-    }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    size_t PLYDirectory::NumFrames() const {
+    size_t AFileSequence::NumFrames() const {
         auto max_possible_num_frames = std::max(static_cast<int>(full_sequence_size_) - init_frame_id_, 0);
         return max_num_frames_ < 0 ? max_possible_num_frames : std::min(max_possible_num_frames, max_num_frames_);
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    ADatasetSequence::Frame PLYDirectory::GetUnfilteredFrame(size_t index) const {
-        Frame frame;
-        auto file_path = file_pattern_.has_value() ?
-                         (root_dir_path_ / file_pattern_.value()(index)).string() :
-                         (root_dir_path_ / file_names_[index]).string();
-        frame.points = slam::ReadWPoint3DVectorFromPLYFile(file_path, mapper_);
-        std::for_each(frame.points.begin(), frame.points.end(),
-                      [index](auto &point) { point.index_frame = static_cast<slam::frame_id_t >(index); });
+    ADatasetSequence::Frame AFileSequence::GetUnfilteredFrame(size_t index) const {
+        std::string filepath;
+        if (file_pattern_)
+            filepath = (root_dir_path_ / (*file_pattern_)(index)).string();
+        if (file_names_)
+            filepath = (root_dir_path_ / file_names_->at(index)).string();
 
-        if (ground_truth_) {
-            auto min_max = MinMaxTimestamps(frame.points);
-            frame.begin_pose = ground_truth_->InterpolatePose(min_max.first);
-            frame.end_pose = ground_truth_->InterpolatePose(min_max.second);
+        Frame frame = ReadFrame(filepath);
+        frame.file_path = filepath;
+        frame.pointcloud->RegisterFieldsFromSchema();
+
+        if (!frame.pointcloud->HasField("index_frame")) {
+            std::vector<int> indices(frame.pointcloud->size());
+            std::iota(indices.begin(), indices.end(), 0);
+            frame.pointcloud->AddElementField<int, slam::INT32>("index_frame", indices);
+        }
+
+        if (ground_truth_ && frame.pointcloud->HasTimestamps()) {
+            auto timestamps = frame.pointcloud->TimestampsProxy<double>();
+            auto min_max = std::minmax_element(timestamps.begin(), timestamps.end());
+            frame.begin_pose = ground_truth_->InterpolatePose(*min_max.first);
+            frame.end_pose = ground_truth_->InterpolatePose(*min_max.second);
         }
         return frame;
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    std::optional<std::vector<slam::Pose>> PLYDirectory::GroundTruth() {
+    std::optional<std::vector<slam::Pose>> AFileSequence::GroundTruth() {
         if (ground_truth_)
             return ground_truth_.value().Poses();
         return {};
     }
 
 /* -------------------------------------------------------------------------------------------------------------- */
-    PLYDirectory::PLYDirectory(fs::path &&root_path,
-                               std::vector<std::string> &&file_names) : file_names_(std::move(file_names)),
-                                                                        root_dir_path_(std::move(root_path)) {
-        full_sequence_size_ = file_names.size();
-        current_frame_id_ = init_frame_id_;
+    PLYDirectory::PLYDirectory(std::string &&root_path, SequenceInfo &&seq_info,
+                               std::vector<std::string> &&file_names) :
+            ct_icp::AFileSequence(std::move(root_path), std::move(seq_info), file_names) {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    void PLYDirectory::SetInitFrame(int frame_index) {
+    void AFileSequence::SetInitFrame(int frame_index) {
         init_frame_id_ = frame_index;
         current_frame_id_ = frame_index;
     }
@@ -847,7 +973,7 @@ namespace ct_icp {
                 case KITTI_360:
                     names = {"00", "02", "03", "04", "05", "06", "07", "09", "10"};
                     break;
-                case HILTI:
+                case HILTI_2021:
                     names = {"00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11"};
                     break;
                 case NCLT:
@@ -885,8 +1011,11 @@ namespace ct_icp {
                 case KITTI_360:
                     Calib = kKITTI360_Calib.Matrix();
                     break;
-                case HILTI:
-                    Calib = kHILTI_Calib.Matrix();
+                case HILTI_2021:
+                    Calib = kHILTI_2021_Calib.Matrix();
+                    break;
+                case HILTI_2022:
+                    Calib = kHILTI_2022_Lidar_To_Imu.Matrix();
                     break;
                 case NCLT:
                     Calib = kNCLT_Calib;
@@ -906,7 +1035,6 @@ namespace ct_icp {
                     case KITTI:
                     case KITTI_raw:
                     case KITTI_360:
-                    case HILTI:
                         new_pose.dest_timestamp = (static_cast<double>(i) + 0.5) * 0.1;
                         new_pose.dest_frame_id = i++;
                         break;
@@ -925,7 +1053,6 @@ namespace ct_icp {
             case KITTI_raw:
             case KITTI_360:
             case KITTI:
-            case HILTI:
                 filename = (sequence_info.sequence_name + ".txt");
                 if (fs::exists(sequence_path / filename)) {
                     poses = slam::LoadPosesKITTIFormat(sequence_path / filename);
@@ -933,6 +1060,10 @@ namespace ct_icp {
                     break;
                 }
                 break;
+
+            case HILTI_2022:
+            case HILTI_2021:
+                return ReadHILTIPosesInLidarFrame(sequence_path / filename, options.dataset);
             case KITTI_CARLA:
                 filename = "poses_gt.txt";
                 if (fs::exists(sequence_path / filename)) {
@@ -964,10 +1095,9 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    std::optional<std::pair<SequenceInfo,
-            std::shared_ptr<ADatasetSequence>>> GetDatasetSequence(const DatasetOptions &options,
-                                                                   const std::string &seq_dirname,
-                                                                   const fs::path &sequence_path) {
+    std::optional<std::shared_ptr<ADatasetSequence>> GetDatasetSequence(const DatasetOptions &options,
+                                                                        const std::string &seq_dirname,
+                                                                        const fs::path &sequence_path) {
         std::shared_ptr<ADatasetSequence> dataset_sequence = nullptr;
         std::shared_ptr<NCLTIterator> nclt_ptr = nullptr;
         std::shared_ptr<PLYDirectory> ply_directory_ptr = nullptr;
@@ -991,7 +1121,8 @@ namespace ct_icp {
                 seq_info.sequence_id = kKITTINamesToIds.at(seq_dirname);
                 seq_info.sequence_size = KITTI_SEQUENCES_SIZE[seq_info.sequence_id];
                 seq_info.sequence_name = KITTI_SEQUENCE_NAMES[seq_info.sequence_id];
-                ply_directory_ptr = std::make_shared<PLYDirectory>(sequence_path / "frames", seq_info.sequence_size,
+                ply_directory_ptr = std::make_shared<PLYDirectory>(sequence_path / "frames", SequenceInfo(seq_info),
+                                                                   seq_info.sequence_size,
                                                                    [](size_t index) {
                                                                        return DefaultFilePattern(index, 4);
                                                                    });
@@ -1003,7 +1134,8 @@ namespace ct_icp {
                 seq_info.sequence_id = kKITTI360NamesToIds.at(seq_dirname);
                 seq_info.sequence_size = KITTI_360_SEQUENCES_SIZE[seq_info.sequence_id];
                 seq_info.sequence_name = KITTI_360_SEQUENCE_NAMES[seq_info.sequence_id];
-                ply_directory_ptr = std::make_shared<PLYDirectory>(sequence_path / "frames", seq_info.sequence_size,
+                ply_directory_ptr = std::make_shared<PLYDirectory>(sequence_path / "frames", SequenceInfo(seq_info),
+                                                                   seq_info.sequence_size,
                                                                    [](size_t index) {
                                                                        return DefaultFilePattern(index, 5);
                                                                    });
@@ -1014,7 +1146,8 @@ namespace ct_icp {
                 seq_info.sequence_id = kKITTI_CARLANamesToIds.at(seq_dirname);
                 seq_info.sequence_size = 5000;
                 seq_info.sequence_name = KITTI_CARLA_SEQUENCE_NAMES[seq_info.sequence_id];
-                ply_directory_ptr = std::make_shared<PLYDirectory>(sequence_path / "frames", seq_info.sequence_size,
+                ply_directory_ptr = std::make_shared<PLYDirectory>(sequence_path / "frames", SequenceInfo(seq_info),
+                                                                   seq_info.sequence_size,
                                                                    [](size_t index) {
                                                                        return DefaultFilePattern(index, 4);
                                                                    });
@@ -1026,7 +1159,7 @@ namespace ct_icp {
                 seq_info.sequence_name = NCLT_SEQUENCE_NAMES[seq_info.sequence_id];
                 seq_info.sequence_size = -1;
 
-                nclt_ptr = std::make_shared<NCLTIterator>(options, seq_info.sequence_id);
+                nclt_ptr = std::make_shared<NCLTIterator>(options, SequenceInfo(seq_info));
                 gt_poses = LoadPoses(options, sequence_path, seq_info);
                 if (gt_poses) {
                     nclt_ptr->SetGroundTruth(std::move(gt_poses.value()));
@@ -1034,12 +1167,13 @@ namespace ct_icp {
                 }
                 dataset_sequence = std::move(nclt_ptr);
                 break;
-            case HILTI:
+            case HILTI_2021:
                 CHECK(kHILTINamesToIds.find(seq_dirname) != kHILTINamesToIds.end());
                 seq_info.sequence_id = kHILTINamesToIds.at(seq_dirname);
                 seq_info.sequence_name = seq_dirname;
                 seq_info.sequence_size = HILTI_SEQUENCES_SIZE[seq_info.sequence_id];
-                ply_directory_ptr = std::make_shared<PLYDirectory>(sequence_path / "frames", seq_info.sequence_size,
+                ply_directory_ptr = std::make_shared<PLYDirectory>(sequence_path / "frames", SequenceInfo(seq_info),
+                                                                   seq_info.sequence_size,
                                                                    [](size_t index) {
                                                                        return DefaultFilePattern(index, 5);
                                                                    });
@@ -1048,11 +1182,11 @@ namespace ct_icp {
             case SYNTHETIC:
                 if (fs::exists(sequence_path) && fs::is_regular_file(sequence_path)
                     && sequence_path.has_extension() && sequence_path.extension() == ".yaml") {
-                    synthetic_ptr = SyntheticSequence::PtrFromDirectoryPath(sequence_path.string());
                     seq_info.sequence_id = 0;
                     seq_info.sequence_name = seq_dirname;
-                    seq_info.sequence_size = synthetic_ptr->NumFrames();
-                    seq_info.with_ground_truth = true;
+                    synthetic_ptr = SyntheticSequence::PtrFromDirectoryPath(sequence_path.string());
+                    seq_info = synthetic_ptr->GetSequenceInfo();
+
                     dataset_sequence = std::move(synthetic_ptr);
                     break;
                 }
@@ -1067,14 +1201,18 @@ namespace ct_icp {
             default:
                 break;
         }
+        seq_info.label = ct_icp::DATASETEnumToString(options.dataset) + "_" + seq_info.sequence_name;
+        dataset_sequence->GetSequenceInfo() = seq_info;
         CHECK(dataset_sequence) << "Could not build the dataset for sequence " << seq_dirname << std::endl;
-        return {{seq_info, dataset_sequence}};
+        return {dataset_sequence};
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
     Dataset Dataset::LoadDataset(const DatasetOptions &options) {
         fs::path root_path(options.root_path);
-        CHECK(fs::exists(root_path)) << "The path to the root directory does not exist" << std::endl;
+        SLAM_CHECK_STREAM(fs::exists(root_path), "The path to the root directory does not exist" << std::endl);
+        SLAM_CHECK_STREAM((options.dataset != CUSTOM && options.dataset != INVALID),
+                          "The CUSTOM dataset cannot be defined from the config");
 
         auto function_pattern = ExpectedSequenceDirNames(options.dataset);
         std::vector<std::shared_ptr<ADatasetSequence>> sequences;
@@ -1095,7 +1233,8 @@ namespace ct_icp {
                 if (function_pattern(entry_path, dirname)) {
                     auto sequence_option = GetDatasetSequence(options, dirname, entry_path);
                     if (sequence_option) {
-                        auto[seq_info, dataset_seq] = *sequence_option;
+                        auto& dataset_seq = *sequence_option;
+                        const auto& seq_info = dataset_seq->GetSequenceInfo();
                         if (!options.use_all_datasets) {
                             if (sequence_names.find(seq_info.sequence_name) == sequence_names.end())
                                 continue;

@@ -1,0 +1,59 @@
+map_options:
+  map_type: MULTI_RESOLUTION_VOXEL_HASHMAP
+  default_radius: 6.
+  resolutions:
+    - resolution: 2.
+      max_num_points: 100
+      min_distance_between_points: 0.2
+
+icp_options:
+  # -- Output Options
+  debug_print: true
+  output_weights: false
+
+  # -- Main Params
+  num_iters_icp: 1 # The number of iterations of the ICP
+  parametrization: SIMPLE
+  distance: POINT_TO_PLANE
+  solver: CERES
+
+  # -- Robustness scheme
+  max_num_residuals: -1
+  min_num_residuals: 100
+  weighting_scheme: ALL
+  weight_alpha: 0.9
+  weight_neighborhood: 0.1
+
+  # -- Neighborhood params
+  min_number_neighbors: 10 # The minimum number of neighbor points to define a valid neighborhood
+  max_number_neighbors: 20
+  num_closest_neighbors: 1
+  power_planarity: 2
+  threshold_voxel_occupancy: 1
+
+  # -- Stop Criterion Params
+  threshold_orientation_norm: 0.0001
+  threshold_translation_norm: 0.001
+
+  # -- CT Trajectory constraint (if parametrizaton == CONTINUOUS_TIME)
+  point_to_plane_with_distortion: true
+  beta_location_consistency: 0.00
+  beta_constant_velocity: 0.00
+  beta_small_velocity: 0.
+  beta_orientation_consistency: 0.
+
+  # -- CERES Solver Specific Params
+  loss_function: CAUCHY # Options: [STANDARD, CAUCHY, HUBER, TOLERANT, TRUNCATED] (for CERES solver)
+  ls_max_num_iters: 1 # The number of steps performed for each iteration of the ICP (for CERES solver)
+  ls_num_threads: 4 # The number of threads to build and solve the least square system (for CERES solver)
+  ls_sigma: 0.1 # The sigma parameter for loss CAUCHY, HUBER, TOLERANT, TRUNCATED (for CERES solver)
+  ls_tolerant_min_threshold: 0.05 # The tolerant parameter for loss TOLERANT (for CERES solver)
+
+
+scene:
+  - type: triangle
+    data: [ [ 0, 0, 0 ], [ 0, 10, 0 ], [ 10, 10, 0 ] ]
+  - type: triangle
+    data: [ [ 0, 0, 0 ], [ 10, 0, 0 ], [ 10, 10, 0 ] ]
+  - type: triangle
+    data: [ [ 0, 0, 0 ], [ 10, 0, 0 ], [ 10, 0, 10 ] ]
