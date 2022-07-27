@@ -13,6 +13,8 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif ()
 
+set(MAPPING_RESEARCH_GIT_DIR https://gitlab.kitware.com/keu-computervision/MappingResearchKEU)
+
 
 # -- Add the MappingResearchKEU Superbuild
 ExternalProject_Add(
