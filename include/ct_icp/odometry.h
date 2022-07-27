@@ -1,7 +1,10 @@
 #ifndef CT_ICP_ODOMETRY_H
 #define CT_ICP_ODOMETRY_H
 
-#include "ct_icp.h"
+#include "ct_icp/ct_icp.h"
+#include "ct_icp/algorithm/sampling.h"
+#include "ct_icp/map.h"
+
 #include <map>
 
 namespace ct_icp {
@@ -18,26 +21,74 @@ namespace ct_icp {
         INIT_CONSTANT_VELOCITY = 1
     };
 
+    namespace sampling {
+        enum SAMPLING_OPTION {
+            NONE,
+            GRID,
+            ADAPTIVE
+        };
+    }
+
     struct OdometryOptions {
 
-        /* Parameters for initialization of the map */
+        /* ---------------------------------------------------------------------------------------------------------- */
+        // Main Options
+
+        CTICPOptions ct_icp_options;
+
+        MOTION_COMPENSATION motion_compensation = CONTINUOUS;
+
+        INITIALIZATION initialization = INIT_CONSTANT_VELOCITY;
+
+        /* ---------------------------------------------------------------------------------------------------------- */
+        // Initialization Regimen
+
         double init_voxel_size = 0.2;
-
         double init_sample_voxel_size = 1.0;
-
         int init_num_frames = 20; // The number of frames defining the initialization of the map
 
-        double voxel_size = 0.5;
-
+        /* ---------------------------------------------------------------------------------------------------------- */
+        // SAMPLING Options
         double sample_voxel_size = 1.5;
+        int max_num_keypoints = -1;
 
-        double max_distance = 100.0; // The threshold on the voxel size to remove points from the map
+        sampling::SAMPLING_OPTION sampling = sampling::GRID;
+
+        ct_icp::AdaptiveGridSamplingOptions adaptive_options;
+
+        /* ---------------------------------------------------------------------------------------------------------- */
+        // MAP OPTIONS
+        std::shared_ptr<ct_icp::IMapOptions> map_options = nullptr;
+
+        std::shared_ptr<ct_icp::INeighborStrategyOptions> neighborhood_strategy = nullptr;
+
+        /// OLD PARAMETERS
+        // Topology Options
+        double size_voxel_map = 1.0;
 
         int max_num_points_in_voxel = 20; // The maximum number of points in a voxel
 
+        // Search Options
+        short voxel_neighborhood = 1;
+
+        double max_radius_neighborhood = 0.8;
+
         double min_distance_points = 0.1; // The minimal distance between points in the map
 
+        /* ---------------------------------------------------------------------------------------------------------- */
+        // FRAME CONSRUCTION OPTIONS
+
+        double voxel_size = 0.5;
+
+        double max_distance = 100.0; // The threshold on the voxel size to remove points from the map
+
+        // TODO: Validity check options
         double distance_error_threshold = 5.0; // The Ego-Motion Distance considered as an error
+        double orientation_error_threshold = 30.; // The Ego Orientation considered as an error
+        bool quit_on_error = true;
+
+        /* ---------------------------------------------------------------------------------------------------------- */
+        /* ROBUST REGIMEN OPTION                                                                                      */
 
         // Whether to assess the quality of the registration,
         // And try a new registration with more conservative parameters in case of failure
@@ -56,12 +107,16 @@ namespace ct_icp {
         double robust_threshold_ego_orientation = 3; // Angle in degrees
         double robust_threshold_relative_orientation = 3; // Angle in degrees
 
-        CTICPOptions ct_icp_options;
+        double insertion_ego_rotation_threshold = 3; // Ego rotation in degrees of frame to avoid inserting
+        double insertion_threshold_frames_skipped = 5; // Threshold on number of frames skipped (inserts a frame after it was skipped)
+        double insertion_cum_distance_threshold = 0.8; // Threshold on cumulative distance threshold
+        double insertion_cum_orientation_threshold = 5; // Threshold on cumulative orientation
 
-        MOTION_COMPENSATION motion_compensation = CONTINUOUS;
+        /* ---------------------------------------------------------------------------------------------------------- */
+        /*  DEBUG AND OUTPUT PARAMS                                                                                   */
 
-        INITIALIZATION initialization = INIT_CONSTANT_VELOCITY;
-
+        bool always_insert = false; // Always insert into the map by the Odometry Node (overseeds do_not_insert)
+        bool do_no_insert = false; // No insertion in the map by the Odometry Node
 
         // Debug Parameters
         bool debug_print = true; // Whether to print debug information into the console
@@ -71,6 +126,12 @@ namespace ct_icp {
         bool log_to_file = false;
 
         std::string log_file_destination = "/tmp/ct_icp.log";
+
+        /* ---------------------------------------------------------------------------------------------------------- */
+        /*  MOTION MODEL                                                                                              */
+        PreviousFrameMotionModel::Options default_motion_model;
+        bool with_default_motion_model = true;
+
 
         ////////////////////////
         /// DEFAULT PROFILES ///
@@ -88,43 +149,20 @@ namespace ct_icp {
         static OdometryOptions RobustDrivingProfile();
         // TODO: INDOOR
 
+        OdometryOptions() {
+            map_options = std::make_shared<ct_icp::MultipleResolutionVoxelMap::Options>();
+            neighborhood_strategy = std::make_shared<ct_icp::DefaultNearestNeighborStrategy::Options>();
+        }
+
     };
 
-    // Add Points To the Map
-    void AddPointsToMap(VoxelHashMap &map, const std::vector<slam::WPoint3D> &points,
-                        double voxel_size, int max_num_points_in_voxel,
-                        double min_distance_points, int min_num_points = 0);
-
-    // Add Points To the Map
-    void AddPointsToMap(VoxelHashMap &map, const ArrayVector3d &points, double voxel_size,
-                        int max_num_points_in_voxel, double min_distance_points);
-
-    // Remove voxels far from the given location
-    void RemovePointsFarFromLocation(VoxelHashMap &map, const Eigen::Vector3d &location, double distance);
-
-    // Extracts points of the local map into a PointCloud
-    ArrayVector3d MapAsPointcloud(const VoxelHashMap &map);
-
-    // Compute the size of a VoxelHashMap
-    size_t MapSize(const VoxelHashMap &map);
-
-
     class Odometry {
-    private:
-        /// The element of the Raw Point in the input PointCloud schema
-        PARAMETER_GETSET(RawPointElement, std::string, "raw_point");
-    private:
-        /// The element of the Timestamp property in the input PointCloud schema
-        PARAMETER_GETSET(TimestampsElement, std::string, "properties");
-    private:
-        /// The property of the timestamp in the Input PointCloud schema
-        PARAMETER_GETSET(TimestampsProperty, std::string, "t")
     public:
 
         // The Output of a registration, including metrics,
         struct RegistrationSummary {
 
-            TrajectoryFrame frame;
+            TrajectoryFrame frame, initial_frame;
 
             int sample_size = 0; // The number of points sampled
 
@@ -142,6 +180,8 @@ namespace ct_icp {
 
             bool success = true; // Whether the registration was a success
 
+            bool points_added = false; // Whether points were added to the map
+
             int number_of_attempts = 0; // The number of attempts at registering the new frame
 
             std::string error_message;
@@ -151,6 +191,10 @@ namespace ct_icp {
             std::vector<slam::WPoint3D> all_corrected_points; // Initial points expressed in the initial frame
 
             std::vector<slam::WPoint3D> keypoints; // Last Keypoints selected
+
+            ICPSummary icp_summary; // The summary of the last ICP
+
+            std::map<std::string, double> logged_values; //< Logging values for the summary
 
         };
 
@@ -183,27 +227,31 @@ namespace ct_icp {
 
         explicit Odometry(const OdometryOptions *options) : Odometry(*options) {}
 
-        // Registers a new Frame to the Map
+        // Registers a new Frame to the Map (with custom motion model)
         RegistrationSummary RegisterFrame(const slam::PointCloud &frame,
-                                          slam::frame_id_t frame_id);
+                                          slam::frame_id_t frame_id,
+                                          AMotionModel *motion_model = nullptr);
 
         // Registers a new Frame to the Map with an initial estimate
         RegistrationSummary RegisterFrameWithEstimate(const slam::PointCloud &frame,
                                                       const TrajectoryFrame &initial_estimate,
-                                                      slam::frame_id_t frame_id);
+                                                      slam::frame_id_t frame_id,
+                                                      AMotionModel *motion_model = nullptr);
 
         // Registers a new Frame to the Map
-        RegistrationSummary RegisterFrame(const std::vector<slam::WPoint3D> &frame);
+        RegistrationSummary RegisterFrame(const std::vector<slam::WPoint3D> &frame,
+                                          AMotionModel *motion_model = nullptr);
 
         // Registers a new Frame to the Map with an initial estimate
         RegistrationSummary RegisterFrameWithEstimate(const std::vector<slam::WPoint3D> &frame,
-                                                      const TrajectoryFrame &initial_estimate);
+                                                      const TrajectoryFrame &initial_estimate,
+                                                      AMotionModel *motion_model = nullptr);
 
         // Returns the currently registered trajectory
         [[nodiscard]] std::vector<TrajectoryFrame> Trajectory() const;
 
         // Returns the Aggregated PointCloud of the Local Map
-        [[nodiscard]] ArrayVector3d GetMapPointCloud() const;
+        [[nodiscard]] slam::PointCloudPtr GetMapPointCloud() const;
 
         // Num Points in the Map
         // Note: This requires a traversal of the whole map which is in O(n)
@@ -212,12 +260,23 @@ namespace ct_icp {
         // Registers a Callback to the Odometry
         void RegisterCallback(OdometryCallback::EVENT event, OdometryCallback &callback);
 
-        REF_GETTER(Map, voxel_map_)
+        REF_GETTER(Map, *map_)
+
+        // Resets the state of the odometry
+        void Reset();
+
+        // Resets the state of the odometry (changing the options)
+        void Reset(const ct_icp::OdometryOptions &options);
+
+        // Returns the pointer to the map
+        std::shared_ptr<ct_icp::ISlamMap> GetMapPointer();
 
     private:
         std::map<OdometryCallback::EVENT, std::vector<OdometryCallback *>> callbacks_;
         std::vector<TrajectoryFrame> trajectory_;
-        VoxelHashMap voxel_map_;
+        std::shared_ptr<ct_icp::ISlamMap> map_ = nullptr;
+        std::shared_ptr<ct_icp::ANeighborhoodStrategy> neighborhood_strategy_ = nullptr;
+        PreviousFrameMotionModel default_motion_model;
         int registered_frames_ = 0;
         int robust_num_consecutive_failures_ = 0;
         bool suspect_registration_error_ = false;
@@ -225,7 +284,80 @@ namespace ct_icp {
         OdometryOptions options_;
         std::ostream *log_out_ = nullptr;
         std::unique_ptr<std::ofstream> log_file_ = nullptr;
+        std::mt19937_64 g_;
 
+        // A Helper class which pilots the robustness of the
+        // By evaluating the quality of the registration
+        struct RobustRegistrationAttempt {
+
+            // Sets an initial Robust Level
+            void SetRobustLevel(int level);
+
+            TrajectoryFrame &CurrentFrame() { return summary.frame; }
+
+            // Heuristic to increase the robustness level by doing more work
+            // Todo : Seriously need to improve the paradigm of robustness !
+            void IncreaseRobustnessLevel();
+
+            RobustRegistrationAttempt(
+                    int index_frame,
+                    const OdometryOptions &options,
+                    const TrajectoryFrame &initial_estimate);
+
+            int robust_level = 0;
+            double sample_voxel_size;
+            slam::frame_id_t index_frame;
+            TrajectoryFrame previous_frame;
+
+            const TrajectoryFrame &initial_estimate_;
+            const ct_icp::OdometryOptions &options_;
+            ct_icp::CTICPOptions registration_options;
+//            VoxelHashMap::SearchOptions search_options;
+            RegistrationSummary summary;
+        };
+
+        struct FrameInsertionTracker {
+            size_t last_inserted_frame_idx = 0;
+            double cum_distance_since_insertion = 0.;
+            double cum_orientation_change_since_insertion = 0.;
+
+            int skipped_frames = 0;
+            int total_insertions = 0;
+
+            void InsertFrame(size_t frame_id) {
+                last_inserted_frame_idx = frame_id;
+                cum_orientation_change_since_insertion = 0.;
+                cum_distance_since_insertion = 0.;
+                skipped_frames = 0;
+                total_insertions++;
+            }
+
+            void SkipFrame() { skipped_frames++; }
+
+            friend std::ostream &operator<<(std::ostream &os, const FrameInsertionTracker &tracker) {
+                os << " Skipped Frames [" << tracker.skipped_frames << " / "
+                   << tracker.options_.insertion_threshold_frames_skipped << "]"
+                   << "  Total Insertions: " << tracker.total_insertions;
+                return os;
+            };
+
+            const OdometryOptions &options_;
+
+            explicit FrameInsertionTracker(const OdometryOptions &options) : options_(options) {}
+
+        } insertion_tracker_;
+
+        void ComputeSummaryMetrics(RegistrationSummary &summary, size_t index_frame);
+
+        void RobustRegistration(std::vector<slam::WPoint3D> &frame,
+                                FrameInfo frame_info,
+                                RegistrationSummary &registration_summary,
+                                AMotionModel *motion_model = nullptr);
+
+        void LogInitialization(std::vector<slam::WPoint3D> &sampled_frame,
+                               FrameInfo &frame_info, std::ostream *out) const;
+
+        void LogSummary(RegistrationSummary &summary) const;;
 
         // Iterate over the callbacks registered
         void IterateOverCallbacks(OdometryCallback::EVENT event,
@@ -242,14 +374,16 @@ namespace ct_icp {
         // When the Robust Registration profile is activated, it can call TryRegister
         // Multiple times changing the options in order to increase the chance of registration
         RegistrationSummary DoRegister(const slam::PointCloud &frame,
-                                       FrameInfo frame_info);
+                                       FrameInfo frame_info,
+                                       AMotionModel *motion_model = nullptr);
 
         // Tries to register a frame given a set of options
-        RegistrationSummary TryRegister(std::vector<slam::WPoint3D> &frame,
-                                        FrameInfo frame_info,
-                                        CTICPOptions &options,
-                                        RegistrationSummary &registration_summary,
-                                        double sample_voxel_size);
+        void TryRegister(std::vector<slam::WPoint3D> &frame,
+                         FrameInfo frame_info,
+                         CTICPOptions &options,
+                         RegistrationSummary &registration_summary,
+                         double sample_voxel_size,
+                         AMotionModel *motion_model = nullptr);
 
         // Insert a New Trajectory Frame, and initializes the motion for this new frame
         void InitializeMotion(FrameInfo frame_info, const TrajectoryFrame *initial_estimate = nullptr);
@@ -259,7 +393,12 @@ namespace ct_icp {
         bool AssessRegistration(const std::vector<slam::WPoint3D> &points, RegistrationSummary &summary,
                                 std::ostream *log_stream = nullptr) const;
 
+        // Inspect the Summary to determine whether point should be added to the map
+        void UpdateMap(RegistrationSummary &summary, int registered_fid);
+
         friend class OdometryCallback;
+        friend class OdometryReactor;
+        friend class InertialCTSlamReactor;
     };
 
 } // namespace ct_icp

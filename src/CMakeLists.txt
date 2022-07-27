@@ -1,10 +1,2 @@
+add_subdirectory(SlamCore)
 add_subdirectory(ct_icp)
-
-add_executable(slam slam.cpp)
-target_link_libraries(slam PUBLIC Slam::SlamCore CT_ICP Ceres::ceres glog::glog Eigen3::Eigen OpenMP::OpenMP_CXX)
-if (WITH_SUPERBUILD)
-    target_link_libraries(slam PUBLIC tclap::tclap)
-else ()
-    target_link_libraries(slam PUBLIC tclap::tclap)
-endif ()
-LINK_WITH_VIZ3D(TARGET slam)

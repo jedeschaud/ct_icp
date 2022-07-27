@@ -1,4 +1,5 @@
 #include <ct_icp/config.h>
+#include <SlamCore/config_utils.h>
 
 
 #define OPTION_CLAUSE(node_name, option_name, param_name, type) \
@@ -26,21 +27,15 @@ namespace ct_icp {
         ct_icp::CTICPOptions icp_options;
 
         OPTION_CLAUSE(icp_node, icp_options, threshold_voxel_occupancy, int);
-        OPTION_CLAUSE(icp_node, icp_options, size_voxel_map, double);
         OPTION_CLAUSE(icp_node, icp_options, num_iters_icp, int);
         OPTION_CLAUSE(icp_node, icp_options, min_number_neighbors, int);
-        OPTION_CLAUSE(icp_node, icp_options, voxel_neighborhood, short);
         OPTION_CLAUSE(icp_node, icp_options, max_number_neighbors, int);
         OPTION_CLAUSE(icp_node, icp_options, max_dist_to_plane_ct_icp, double);
         OPTION_CLAUSE(icp_node, icp_options, threshold_orientation_norm, double);
         OPTION_CLAUSE(icp_node, icp_options, threshold_translation_norm, double);
         OPTION_CLAUSE(icp_node, icp_options, debug_print, bool);
         OPTION_CLAUSE(icp_node, icp_options, point_to_plane_with_distortion, bool);
-        OPTION_CLAUSE(icp_node, icp_options, num_closest_neighbors, int);
-        OPTION_CLAUSE(icp_node, icp_options, beta_constant_velocity, double);
-        OPTION_CLAUSE(icp_node, icp_options, beta_location_consistency, double);
-        OPTION_CLAUSE(icp_node, icp_options, beta_small_velocity, double);
-        OPTION_CLAUSE(icp_node, icp_options, beta_orientation_consistency, double);
+        OPTION_CLAUSE(icp_node, icp_options, num_closest_neighbors, int);;
         OPTION_CLAUSE(icp_node, icp_options, ls_max_num_iters, int);
         OPTION_CLAUSE(icp_node, icp_options, ls_num_threads, int);
         OPTION_CLAUSE(icp_node, icp_options, ls_sigma, double);
@@ -49,35 +44,56 @@ namespace ct_icp {
         OPTION_CLAUSE(icp_node, icp_options, weight_alpha, double);
         OPTION_CLAUSE(icp_node, icp_options, weight_neighborhood, double);
         OPTION_CLAUSE(icp_node, icp_options, ls_tolerant_min_threshold, double);
-        OPTION_CLAUSE(icp_node, icp_options, debug_viz, bool);
+        OPTION_CLAUSE(icp_node, icp_options, power_planarity, double);
+        OPTION_CLAUSE(icp_node, icp_options, point_to_plane_with_distortion, bool);
+
+        // Output Params
+        OPTION_CLAUSE(icp_node, icp_options, output_normals, bool);
+        OPTION_CLAUSE(icp_node, icp_options, output_lines, bool);
+        OPTION_CLAUSE(icp_node, icp_options, output_weights, bool);
+        OPTION_CLAUSE(icp_node, icp_options, output_residuals, bool);
+        OPTION_CLAUSE(icp_node, icp_options, output_neighborhood_info, bool);
+
+        // ROBUST SOLVER PARAMS
+        OPTION_CLAUSE(icp_node, icp_options, threshold_linearity, double);
+        OPTION_CLAUSE(icp_node, icp_options, threshold_planarity, double);
+        OPTION_CLAUSE(icp_node, icp_options, weight_point_to_point, double);
+        OPTION_CLAUSE(icp_node, icp_options, outlier_distance, double);
+        OPTION_CLAUSE(icp_node, icp_options, use_barycenter, bool);
 
         if (icp_node["distance"]) {
             auto distance = icp_node["distance"].as<std::string>();
-            CHECK(distance == "CT_POINT_TO_PLANE" || distance == "POINT_TO_PLANE");
             if (distance == "POINT_TO_PLANE")
                 icp_options.distance = POINT_TO_PLANE;
+            else if (distance == "POINT_TO_LINE")
+                icp_options.distance = POINT_TO_LINE;
+            else if (distance == "POINT_TO_POINT")
+                icp_options.distance = POINT_TO_POINT;
+            else if (distance == "POINT_TO_DISTRIBUTION")
+                icp_options.distance = POINT_TO_DISTRIBUTION;
             else
-                icp_options.distance = CT_POINT_TO_PLANE;
+                throw std::runtime_error("Distance " + distance + " not recognized as a valid distance");
         }
 
-        if (icp_node["viz_mode"]) {
-            auto viz_mode = icp_node["viz_mode"].as<std::string>();
-            CHECK(viz_mode == "NORMAL" || viz_mode == "WEIGHT" || viz_mode == "TIMESTAMP");
-            if (viz_mode == "NORMAL")
-                icp_options.viz_mode = ct_icp::NORMAL;
-            else if (viz_mode == "WEIGHT")
-                icp_options.viz_mode = ct_icp::WEIGHT;
+        if (icp_node["parametrization"]) {
+            auto parametrization = icp_node["parametrization"].as<std::string>();
+            if (parametrization == "SIMPLE")
+                icp_options.parametrization = SIMPLE;
+            else if (parametrization == "CONTINUOUS_TIME")
+                icp_options.parametrization = CONTINUOUS_TIME;
             else
-                icp_options.viz_mode = ct_icp::TIMESTAMP;
+                throw std::runtime_error("Parametrization is not supported !");
         }
 
         if (icp_node["solver"]) {
             auto solver = icp_node["solver"].as<std::string>();
-            CHECK(solver == "GN" || solver == "CERES");
             if (solver == "GN")
                 icp_options.solver = GN;
-            else
+            else if (solver == "CERES")
                 icp_options.solver = CERES;
+            else if (solver == "ROBUST")
+                icp_options.solver = ROBUST;
+            else throw std::runtime_error("Invalid Solver Options found: " + solver + " Not in [GN, CERES, ROBUST]");
         }
 
         if (icp_node["loss_function"]) {
@@ -102,7 +118,6 @@ namespace ct_icp {
                 icp_options.loss_function = TRUNCATED;
         }
 
-
         return icp_options;
     }
 
@@ -117,22 +132,62 @@ namespace ct_icp {
     ct_icp::OdometryOptions yaml_to_odometry_options(const YAML::Node &odometry_node) {
         ct_icp::OdometryOptions odometry_options;
 
-        OPTION_CLAUSE(odometry_node, odometry_options, voxel_size, double);
-        OPTION_CLAUSE(odometry_node, odometry_options, sample_voxel_size, double);
-        OPTION_CLAUSE(odometry_node, odometry_options, max_distance, double);
-        OPTION_CLAUSE(odometry_node, odometry_options, max_num_points_in_voxel, double);
-        OPTION_CLAUSE(odometry_node, odometry_options, max_num_points_in_voxel, int);
-        OPTION_CLAUSE(odometry_node, odometry_options, debug_print, bool);
-        OPTION_CLAUSE(odometry_node, odometry_options, debug_viz, bool);
+        // Frame Options
+        OPTION_CLAUSE(odometry_node, odometry_options, voxel_size, double)
+        OPTION_CLAUSE(odometry_node, odometry_options, max_distance, double)
+        OPTION_CLAUSE(odometry_node, odometry_options, distance_error_threshold, double)
+        OPTION_CLAUSE(odometry_node, odometry_options, orientation_error_threshold, double)
 
-        OPTION_CLAUSE(odometry_node, odometry_options, min_distance_points, double);
-        OPTION_CLAUSE(odometry_node, odometry_options, distance_error_threshold, double);
-        OPTION_CLAUSE(odometry_node, odometry_options, init_num_frames, int);
-        OPTION_CLAUSE(odometry_node, odometry_options, init_voxel_size, double);
-        OPTION_CLAUSE(odometry_node, odometry_options, init_sample_voxel_size, double);
-        OPTION_CLAUSE(odometry_node, odometry_options, log_to_file, bool);
-        OPTION_CLAUSE(odometry_node, odometry_options, log_file_destination, std::string);
+        // Sampling Options
+        OPTION_CLAUSE(odometry_node, odometry_options, max_num_keypoints, int)
+        OPTION_CLAUSE(odometry_node, odometry_options, sample_voxel_size, double)
 
+        // Map Options
+        if (odometry_node["map_options"]) {
+            auto map_node = odometry_node["map_options"];
+            odometry_options.map_options = yaml_to_map_options(map_node);
+        } else {
+            SLAM_LOG(WARNING) << "The config does not have any node `map_options`, "
+                                 "using the default (deprecated) set of parameters to define the map" << std::endl;
+            odometry_options.map_options = yaml_to_map_options(odometry_node);
+        }
+
+        if (odometry_node["neighborhood_strategy"]) {
+            auto strategy_node = odometry_node["neighborhood_strategy"];
+            std::string type;
+            if (strategy_node["type"])
+                type = strategy_node["type"].as<std::string>();
+            else
+                type = odometry_options.neighborhood_strategy->GetType();
+            if (type == DistanceBasedStrategy::Options::Type())
+                odometry_options.neighborhood_strategy = std::make_shared<DistanceBasedStrategy::Options>();
+            else if (type != DefaultNearestNeighborStrategy::Options::Type()) {
+                SLAM_LOG(WARNING) << "The neighborhood strategy type :" << type << " is not recognised" << std::endl;
+            }
+            odometry_options.neighborhood_strategy->FromYAML(strategy_node);
+        }
+
+        // Old Options (deprecated)
+        OPTION_CLAUSE(odometry_node, odometry_options, min_distance_points, double)
+        OPTION_CLAUSE(odometry_node, odometry_options, max_num_points_in_voxel, int)
+        OPTION_CLAUSE(odometry_node, odometry_options, size_voxel_map, double)
+        OPTION_CLAUSE(odometry_node, odometry_options, voxel_neighborhood, int)
+        OPTION_CLAUSE(odometry_node, odometry_options, max_radius_neighborhood, double)
+
+        // Init options
+        OPTION_CLAUSE(odometry_node, odometry_options, init_num_frames, int)
+        OPTION_CLAUSE(odometry_node, odometry_options, init_voxel_size, double)
+        OPTION_CLAUSE(odometry_node, odometry_options, init_sample_voxel_size, double)
+
+        // Output options
+        OPTION_CLAUSE(odometry_node, odometry_options, log_to_file, bool)
+        OPTION_CLAUSE(odometry_node, odometry_options, log_file_destination, std::string)
+        OPTION_CLAUSE(odometry_node, odometry_options, debug_print, bool)
+        OPTION_CLAUSE(odometry_node, odometry_options, debug_viz, bool)
+        OPTION_CLAUSE(odometry_node, odometry_options, do_no_insert, bool)
+        OPTION_CLAUSE(odometry_node, odometry_options, always_insert, bool)
+
+        // Robust options
         OPTION_CLAUSE(odometry_node, odometry_options, robust_minimal_level, int);
         OPTION_CLAUSE(odometry_node, odometry_options, robust_registration, bool);
         OPTION_CLAUSE(odometry_node, odometry_options, robust_full_voxel_threshold, double);
@@ -142,6 +197,10 @@ namespace ct_icp {
         OPTION_CLAUSE(odometry_node, odometry_options, robust_threshold_relative_orientation, double)
         OPTION_CLAUSE(odometry_node, odometry_options, robust_threshold_ego_orientation, double);
 
+        if (odometry_node["default_motion_model"]) {
+            auto motion_model_node = odometry_node["default_motion_model"];
+            odometry_options.default_motion_model = yaml_to_motion_model_options(motion_model_node);
+        }
 
         if (odometry_node["motion_compensation"]) {
             auto compensation = odometry_node["motion_compensation"].as<std::string>();
@@ -157,6 +216,19 @@ namespace ct_icp {
                 odometry_options.motion_compensation = ct_icp::CONTINUOUS;
             else
                 CHECK(false) << "The `motion_compensation` " << compensation << " is not supported." << std::endl;
+        }
+
+        if (odometry_node["sampling"]) {
+            auto sampling = odometry_node["sampling"].as<std::string>();
+            CHECK(sampling == "GRID" || sampling == "ADAPTIVE" || sampling == "NONE");
+            if (sampling == "NONE")
+                odometry_options.sampling = ct_icp::sampling::NONE;
+            else if (sampling == "GRID")
+                odometry_options.sampling = ct_icp::sampling::GRID;
+            else if (sampling == "ADAPTIVE")
+                odometry_options.sampling = ct_icp::sampling::ADAPTIVE;
+            else
+                CHECK(false) << "The `sampling` " << sampling << " is not supported." << std::endl;
         }
 
 
@@ -194,6 +266,7 @@ namespace ct_icp {
         if (dataset_node["dataset"]) {
             auto dataset = dataset_node["dataset"].as<std::string>();
             dataset_options.dataset = DATASETFromString(dataset);
+            SLAM_CHECK_STREAM(dataset_options.dataset != INVALID, "The `dataset` name: " << dataset << " is invalid.");
         }
         OPTION_CLAUSE(dataset_node, dataset_options, root_path, std::string)
         OPTION_CLAUSE(dataset_node, dataset_options, fail_if_incomplete, bool)
@@ -225,6 +298,23 @@ namespace ct_icp {
             datasets_option.push_back(option);
         }
         return datasets_option;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    ct_icp::PreviousFrameMotionModel::Options yaml_to_motion_model_options(const YAML::Node &node) {
+        ct_icp::PreviousFrameMotionModel::Options options;
+        OPTION_CLAUSE(node, options, beta_location_consistency, double)
+        OPTION_CLAUSE(node, options, beta_small_velocity, double)
+        OPTION_CLAUSE(node, options, beta_orientation_consistency, double)
+        OPTION_CLAUSE(node, options, beta_constant_velocity, double)
+        OPTION_CLAUSE(node, options, threshold_orientation_deg, double)
+        OPTION_CLAUSE(node, options, threshold_translation_diff, double)
+        OPTION_CLAUSE(node, options, log_if_invalid, bool)
+        slam::config::FindEnumOption(node, (int &) options.model, "model", {
+                {"CONSTANT_VELOCITY", ct_icp::PreviousFrameMotionModel::CONSTANT_VELOCITY},
+                {"SMALL_VELOCITY",    ct_icp::PreviousFrameMotionModel::SMALL_VELOCITY}
+        });
+        return options;
     }
 
 

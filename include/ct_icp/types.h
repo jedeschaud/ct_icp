@@ -10,9 +10,12 @@
 #include <Eigen/Dense>
 #include <Eigen/StdVector>
 #include <glog/logging.h>
-#include <SlamCore/types.h>
 
-#include "utils.h"
+#include <SlamCore/types.h>
+#include <SlamCore/experimental/map.h>
+#include <SlamCore/imu.h>
+
+#include "ct_icp/utils.h"
 
 #define _USE_MATH_DEFINES
 
@@ -58,31 +61,6 @@ namespace ct_icp {
     };
 
 
-    // Voxel
-    // Note: Coordinates range is in [-32 768, 32 767]
-    struct Voxel {
-
-        Voxel() = default;
-
-        Voxel(short x, short y, short z) : x(x), y(y), z(z) {}
-
-        bool operator==(const Voxel &vox) const { return x == vox.x && y == vox.y && z == vox.z; }
-
-        inline bool operator<(const Voxel &vox) const {
-            return x < vox.x || (x == vox.x && y < vox.y) || (x == vox.x && y == vox.y && z < vox.z);
-        }
-
-        inline static Voxel Coordinates(const Eigen::Vector3d &point, double voxel_size) {
-            return {short(point.x() / voxel_size),
-                    short(point.y() / voxel_size),
-                    short(point.z() / voxel_size)};
-        }
-
-        short x;
-        short y;
-        short z;
-    };
-
     typedef std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> ArrayVector3d;
     typedef std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>> ArrayMatrix4d;
     typedef ArrayMatrix4d ArrayPoses;
@@ -109,30 +87,26 @@ namespace ct_icp {
     };
 
 
-    typedef tsl::robin_map<Voxel, VoxelBlock> VoxelHashMap;
+    /** A Lidar Frame for Inertial Lidar Datasets with the measurements  */
+    struct LidarIMUFrame {
+        slam::PointCloudPtr pointcloud = nullptr; //< Point Cloud Frame
+        double timestamp_min = -1., timestamp_max = -1.; //< Timestamp min and max of the frame
+        std::vector<slam::ImuData> imu_data; //< Imu Data recorded between the beginning and end of the frame
 
+        // Optional Dataset frames
+        std::optional<slam::Pose> begin_pose{}; //< Optional ground truth for the beginning of the frame
+        std::optional<slam::Pose> end_pose{}; //< Optional ground truth for the end of the frame
+        std::string file_path; //< file which generated the frame (if applicable)
 
-} // namespace Elastic_ICP
+        double dataset_offset = 0.; // Offset of the dataset time (in seconds)
 
-
-// Specialization of std::hash for our custom type Voxel
-namespace std {
-
-
-    template<>
-    struct hash<ct_icp::Voxel> {
-        std::size_t operator()(const ct_icp::Voxel &vox) const {
-#ifdef CT_ICP_IS_WINDOWS
-            const std::hash<int32_t> hasher;
-            return ((hasher(vox.x) ^ (hasher(vox.y) << 1)) >> 1) ^ (hasher(vox.z) << 1) >> 1;
-#else
-            const size_t kP1 = 73856093;
-            const size_t kP2 = 19349669;
-            const size_t kP3 = 83492791;
-            return vox.x * kP1 + vox.y * kP2 + vox.z * kP3;
-#endif
+        inline bool HasGroundTruth() const {
+            return begin_pose.has_value() && end_pose.has_value();
         }
     };
-}
+
+    typedef std::shared_ptr<LidarIMUFrame> LidarIMUFramePtr;
+
+} // namespace Elastic_ICP
 
 #endif //CT_ICP_TYPES_HPP

@@ -1,0 +1,23 @@
+<!-- Launches a Dataset Node and the ct_icp SLAM node -->
+<launch>
+  <arg name="rviz" default="true" doc="Visualize results with RViz."/>
+  <arg name="config" default="" doc="The path on disk to the config"/>
+  <arg name="pc_topic" default="/ct_icp/pointcloud" doc="The topic of the point cloud as input to ct_icp odometry" />
+  <arg name="debug_print" default="false" doc="Whether to print debug information of the node" />
+
+  <!-- TODO: Replace by config -->
+  <arg name="timestamp_property_name" default="timestamp" />
+
+   <group if="$(arg rviz)">
+     <node pkg="rviz" type="rviz" name="rviz" args="-d $(find ct_icp_odometry)/params/ct_icp_odometry.rviz"/>
+   </group>
+
+  <!-- CT-ICP SLAM -->
+  <node name="ct_icp_odometry_node" pkg="ct_icp_odometry" type="ct_icp_odometry_node" output="screen">
+    <remap from="/ct_icp/pointcloud" to="$(arg pc_topic)"/>
+    <param name="config" value="$(arg config)"/>
+    <param name="timestamps_element" value="properties"/>
+    <param name="timestamps_property" value="$(arg timestamp_property_name)"/>
+    <param name="debug_print" value="$(arg debug_print)"/>
+  </node>
+</launch>

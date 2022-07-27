@@ -1,0 +1,12 @@
+<launch>
+
+<!-- Arguments -->
+<arg name="rosbag" required="true" doc="The path to the rosbag to print info from"/>
+
+<!-- Rosbag player -->
+<node name="player" pkg="rosbag" type="play" args="$(arg rosbag)"/>
+
+<!-- Prints the Point Cloud Schema -->
+<node name="rosbag_info" pkg="slam_roscore" type="rosbag_info" output="screen"/>
+
+</launch>

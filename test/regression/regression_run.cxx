@@ -143,7 +143,7 @@ struct RegressionSessionOptions {
     bool all_runs = true;
 
     double tolerance_tr = 1.e-5; //< The tolerance for the kitti metric to determine a regression or not
-    double tolerance_time_sec = 1.e-2; //< The tolerance for the average runtime to determine a regression (in seconds)
+    double tolerance_time_sec = 1.e-3; //< The tolerance for the average runtime to determine a regression (in seconds)
     std::string selected_run;
     std::string output_file = "/tmp/output.yaml";
 
@@ -283,7 +283,7 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     };
 
-    for (auto&[run_name, run_options]: options.runs) {
+    for (auto &[run_name, run_options]: options.runs) {
         SLAM_LOG(INFO) << "/****************************************************************/";
         SLAM_LOG(INFO) << "Starting Run: [" << run_name << "]";
         auto odometry_options = run_options.odometry_options;
@@ -293,6 +293,8 @@ int main(int argc, char **argv) {
             ct_icp::DatasetOptions dataset_option;
             dataset_option.root_path = dataset_run.root_path;
             dataset_option.dataset = DATASETFromString(dataset_run.dataset_name);
+            SLAM_CHECK_STREAM(dataset_option.dataset != INVALID, "The `dataset` name: "
+                    << dataset_run.dataset_name << " is invalid.");
             dataset_option.use_all_datasets = true;
             auto dataset = ct_icp::Dataset::LoadDataset(dataset_option);
 
@@ -319,12 +321,13 @@ int main(int argc, char **argv) {
                 SLAM_LOG(INFO) << "Dataset: " << dataset_option.dataset << " / sequence: "
                                << seq_option.sequence_name << " / Number of Frames: " << seq_option.max_num_frames;
 
+                const auto kNumFrames = std::min(sequence_data->NumFrames(), size_t(seq_option.max_num_frames));
                 while (sequence_data->HasNext()) {
                     auto next_frame = sequence_data->NextFrame();
 
                     {
                         auto begin = std::chrono::system_clock::now();
-                        auto result = odometry.RegisterFrame(next_frame.points);
+                        auto result = odometry.RegisterFrame(*next_frame.pointcloud, frame_idx);
                         auto end = std::chrono::system_clock::now();
                         total_time_milli += std::chrono::duration<double, std::milli>(end - begin).count();
                         if (!result.success) {
@@ -334,6 +337,19 @@ int main(int argc, char **argv) {
                         }
                     }
                     frame_idx++;
+
+                    if (kNumFrames > 0) {
+                        auto percent = 10;
+                        auto step = percent * kNumFrames / 100;
+                        if (frame_idx % step == 0) {
+                            int q = (int(frame_idx) / int(step)) * percent;
+                            SLAM_LOG(INFO) << q << "% Complete" << std::endl;
+                        }
+                    } else {
+                        if (frame_idx % 100 == 0) {
+                            SLAM_LOG(INFO) << frame_idx << " Finished frame " << frame_idx << std::endl;
+                        }
+                    }
                     if (seq_option.max_num_frames <= frame_idx)
                         break;
                 }
@@ -380,6 +396,9 @@ int main(int argc, char **argv) {
                         SLAM_LOG(WARNING) << "[REGRESSION FOUND]The difference in score is : " << diff
                                           << " (or " << diff_percent << "% of the score)";
                         has_precision_regression = true;
+
+                        if (options.fail_early)
+                            return exit_failure();
                     } else
                         SLAM_LOG(WARNING) << "No precision regression for sequence " << seq_option.sequence_name
                                           << " old score: "
@@ -391,14 +410,15 @@ int main(int argc, char **argv) {
                         auto diff = std::abs(seq_option.avg_runtime_sec - copy_sequence_option.avg_runtime_sec);
                         auto diff_percent = (diff / seq_option.avg_runtime_sec) * 100;
 
-                        if (options.fail_early)
-                            return exit_failure();
                         SLAM_LOG(WARNING)
                                 << "[REGRESSION FOUND] The runtime is slower for the new execution than the previous"
                                 << std::endl;
                         SLAM_LOG(WARNING) << "[REGRESSION FOUND]The difference in score is : " << diff
                                           << " (or " << diff_percent << "% of the score)";
                         has_performance_regression = true;
+
+                        if (options.fail_early)
+                            return exit_failure();
                     } else
                         SLAM_LOG(WARNING) << "No performance regression for sequence " << seq_option.sequence_name
                                           << " old score: "

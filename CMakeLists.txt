@@ -5,15 +5,23 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+option(WITH_GTSAM "Search GTSAM dependency (disabled by default)" OFF)
 option(WITH_VIZ3D "Search and install viz3d (disabled by default)" OFF)
 option(WITH_PYTHON_BINDING "Install Python bindings" OFF)
 
 set(LOG_PREFIX " [CT_ICP] -- ")
 
+# --- Defining Install Location
 if (NOT SUPERBUILD_INSTALL_DIR)
     set(SUPERBUILD_INSTALL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/install)
     get_filename_component(SUPERBUILD_INSTALL_DIR ${SUPERBUILD_INSTALL_DIR} ABSOLUTE)
     message(INFO "${LOG_PREFIX}Variable \"SUPERBUILD_INSTALL_DIR\" not specified. Trying to set it to ${SUPERBUILD_INSTALL_DIR}")
+endif ()
+
+if (NOT SLAMCORE_INSTALL_DIR)
+    set(SLAMCORE_INSTALL_DIR ${SUPERBUILD_INSTALL_DIR}/SlamCore)
+    get_filename_component(SLAMCORE_INSTALL_DIR ${SLAMCORE_INSTALL_DIR} ABSOLUTE)
+    message(INFO "${LOG_PREFIX}Variable \"SLAMCORE_INSTALL_DIR\" not specified. Trying to set it to ${SLAMCORE_INSTALL_DIR}")
 endif ()
 
 if (NOT CT_ICP_INSTALL_DIR)
@@ -22,16 +30,9 @@ if (NOT CT_ICP_INSTALL_DIR)
     message(INFO "${LOG_PREFIX}Variable \"CT_ICP_INSTALL_DIR\" not specified. Trying to set it to ${CT_ICP_INSTALL_DIR}")
 endif ()
 
-# ----------------------------------------------------------------------------------------------------------------------
-# Find package SlamCore
-
-if (NOT SLAM_CORE_DIR)
-    set(SLAM_CORE_DIR ${SUPERBUILD_INSTALL_DIR}/SlamCore/lib/cmake)
-    get_filename_component(SLAM_CORE_DIR ${SLAM_CORE_DIR} ABSOLUTE)
-    message(INFO "${LOG_PREFIX}Variable \"SLAM_CORE_DIR\" not specified. Trying to set it to ${SLAM_CORE_DIR}.")
-endif ()
-get_filename_component(SLAM_CORE_RPATH ${SLAM_CORE_DIR}/.. ABSOLUTE)
-find_package(SlamCore REQUIRED CONFIG PATHS ${SLAM_CORE_DIR} NO_DEFAULT_PATH)
+# --- Include CMAKE scripts
+include(cmake/includes.cmake)
+include(cmake/viz3d_utils.cmake)
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Define Default variables
@@ -45,9 +46,9 @@ if (UNIX)
 endif ()
 
 
-include(cmake/viz3d_utils.cmake)
 SLAM_DEFAULT_VARIABLES()
 SLAM_INCLUDE_SUPERBUILD()
+
 SLAM_INSTALL_DEFAULT_VARIABLES(TARGET CT_ICP PREFIX CT_ICP)
 set(CMAKE_INSTALL_PREFIX ${CT_ICP_INSTALL_DIR})
 
@@ -60,30 +61,49 @@ if (NOT TARGET OpenMP::OpenMP_CXX)
 endif ()
 
 SLAM_CHECK_TARGETS(Ceres::ceres glog::glog Eigen3::Eigen OpenMP::OpenMP_CXX)
-if (WITH_VIZ3D)
-    SLAM_CHECK_TARGETS(viz3d)
-    find_package(SlamCore-viz3d REQUIRED CONFIG PATHS ${SLAM_CORE_DIR} NO_DEFAULT_PATH)
-endif ()
 
 # -- Manually append to the RPATH for CT_ICP shared library the rpath to SlamCore
 set(CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_RPATH} ${SLAM_CORE_RPATH})
 add_subdirectory(src)
 target_compile_definitions(CT_ICP PUBLIC CT_ICP_CPP_STANDARD=${CMAKE_CXX_STANDARD})
 
-# ---------------------
-# Install Target
-if (NOT SLAM_CMAKE_SCRIPTS_PATH)
-    message(FATAL_ERROR "${LOG_PREFIX}`SLAM_CMAKE_SCRIPTS_PATH` Variable not found")
+if (WITH_GTSAM)
+    find_package(GTSAM REQUIRED)
+    message(INFO ${LOG_PREFIX}"WITH_GTSAM=ON and target GTSAM found")
+else ()
+    message(INFO ${LOG_PREFIX}"WITH_GTSAM=OFF gtsam dependent targets will not be built")
 endif ()
 
+# ---------------------
+# Install Target
+
+SLAM_INSTALL_TARGET(
+        TARGET SlamCore
+        CONFIG_TEMPLATE cmake/project_config.cmake.in
+        INSTALL_DIR ${CT_ICP_INSTALL_DIR}
+        INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+if (WITH_VIZ3D)
+    SLAM_INSTALL_TARGET(
+            TARGET SlamCore-viz3d
+            CONFIG_TEMPLATE cmake/project_config.cmake.in
+            INSTALL_DIR ${CT_ICP_INSTALL_DIR}
+            INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
+endif ()
 
 SLAM_INSTALL_TARGET(
         TARGET CT_ICP
-        CONFIG_TEMPLATE ${SLAM_CMAKE_SCRIPTS_PATH}/project_config.cmake.in
+        CONFIG_TEMPLATE cmake/project_config.cmake.in
         INSTALL_DIR ${CT_ICP_INSTALL_DIR}
         INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
-install(TARGETS slam DESTINATION ${CT_ICP_RUNTIME_DESTINATION})
-LINK_WITH_VIZ3D(TARGET slam)
+
+if (WITH_VIZ3D)
+    SLAM_INSTALL_TARGET(
+            TARGET CT_ICP-viz3d
+            CONFIG_TEMPLATE cmake/project_config.cmake.in
+            INSTALL_DIR ${CT_ICP_INSTALL_DIR}
+            INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
+endif ()
 
 add_subdirectory(test)
 add_subdirectory(command)

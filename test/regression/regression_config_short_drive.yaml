@@ -1,7 +1,7 @@
 # -------------------------------------------------------------------------------------------------------------------- #
 # SESSION CONFIGURATION
 # -------------------------------------------------------------------------------------------------------------------- #
-regression_test: false # Tests that there are no regressions
+regression_test: true # Tests that there are no regressions
 fail_early: true      # Fails early if a regression was detected
 produce_output: true  # Produces an output (which formats the runs)
 output_file: /tmp/output.yaml
@@ -18,7 +18,7 @@ runs:
         sequences:
           - sequence_name: 00       # The name of the sequence of the dataset
             max_num_frames: 500     # Number of frames to run the algorithm for
-            kitti_Tr: 0.99          # KITTI score for the sequence
+            kitti_Tr: 1.0           # KITTI score for the sequence
             avg_runtime_sec: 0.08   # Average runtime in seconds
           - sequence_name: 01
             max_num_frames: 500
@@ -37,8 +37,8 @@ runs:
         sequences:
           - sequence_name: Town01
             max_num_frames: 500
-            avg_runtime_sec: 0.07
-            kitti_Tr: 0.016
+            avg_runtime_sec: 0.08
+            kitti_Tr: 0.044
       - dataset_name: kitti_360
         root_path: .kitti_360
         sequences:
@@ -48,34 +48,74 @@ runs:
             kitti_Tr: 1.40
 
     odometry_options:
-      voxel_size: 0.5 # The voxel size for the grid sampling of the new frame (before keypoints extraction)
-      sample_voxel_size: 1.5 # The size of a voxel for the selection of `keypoints` by grid sampling
-      max_distance: 100.0 # The threshold of the distance to suppress voxels from the map
-      max_num_points_in_voxel: 20 # The maximum number of points per voxel of the map
+
+      # -- Output Options
       debug_print: false
-      min_distance_points: 0.1
-      distance_error_threshold: 5.0 # The motion of the sensor between two frames which is considered erroneous (stops the odometry)
+
+      # -- Main Options
       motion_compensation: CONTINUOUS # The profile of the motion compensation (NONE, CONSTANT_VELOCITY, ITERATIVE, CONTINUOUS)
+      initialization: INIT_CONSTANT_VELOCITY
+
+      # -- Sampling Options
+      sample_voxel_size: 1.5 # The size of a voxel for the selection of `keypoints` by grid sampling
+
+      # -- Frame Options
+      voxel_size: 0.5 # The voxel size for the grid sampling of the new frame (before keypoints extraction)
+      max_distance: 100.0 # The threshold of the distance to suppress voxels from the map
+      distance_error_threshold: 5.0 # The motion of the sensor between two frames which is considered erroneous (stops the odometry)
+
+      # -- Map Options
+      size_voxel_map: 1.0 # The voxel size of in the voxel map
+      voxel_neighborhood: 1
+      max_num_points_in_voxel: 20 # The maximum number of points per voxel of the map
+      min_distance_points: 0.1
+
 
       # THE CT-ICP Options for the RUN
       ct_icp_options:
-        size_voxel_map: 1.0 # The voxel size of in the voxel map
-        num_iters_icp: 5 # The number of iterations of the ICP
-        min_number_neighbors: 20 # The minimum number of neighbor points to define a valid neighborhood
-        voxel_neighborhood: 1
-        max_number_neighbors: 20
-        max_dist_to_plane_ct_icp: 0.3
-        norm_x_end_iteration_ct_icp: 0.001
+
+        # -- Output Options
         debug_print: false
-        point_to_plane_with_distortion: true
-        distance: CT_POINT_TO_PLANE # Options: [CT_POINT_TO_PLANE, POINT_TO_PLANE]
+        output_weights: false
+
+        # -- Main Params
+        num_iters_icp: 5 # The number of iterations of the ICP
+        parametrization: CONTINUOUS_TIME
+        distance: POINT_TO_PLANE
+        solver: CERES
+
+        # -- Robustness scheme
+        max_num_residuals: -1
+        min_num_residuals: 100
+        weighting_scheme: ALL
+        weight_alpha: 0.9
+        weight_neighborhood: 0.1
+
+        # -- Neighborhood params
+        min_number_neighbors: 10 # The minimum number of neighbor points to define a valid neighborhood
+        max_number_neighbors: 20
         num_closest_neighbors: 1
+        power_planarity: 2
+        threshold_voxel_occupancy: 1
+
+        # -- Stop Criterion Params
+        threshold_orientation_norm: 0.0001
+        threshold_translation_norm: 0.001
+
+        # -- CT Trajectory constraint (if parametrizaton == CONTINUOUS_TIME)
+        point_to_plane_with_distortion: true
         beta_location_consistency: 0.001
         beta_constant_velocity: 0.001
+        beta_small_velocity: 0.
+        beta_orientation_consistency: 0.
 
-        solver: CERES # Options: [GN=Gauss-Newton, CERES]
+        # -- CERES Solver Specific Params
         loss_function: CAUCHY # Options: [STANDARD, CAUCHY, HUBER, TOLERANT, TRUNCATED] (for CERES solver)
         ls_max_num_iters: 5 # The number of steps performed for each iteration of the ICP (for CERES solver)
         ls_num_threads: 6 # The number of threads to build and solve the least square system (for CERES solver)
         ls_sigma: 0.1 # The sigma parameter for loss CAUCHY, HUBER, TOLERANT, TRUNCATED (for CERES solver)
         ls_tolerant_min_threshold: 0.05 # The tolerant parameter for loss TOLERANT (for CERES solver)
+
+        # -- GN Solver Specific Params
+        max_dist_to_plane_ct_icp: 0.3
+        norm_x_end_iteration_ct_icp: 0.001

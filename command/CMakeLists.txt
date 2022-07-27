@@ -1,5 +1,4 @@
-#if (WITH_VIZ3D)
-#    add_executable(cmd_viz_dataset cmd_viz_dataset.cpp)
-#    target_link_libraries(cmd_viz_dataset PUBLIC CT_ICP tclap::tclap)
-#    target_compile_definitions(cmd_viz_dataset PUBLIC CT_ICP_WITH_VIZ=1)
-#endif ()
+# -- Main Script to run the Odometry --
+add_executable(run_odometry cmd_run_odometry.cpp odometry_runner.h odometry_runner.cpp)
+target_link_libraries(run_odometry PUBLIC CT_ICP CT_ICP-viz3d)
+LINK_WITH_VIZ3D(TARGET run_odometry)

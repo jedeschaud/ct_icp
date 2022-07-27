@@ -2,13 +2,14 @@
 #define CT_ICP_DATASET_HPP
 
 #include <memory>
+
 #include "types.h"
 #include "ct_icp/utils.h"
 
 #include <SlamCore/io.h>
 #include <SlamCore/trajectory.h>
 #include <SlamCore/experimental/synthetic.h>
-
+#include <SlamCore/pointcloud.h>
 
 namespace ct_icp {
 
@@ -18,9 +19,12 @@ namespace ct_icp {
         KITTI = 2,
         KITTI_360 = 3,
         NCLT = 4,
-        HILTI = 5,
-        PLY_DIRECTORY = 6,
-        SYNTHETIC = 7
+        HILTI_2021 = 5,
+        HILTI_2022 = 6,
+        PLY_DIRECTORY = 7,
+        SYNTHETIC = 8,
+        CUSTOM = 9,
+        INVALID = -1
     };
 
     DATASET DATASETFromString(const std::string &);
@@ -29,30 +33,32 @@ namespace ct_icp {
 
     bool IsDrivingDataset(DATASET dataset);
 
+
+    /*! @brief A SequenceInformation */
+    struct SequenceInfo {
+        std::string sequence_name; //< The name of the sequence
+
+        std::string label; //< Label of the sequence
+
+        int sequence_id = -1; //< The id of the sequence
+
+        int sequence_size = -1; //< The size of the sequence
+
+        bool with_ground_truth = false; //< Whether the sequence has ground truth
+
+    };
+
     /**
-     * An ADatasetSequence allows access to the frames for a sequence of a dataset
+     * @brief An ADatasetSequence allows access to the frames for a sequence of a dataset
      */
     class ADatasetSequence {
     public:
         virtual ~ADatasetSequence() = 0;
 
-        struct Frame {
-
-            std::vector<slam::WPoint3D> points;
-
-            std::optional<slam::Pose> begin_pose{};
-
-            std::optional<slam::Pose> end_pose{};
-
-            [[nodiscard]] inline bool HasGroundTruth() const {
-                return begin_pose.has_value() && end_pose.has_value();
-            }
-
-        };
+        typedef LidarIMUFrame Frame;
 
         // Whether the sequence contains another frame
         [[nodiscard]] virtual bool HasNext() const { return false; };
-
 
         // Returns the number of frames (-1 if the total number of frames is unknown)
         [[nodiscard]] virtual size_t NumFrames() const = 0;
@@ -69,7 +75,7 @@ namespace ct_icp {
         virtual Frame GetFrame(size_t index) const;
 
         // Sets a filter on the frame
-        void SetFilter(std::function<void(std::vector<slam::WPoint3D> &)> &&filter);
+        void SetFilter(std::function<void(slam::PointCloud &)> &&filter);
 
         // Remove the filter on the frame
         void ClearFilter();
@@ -84,17 +90,35 @@ namespace ct_icp {
         // Returns the ground truth if the dataset has a ground truth
         virtual std::optional<std::vector<slam::Pose>> GroundTruth() { return {}; };
 
+        // Returns whether the dataset has a ground truth
+        virtual bool HasGroundTruth() const { return seq_info_.with_ground_truth; }
+
+        const SequenceInfo &GetSequenceInfo() const {
+            return seq_info_;
+        }
+
+        SequenceInfo &GetSequenceInfo() {
+            return seq_info_;
+        }
+
     protected:
+
+        explicit ADatasetSequence(SequenceInfo &&seq_info) : seq_info_(std::move(seq_info)) {}
 
         // Returns the next frame (is the sequence contains one)
         virtual Frame NextUnfilteredFrame() = 0;
 
+        // Register fields and apply the optional filters to the frame
+        void ProcessFrame(Frame &frame) const;
+
+        // Throws an exception by default (only for random access datasets e.g. sequence of files)
         [[nodiscard]] virtual Frame GetUnfilteredFrame(size_t index) const;
 
+        SequenceInfo seq_info_;
         int max_num_frames_ = -1;
         int init_frame_id_ = 0; // The initial frame index of the sequence
         int current_frame_id_ = 0; // The current frame index of the iterator
-        std::optional<std::function<void(std::vector<slam::WPoint3D> &)>> filter_{};
+        std::optional<std::function<void(slam::PointCloud &)>> filter_{};
     };
 
     inline std::string DefaultFilePattern(size_t index_file, int zero_padding = 6) {
@@ -104,12 +128,13 @@ namespace ct_icp {
     }
 
     /**
-     * A Synthetic Acquisition simulates the acquisition of a Depth Sensor in a synthetic environment
+     * @brief A Synthetic Acquisition simulates the acquisition of a Depth Sensor in a synthetic environment
      */
     class SyntheticSequence : public ADatasetSequence {
     public:
 
         SyntheticSequence(slam::SyntheticSensorAcquisition &&sensor_acquisition,
+                          SequenceInfo &&seq_info,
                           std::vector<slam::Pose> &&gt_poses);
 
         static std::shared_ptr<SyntheticSequence> PtrFromDirectoryPath(const std::string &yaml_path);
@@ -145,52 +170,101 @@ namespace ct_icp {
     };
 
     /**
-     * A Generic Sequence to iterate over a directory consisting of point cloud PLY files
+     * @brief A abstract Sequence of files to iterate over
      */
-    class PLYDirectory : public ADatasetSequence {
+    class AFileSequence : public ADatasetSequence {
     public:
         typedef std::function<std::string(size_t)> FilePatternFunctionType;
+        typedef std::function<bool(const std::string &, const std::string &)> SortingFunctionType;
 
-        explicit PLYDirectory(fs::path &&root_path, size_t expected_size, FilePatternFunctionType &&optional_pattern);
+        /*! @brief Reads a Frame from the disk */
+        virtual Frame ReadFrame(const std::string &filename) const = 0;
 
-        static PLYDirectory FromDirectoryPath(const std::string &dir_path);
+        /*! @brief  Defines the Sorting function  */
+        void SetSortingFunction(SortingFunctionType &&function) {
+            sorting_function = std::move(function);
+            if (file_names_) {
+                std::sort(file_names_->begin(), file_names_->end(), sorting_function);
+            }
+        }
 
-        static std::shared_ptr<PLYDirectory> PtrFromDirectoryPath(const std::string &dir_path);
+        void SetGroundTruth(std::vector<Pose> &&poses);
 
         [[nodiscard]] bool HasNext() const override;
 
         Frame NextUnfilteredFrame() override;
 
-        void SetGroundTruth(std::vector<Pose> &&poses);
-
-        void SetFilePattern(size_t expected_size, std::function<std::string(size_t)> &&file_pattern);
-
         // Returns the number of frames (-1 if the total number of frames is unknown)
         [[nodiscard]] size_t NumFrames() const override;
 
         // Returns a frame at `index`. Throws an exception if the dataset does not support Random Access
-        [[nodiscard]] Frame GetUnfilteredFrame(size_t index) const override;;
+        [[nodiscard]] Frame GetUnfilteredFrame(size_t index) const override;
 
         // Whether the dataset support random access
         [[nodiscard]] bool WithRandomAccess() const override { return true; };
 
         // Returns the ground truth if the dataset has a ground truth
-        std::optional<std::vector<slam::Pose>> GroundTruth() override;;
-
-        explicit PLYDirectory(fs::path &&root_path,
-                              std::vector<std::string> &&file_names);
+        std::optional<std::vector<slam::Pose>> GroundTruth() override;
 
         void SetInitFrame(int frame_index) override;
+
+
+    protected:
+
+        explicit AFileSequence(std::string &&dir_path, SequenceInfo &&seq_info,
+                               const std::vector<std::string> &filenames_) : ADatasetSequence(std::move(seq_info)),
+                                                                             root_dir_path_(std::move(dir_path)) {
+            SLAM_CHECK_STREAM(fs::exists(root_dir_path_), "The Directory " << root_dir_path_ << " does not exist");
+            file_names_.emplace(std::vector<std::string>{});
+            file_names_->reserve(filenames_.size());
+            full_sequence_size_ = file_names_->size();
+            std::sort(file_names_->begin(), file_names_->end(), sorting_function);
+        }
+
+        explicit AFileSequence(std::string &&root_path, SequenceInfo &&seq_info,
+                               size_t expected_size, FilePatternFunctionType &&optional_pattern)
+                : ADatasetSequence(std::move(seq_info)),
+                  root_dir_path_(std::move(root_path)) {
+            file_pattern_ = {
+                    std::move(optional_pattern),
+            };
+            full_sequence_size_ = expected_size;
+            seq_info_.sequence_size = int(expected_size);
+        }
+
+
+        SortingFunctionType sorting_function = [](const std::string &lhs, const std::string &rhs) { return lhs < rhs; };
+        fs::path root_dir_path_;
+        std::optional<std::vector<std::string>> file_names_;
+        std::optional<slam::LinearContinuousTrajectory> ground_truth_{};
+        std::optional<FilePatternFunctionType> file_pattern_;
+        size_t full_sequence_size_ = -1;
+    };
+
+    /**
+     * @brief A Generic Sequence to iterate over a directory consisting of point cloud PLY files
+     */
+    class PLYDirectory : public AFileSequence {
+    public:
+
+        explicit PLYDirectory(std::string &&root_path, SequenceInfo &&seq_info,
+                              size_t expected_size, FilePatternFunctionType &&optional_pattern);
+
+        explicit PLYDirectory(std::string &&root_path, SequenceInfo &&seq_info, std::vector<std::string> &&file_names);
+
+        static PLYDirectory FromDirectoryPath(const std::string &dir_path,
+                                              std::optional<SequenceInfo> seq_info = {});
+
+        // Read a PLY Frame from disk
+        Frame ReadFrame(const std::string &filename) const override;
+
+        static std::shared_ptr<PLYDirectory> PtrFromDirectoryPath(const std::string &dir_path,
+                                                                  std::optional<SequenceInfo> seq_info = {});
 
         REF_GETTER(GetSchemaMapper, mapper_)
 
     private:
-        slam::PLYSchemaMapper mapper_ = slam::WPoint3D::FloatSchemaMapper(); //< The default Schema Mapper.
-        size_t full_sequence_size_ = -1;
-        std::vector<std::string> file_names_;
-        fs::path root_dir_path_;
-        std::optional<slam::LinearContinuousTrajectory> ground_truth_{};
-        std::optional<FilePatternFunctionType> file_pattern_{};
+        std::optional<slam::PLYSchemaMapper> mapper_ = {}; //< The default Schema Mapper.
     };
 
     struct SequenceOptions {
@@ -216,19 +290,6 @@ namespace ct_icp {
         bool use_all_datasets = true; // Whether to use all sequences, or only the ones specified in param `sequence_options`
 
         std::vector<SequenceOptions> sequence_options;
-
-    };
-
-    struct SequenceInfo {
-
-        std::string sequence_name;
-
-        int sequence_id = -1;
-
-        int sequence_size = -1;
-
-        bool with_ground_truth = false;
-
     };
 
     /**
@@ -265,6 +326,21 @@ namespace ct_icp {
 
         static Dataset LoadDataset(const DatasetOptions &options);
 
+        // Builds a dataset from a set of sequences
+        static Dataset BuildCustomDataset(std::vector<std::shared_ptr<ADatasetSequence>> &&custom_sequences) {
+            std::vector<SequenceInfo> sequence_infos;
+            std::set<std::string> sequence_names;
+            for (auto &sequence: custom_sequences) {
+                auto &seq_info = sequence->GetSequenceInfo();
+                if (sequence_names.find(seq_info.sequence_name) != sequence_names.end()) {
+                    SLAM_LOG(WARNING) << "A sequence with the name " <<
+                                      seq_info.sequence_name << " already exists" << std::endl;
+                }
+                sequence_infos.push_back(seq_info);
+            }
+            return Dataset(CUSTOM, std::move(custom_sequences), std::move(sequence_infos));
+        };
+
     private:
         Dataset(DATASET dataset,
                 std::vector<std::shared_ptr<ADatasetSequence>> &&dataset_sequences,
@@ -279,7 +355,6 @@ namespace ct_icp {
             }
         }
 
-
         DATASET dataset_;
         std::vector<std::shared_ptr<ADatasetSequence>> dataset_sequences_;
         std::vector<SequenceInfo> sequence_infos_;
@@ -288,6 +363,12 @@ namespace ct_icp {
 
     // Reads the poses from NCLT ground truth poses
     std::vector<slam::Pose> ReadNCLTPoses(const std::string &file_path);
+
+    // Reads the GT poses from HILTI dataset (in the imu frame)
+    std::vector<slam::Pose> ReadHILTIPosesInIMUFrame(const std::string &file_path);
+
+    // Reads the GT poses from the HILTI dataset (in the lidar frame)
+    std::vector<slam::Pose> ReadHILTIPosesInLidarFrame(const std::string &file_path, DATASET hilti_dataset);
 }
 
 
