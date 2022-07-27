@@ -1,0 +1,19 @@
+<!-- Launches a Dataset Node and the ct_icp SLAM node -->
+<launch>
+  <arg name="rosbag" required="true" doc="The path to the rosbag to play"/>
+  <arg name="topic" required="true" doc="The topic of the point cloud" />
+  <arg name="rate" doc="The rate of the rosbag" default="1.0"/>
+  <arg name="config" default="" doc="The path to the config" />
+  <arg name="start_sec" default="0." doc="The starting time of the rosbag" />
+  <arg name="kill_on_finish" default="true" doc="Whether to keep the rosbag alive" />
+
+  <!-- Rosbag dataset -->
+  <node name="player" pkg="rosbag" type="play" args="-r $(arg rate) -s $(arg start_sec) $(arg rosbag) "
+        output="screen" required="$(arg kill_on_finish)"/>
+
+  <include file="$(find ct_icp_odometry )/launch/ct_icp_slam.launch" args="-pc_topic $(arg topic) -config $(arg config)">
+    <arg name="config" value="$(arg config)"/>
+    <arg name="pc_topic" value="$(arg topic)"/>
+  </include>
+
+</launch>

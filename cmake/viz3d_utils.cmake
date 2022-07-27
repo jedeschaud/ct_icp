@@ -1,0 +1,13 @@
+# ----------------------------------------------------------------------------------------------------------------------
+macro(LINK_WITH_VIZ3D)
+    set(on_value_args TARGET)
+    cmake_parse_arguments(SLAM "" "${on_value_args}" "" ${ARGN})
+    if (WITH_VIZ3D)
+        message(INFO "${LOG_PREFIX}Setting Macro CT_ICP_WITH_VIZ=1 in target ${SLAM_TARGET}")
+        target_compile_definitions(${SLAM_TARGET} PUBLIC CT_ICP_WITH_VIZ=1)
+        target_link_libraries(${SLAM_TARGET} PUBLIC viz3d SlamCore-viz3d)
+    else ()
+        message(INFO "${LOG_PREFIX}Setting Macro CT_ICP_WITH_VIZ=0 in target ${SLAM_TARGET}")
+        target_compile_definitions(${SLAM_TARGET} PUBLIC CT_ICP_WITH_VIZ=0)
+    endif ()
+endmacro(LINK_WITH_VIZ3D)

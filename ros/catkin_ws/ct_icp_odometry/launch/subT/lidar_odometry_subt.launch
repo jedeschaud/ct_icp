@@ -1,0 +1,16 @@
+<!-- Launches the Lidar-Only SLAM with default parameters on NHCD rosbag -->
+<launch>
+  <arg name="rosbag" required="true" doc="The path to the rosbag to play"/>
+  <arg name="rate" doc="The rate of the rosbag" default="0.8"/>
+  <arg name="config" default="$(find ct_icp_odometry)/params/ct_icp/subT/ct_icp_subt_config.yaml" />
+  <arg name="kill_on_finish" default="true" />
+
+  <include file="$(find ct_icp_odometry)/launch/ct_icp_on_rosbag.launch">
+    <arg name="topic" value="/sherman/lidar_points"/>
+    <arg name="config" value="$(arg config)"/>
+    <arg name="start_sec" value="0."/>
+    <arg name="rate" value="$(arg rate)"/>
+    <arg name="rosbag" value="$(arg rosbag)"/>
+    <arg name="kill_on_finish" value="$(arg kill_on_finish)"/>
+  </include>
+</launch>

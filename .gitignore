@@ -2,6 +2,8 @@
 cmake-*
 cmake-build*
 imgui.ini
+install/*
+wandb*
 
 # Configuration files (e.g. idea)
 .*
@@ -14,3 +16,4 @@ slam
 
 # Commit the .gitignore
 !.gitignore
+!.github

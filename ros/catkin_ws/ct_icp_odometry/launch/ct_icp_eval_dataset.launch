@@ -1,0 +1,13 @@
+<!-- Launches the Evaluation Node -->
+<launch>
+
+  <arg name="monitor" required="false" doc="Whether to monitor the metrics of the dataset"/>
+
+  <!-- Eval Node -->
+  <node name="ct_icp_evaluation_node" pkg="ct_icp_odometry" type="ct_icp_evaluation_node" output="screen">
+    <param name="odom_topic" value="/ct_icp/pose/odom"/>
+    <param name="gt_type" value="from_topic"/>
+    <param name="gt_topic" value="/ct_icp/gt_pose/odom" />
+  </node>
+
+</launch>
