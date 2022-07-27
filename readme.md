@@ -132,7 +132,8 @@ roslaunch ct_icp_odometry launch_slam_dataset.launch dataset_path:=<path-to-data
 
 The Datasets are publicly available at:
 https://cloud.mines-paristech.fr/index.php/s/UwgVFtiTOmrgKp5
-The folder is protected by a password (you can find it in an answer in the issues).
+
+The folder is protected by the following password : **npm3d**
 
 Each dataset is a .zip archive containing the PLY scan file with the relative timestamps for each point in the frame,
 and if available, the ground truth poses.
