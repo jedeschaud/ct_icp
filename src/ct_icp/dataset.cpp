@@ -143,7 +143,6 @@ namespace ct_icp {
                                          -8.433819635885287935e-01));
     }();
 
-
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// HARD CODED VALUES FOR KITTI-CARLA
 
@@ -792,7 +791,7 @@ namespace ct_icp {
         if (HasGroundTruth()) {
             new_frame.begin_pose = ground_truth_->InterpolatePose(new_frame.timestamp_min);
             new_frame.end_pose = ground_truth_->InterpolatePose(new_frame.timestamp_max);
-        }
+       }
 
         return new_frame;
     }
