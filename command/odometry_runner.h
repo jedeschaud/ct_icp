@@ -12,6 +12,7 @@
 #include <ct_icp/dataset.h>
 #include <ct_icp/config.h>
 #include <SlamCore/eval.h>
+#include <SlamCore/experimental/iterator/transform_iterator.h>
 
 #if CT_ICP_WITH_VIZ == 1
 
@@ -19,7 +20,6 @@
 #include <viz3d/imgui_utils.h>
 #include <SlamCore-viz3d/viz3d_utils.h>
 #include <SlamCore-viz3d/viz3d_windows.h>
-#include <SlamCore/experimental/iterator/transform_iterator.h>
 
 #endif // CT_ICP_WITH_VIZ
 

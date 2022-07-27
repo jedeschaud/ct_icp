@@ -163,9 +163,9 @@ namespace ct_icp {
                         gui_thread->join();
                         instance.ClearWindows();
                     }
+                return true;
+            }
 #endif // CT_ICP_WITH_VIZ
-                    return true;
-                }
 
                 auto init_frame = std::chrono::steady_clock::now();
                 auto frame = next_sequence->NextFrame();
@@ -197,8 +197,10 @@ namespace ct_icp {
                     auto end = seq_summary.trajectory.end();
                     auto _begin = slam::make_transform(begin, slam::PoseConversion());
                     auto _end = slam::make_transform(end, slam::PoseConversion());
+#if CT_ICP_WITH_VIZ == 1
                     auto polydata = slam::polydata_from_poses(_begin, _end);
                     window_ptr->AddPolyData("Poses", index, polydata);
+#endif // CT_ICP_WITH_VIZ == 1
                 }
 
 
@@ -288,7 +290,7 @@ namespace ct_icp {
         return true;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     void OdometryRunner::SaveTrajectoryAndMetrics(const Odometry &odom, const std::string &sequence_name,
                                                   const fs::path &output_dir,
                                                   std::optional<std::vector<slam::Pose>> &gt_poses,
@@ -338,7 +340,7 @@ namespace ct_icp {
         }
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     void OdometryRunner::Options::LoadYAML(const YAML::Node &config) {
         if (config["odometry_options"]) {
             auto node = config["odometry_options"];
@@ -359,4 +361,5 @@ namespace ct_icp {
         FIND_OPTION(config, (*this), save_mid_frame, int)
         FIND_OPTION(config, (*this), output_dir, std::string)
     }
+
 } // namespace ct_icp
