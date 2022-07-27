@@ -217,5 +217,3 @@ If you use our work in your research project, please consider citing:
 - [ ] Add tests/automatic build to the Github CI
 
 - [ ] Add a wiki (documentation on the code)
-- [ ] Add point-to-distribution cost
-- [ ] Improve the robust regime (go faster and find parameters for robust and fast driving profile)
