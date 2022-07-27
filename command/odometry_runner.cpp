@@ -152,10 +152,10 @@ namespace ct_icp {
             double sum_frame_time = 0.;
             while (next_sequence->HasNext()) {
 
+#if CT_ICP_WITH_VIZ == 1
                 window_ptr->GetWindow().WaitIfPaused();
                 if (window_ptr->GetWindow().stop) {
                     SLAM_LOG(INFO) << "Stopped early by the user. Exiting..." << std::endl;
-#if CT_ICP_WITH_VIZ == 1
                     callback->Clear();
                     if (gui_thread) {
                         auto &instance = viz3d::GUI::Instance();

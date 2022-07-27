@@ -5,7 +5,7 @@
 This repository implements the SLAM **CT-ICP** (see  [our article](https://arxiv.org/abs/2109.12979)), a lightweight,
 precise and versatile pure LiDAR odometry.
 
-The code can be run with **ROS**, but also as an independent library, or using scripts we provide. 
+The code can be run with **ROS**, but also as an independent library, or using scripts we provide.
 
 It is integrated with the python project **[pyLiDAR-SLAM](https://github.com/Kitware/pyLiDAR-SLAM)** which gives access
 to more datasets.
@@ -13,6 +13,15 @@ to more datasets.
 
 ![](https://github.com/pierdell/gifs/blob/master/ct_icp_NCLT.GIF)
 ![](https://github.com/pierdell/gifs/blob/master/ct_icp_UrbanLoco.GIF)
+
+## NEWS:
+
+##### [27/07/2022] New release, with increased ROS support
+
+> We introduce a new release, with significant changes in the code. We do not guarantee the results of the article in
+> this branch, (though this branch should globally our SLAM). To replicate the results from the dataset, see the
+> release `ICRA-2022`
+>
 
 # Installation
 
@@ -66,12 +75,23 @@ cmake --build . --target install --config Release --parallel 12       #< Build a
 > You can use the config files located at `<SUPERBUILD_INSTALL_DIR>/CT_ICP/lib/cmake` to load the libraries in a cmake
 > project, or use ROS or the specified executables.
 
-### Step 3: ROS [experimental]
+### Step 3: ROS
 
-> To build the ROS wrapping for **CT-ICP**, first build and install the CT-ICP library (see *Steps 1 and 2* ).
->
+To build the ROS wrapping for **CT-ICP**, first build and install the CT-ICP library (see *Steps 1 and 2* ).
+
 > /!\ Set the CMAKE argument `-DWITH_ROS=ON` to the configure step (1) of the superbuild (*Step 1*)
 >
+
+Install the `ROSCore` library, (this should install a shared library named `ROSCore`
+at `<CT_ICP_INSTALL_DIR>/CT_ICP/lib`):
+
+```bash
+cd ros/roscore
+mkdir cmake-build-release && cd  cmake-build-release                  #< Create the build directory
+cmake .. -DCMAKE_BUILD_TYPE=Release                                   #< (2) Configure with the desired options (specify arguments with -D<arg_name>=<arg_value>)
+cmake --build . --target install --config Release --parallel 12       #< Build and Install the ROSCore library
+```
+
 > Then make a symbolic link of the directory `ct_icp_odometry` and `slam_roscore` of this project to the `src` directory
 > of your catkin
 > workspace.
@@ -86,7 +106,7 @@ catkin_make -DSUPERBUILD_INSTALL_DIR=<path-to-superbuild-install-dir>
 
 > If the installation is successful, and after sourcing the workspace's devel directory, you should be able to launch
 > the ROS Nodes installed.
->
+
 > The wrapping defines the following nodes:
 
 - `ct_icp_dataset_node`: A node which publishes pointclouds of ct_icp's different datasets read from disk.
@@ -175,22 +195,39 @@ list [List of SLAM Datasets](https://github.com/youngguncho/awesome-slam-dataset
 
 ### OPTION I -- Using the scripts (on the *ct-icp* datasets)
 
-#### Selecting the config / setting the options
+If the installation of CT-ICP went fine, there should be an executable located
+at `<CT_ICP_INSTALL_DIR>/bin/run_odometry`.
+This executable can be run with a config file with the command:
 
-To run the SLAM call (on Unix, adapt for windows), please follow the following steps:
+```./run_odometry -c <path-to-config-file>```
 
-1. Modify/Copy and modify one of the default config (`default_config.yaml`, `robust_high_frequency_config.yaml`
-   or `robust_driving_config.yaml`) to suit your needs.
-   **Notably:** change the dataset and dataset root_path ```dataset_options_vector.dataset```
-   and ```dataset_options_vector.root_path```.
-2. Launch the SLAM with command:
-   ```./slam -c <config file path, e.g. default_config.yaml>  # Launches the SLAM on the default config```
+See `./config/odometry/driving_config.yaml` for an example of the format of the config file to expect.
 
-3. Find the trajectory (and optionally metrics if the dataset has a ground truth) in the output directory
+If `CT-ICP` was installed with `viz3d`, the SLAM should run along a GUI, otherwise, the trajectory and metrics will be
+saved to disk regularly.
 
 ### OPTION II -- Using the SLAM as a library
 
+After the installation, you can also use `CT_ICP` and `SlamCore` libraries, located in `<CT_ICP_INSTALL_DIR>/lib`,
+for instance with a cmake project with the cmake config files for the libraries located
+at `<CT_ICP_INSTALL_DIR>/lib/cmake`.
+
+See for example `command/cmd_run_odometry.cpp` and `command/odometry_runner.h` for an example of use.
+
+#### Custom Datasets
+
+Some datasets are defined in the library (with expected layout for the Data, see `dataset.h, dataset.cpp`), but you can
+extend
+`ct_icp::ADatasetSequence` to define your own custom datasets.
+
 ### OPTION III -- Using ROS
+
+After completing the ROS installation, use the launch files defined in `ros/catkin_ws/ct_icp_odometry/launch` on a
+rosbag to launch the odometry, for e.g:
+
+```
+roslaunch ct_icp_odometry urban_loco_CAL.launch rosbag:=<path-to-UrbanLoco-root>/CA-20190828190411_blur_align.bag
+```
 
 ## Citation
 
