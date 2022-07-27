@@ -155,6 +155,7 @@ namespace ct_icp {
                 window_ptr->GetWindow().WaitIfPaused();
                 if (window_ptr->GetWindow().stop) {
                     SLAM_LOG(INFO) << "Stopped early by the user. Exiting..." << std::endl;
+#if CT_ICP_WITH_VIZ == 1
                     callback->Clear();
                     if (gui_thread) {
                         auto &instance = viz3d::GUI::Instance();
@@ -162,6 +163,7 @@ namespace ct_icp {
                         gui_thread->join();
                         instance.ClearWindows();
                     }
+#endif // CT_ICP_WITH_VIZ
                     return true;
                 }
 
