@@ -20,7 +20,7 @@ set(MAPPING_RESEARCH_GIT_DIR https://gitlab.kitware.com/keu-computervision/Mappi
 ExternalProject_Add(
         MappingResearchKEU_superbuild
         PREFIX MappingResearchKEU_superbuild
-        GIT_REPOSITORY ${MAPPING_RESEARCH_GIT_DIR}Superbuild.git
+        GIT_REPOSITORY ${MAPPING_RESEARCH_GIT_DIR}/Superbuild.git
         GIT_TAG master
         BUILD_ALWAYS ON
         INSTALL_DIR ${INSTALL_DIR}
