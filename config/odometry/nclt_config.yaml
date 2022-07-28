@@ -1,4 +1,4 @@
-with_viz3d: true
+with_viz3d: false
 generate_directory_prefix: true # Whether to generate a directory prefix for each iteration (yyyy-mm-dd_hh-mm-ss)
 progress_bar: true # Whether to display progress with a progress bar
 debug_information: false # Whether to display debug information (incompatible with progress_bar)

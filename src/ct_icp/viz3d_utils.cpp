@@ -14,7 +14,6 @@ namespace slam {
         value_const_reference operator()(source_const_reference pose) const {
             return pose.begin_pose.pose;
         }
-
     };
 }
 

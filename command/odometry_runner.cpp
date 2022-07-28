@@ -144,27 +144,31 @@ namespace ct_icp {
             slam::frame_id_t frame_id = 0;
 
 #if CT_ICP_WITH_VIZ
-            if (callback)
-                odometry.RegisterCallback(ct_icp::Odometry::OdometryCallback::FINISHED_REGISTRATION,
-                                          *callback);
+            if (options.with_viz3d) {
+                if (callback)
+                    odometry.RegisterCallback(ct_icp::Odometry::OdometryCallback::FINISHED_REGISTRATION,
+                                              *callback);
+            }
 #endif // CT_ICP_WITH_VIZ
 
             double sum_frame_time = 0.;
             while (next_sequence->HasNext()) {
 
 #if CT_ICP_WITH_VIZ == 1
-                window_ptr->GetWindow().WaitIfPaused();
-                if (window_ptr->GetWindow().stop) {
-                    SLAM_LOG(INFO) << "Stopped early by the user. Exiting..." << std::endl;
-                    callback->Clear();
-                    if (gui_thread) {
-                        auto &instance = viz3d::GUI::Instance();
-                        instance.SignalClose();
-                        gui_thread->join();
-                        instance.ClearWindows();
+                if (options.with_viz3d) {
+                    window_ptr->GetWindow().WaitIfPaused();
+                    if (window_ptr->GetWindow().stop) {
+                        SLAM_LOG(INFO) << "Stopped early by the user. Exiting..." << std::endl;
+                        callback->Clear();
+                        if (gui_thread) {
+                            auto &instance = viz3d::GUI::Instance();
+                            instance.SignalClose();
+                            gui_thread->join();
+                            instance.ClearWindows();
+                        }
+                        return true;
                     }
-                return true;
-            }
+                }
 #endif // CT_ICP_WITH_VIZ
 
                 auto init_frame = std::chrono::steady_clock::now();
@@ -198,8 +202,10 @@ namespace ct_icp {
                     auto _begin = slam::make_transform(begin, slam::PoseConversion());
                     auto _end = slam::make_transform(end, slam::PoseConversion());
 #if CT_ICP_WITH_VIZ == 1
-                    auto polydata = slam::polydata_from_poses(_begin, _end);
-                    window_ptr->AddPolyData("Poses", index, polydata);
+                    if (options.with_viz3d) {
+                        auto polydata = slam::polydata_from_poses(_begin, _end);
+                        window_ptr->AddPolyData("Poses", index, polydata);
+                    }
 #endif // CT_ICP_WITH_VIZ == 1
                 }
 
@@ -256,7 +262,7 @@ namespace ct_icp {
                     if (options.exit_early) {
                         SLAM_LOG(ERROR) << "Exiting Early" << std::endl;
 #if CT_ICP_WITH_VIZ
-                        if (gui_thread) {
+                        if (options.with_viz3d && gui_thread) {
                             auto &instance = viz3d::GUI::Instance();
                             instance.SignalClose();
                             gui_thread->join();
@@ -279,7 +285,7 @@ namespace ct_icp {
 
 #if CT_ICP_WITH_VIZ
         callback->Clear();
-        if (gui_thread) {
+        if (options.with_viz3d && gui_thread) {
             auto &instance = viz3d::GUI::Instance();
             instance.SignalClose();
             gui_thread->join();
