@@ -499,8 +499,9 @@ namespace ct_icp {
             const unsigned short magic_number = 44444;
             file->read(reinterpret_cast<char *>(magic), 8);
 
-            for (unsigned short i: magic)
-                CHECK(i == magic_number);
+            for (unsigned short i: magic) {
+                SLAM_CHECK_STREAM(i == magic_number, "The batch does not have a matching magic number");
+            }
 
             unsigned int num_hits, padding;
             unsigned long long utime;
@@ -791,7 +792,7 @@ namespace ct_icp {
         if (HasGroundTruth()) {
             new_frame.begin_pose = ground_truth_->InterpolatePose(new_frame.timestamp_min);
             new_frame.end_pose = ground_truth_->InterpolatePose(new_frame.timestamp_max);
-       }
+        }
 
         return new_frame;
     }
@@ -1232,8 +1233,8 @@ namespace ct_icp {
                 if (function_pattern(entry_path, dirname)) {
                     auto sequence_option = GetDatasetSequence(options, dirname, entry_path);
                     if (sequence_option) {
-                        auto& dataset_seq = *sequence_option;
-                        const auto& seq_info = dataset_seq->GetSequenceInfo();
+                        auto &dataset_seq = *sequence_option;
+                        const auto &seq_info = dataset_seq->GetSequenceInfo();
                         if (!options.use_all_datasets) {
                             if (sequence_names.find(seq_info.sequence_name) == sequence_names.end())
                                 continue;

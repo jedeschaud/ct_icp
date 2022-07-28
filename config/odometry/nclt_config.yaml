@@ -13,6 +13,7 @@ dataset_options:
     use_all_datasets: false
     sequence_options:
       - sequence_name: 2012-01-08
+        max_num_frames: 42760
 
 # ---- ODOMETRY OPTIONS ----
 odometry_options:
@@ -29,7 +30,7 @@ odometry_options:
 
   # -- Frame Options
   voxel_size: 0.5 # The voxel size for the grid sampling of the new frame (before keypoints extraction)
-  max_distance: 100.0 # The threshold of the distance to suppress voxels from the map
+  max_distance: 200.0 # The threshold of the distance to suppress voxels from the map
   distance_error_threshold: 5.0 # The motion of the sensor between two frames which is considered erroneous (stops the odometry)
 
   # -- Map Options
