@@ -31,3 +31,25 @@ jobs:
           mkdir cmake-build-release && cd cmake-build-release
           cmake .. -DCMAKE_BUILD_TYPE=Release
           cmake --build . --target install --config Release --parallel 12
+
+  dev-linux-noros-noviz3d-ubuntu-20:
+    runs-on: ubuntu-20.04
+    env:
+      CC: gcc-11
+      CXX: g++-11
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-dev gcc-multilib g++-multilib libfreetype6-dev libvulkan-dev freeglut3-dev libxrandr-dev libglfw3-dev
+      - name: Install the superbuild
+        run: |
+          mkdir .cmake-build-superbuild && cd .cmake-build-superbuild
+          cmake ../superbuild
+          cmake --build . --config Release
+      - name: Install CT-ICP
+        run: |
+          mkdir cmake-build-release && cd cmake-build-release
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --target install --config Release --parallel 12
