@@ -54,3 +54,8 @@ jobs:
           mkdir cmake-build-release && cd cmake-build-release
           cmake .. -DCMAKE_BUILD_TYPE=Release
           cmake --build . --target install --config Release --parallel 12
+      - name: Run Tests
+        run: |
+          cd .. && ls
+          cd install/CT_ICP
+          readelf -d bin/run_odometry
