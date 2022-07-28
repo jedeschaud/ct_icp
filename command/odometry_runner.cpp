@@ -240,6 +240,7 @@ namespace ct_icp {
                     auto transform = slam::slam_to_vtk_transform(summary.frame.begin_pose.pose.Inverse());
                     window_ptr->ApplyTransform(callback->PointCloudGroupName(), transform);
                     window_ptr->ApplyTransform("Poses", transform);
+                    window_ptr->ApplyTransform("Map", transform);
                 }
 #endif // CT_ICP_WITH_VIZ
 
