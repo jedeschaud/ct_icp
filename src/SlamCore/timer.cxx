@@ -1,3 +1,4 @@
+#include <stdexcept>
 #include <SlamCore/timer.h>
 #include <glog/logging.h>
 

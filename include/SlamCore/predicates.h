@@ -7,15 +7,15 @@ namespace slam {
     /// POSE PREDICATES
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    auto pose_less_by_fid = [](const auto &lhs, const auto &rhs) {
+    inline auto pose_less_by_fid = [](const auto &lhs, const auto &rhs) {
         return lhs.dest_frame_id < rhs.dest_frame_id;
     };
 
-    auto pose_less_by_timestamp = [](const auto &lhs, const auto &rhs) {
+    inline auto pose_less_by_timestamp = [](const auto &lhs, const auto &rhs) {
         return lhs.dest_timestamp < rhs.dest_timestamp;
     };
 
-    auto pose_less_by_fid_and_timestamp = [](const auto &lhs, const auto &rhs) {
+    inline auto pose_less_by_fid_and_timestamp = [](const auto &lhs, const auto &rhs) {
         return lhs.dest_frame_id < rhs.dest_frame_id || (
                 lhs.dest_frame_id == rhs.dest_frame_id && (lhs.dest_timestamp < rhs.dest_timestamp));
     };
