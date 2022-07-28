@@ -1,7 +1,7 @@
-with_viz3d: false
+with_viz3d: true
 generate_directory_prefix: true # Whether to generate a directory prefix for each iteration (yyyy-mm-dd_hh-mm-ss)
-progress_bar: true # Whether to display progress with a progress bar
-debug_information: false # Whether to display debug information (incompatible with progress_bar)
+progress_bar: false # Whether to display progress with a progress bar
+debug_information: true # Whether to display debug information (incompatible with progress_bar)
 output_results: true # Whether to output results to disk
 exit_early: true # Whether to exit early upon a detected failure
 output_dir: .outputs

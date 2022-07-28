@@ -243,6 +243,7 @@ namespace ct_icp {
                 frame.max_t = *max_it;
             }
 
+            frame_indices_.push_back(frame_id_count_ - 1);
             // Remove old point clouds in memory
             while (frame_indices_.size() > options_.max_frames_to_keep) {
                 auto oldest_idx = frame_indices_.front();

@@ -127,7 +127,7 @@ namespace slam {
         }
 
     protected:
-        explicit MultiPolyDataWindow(int queue_size = 10) {
+        explicit MultiPolyDataWindow() {
             //!\\ The Child class must populate the window pointer
             window_ = nullptr;
         };
@@ -165,7 +165,11 @@ namespace slam {
             // Updates Group Information from the Poly Data
             void UpdateGroupInformation();
 
-            slam::blocking_queue<standard_message_t> update_messages_queue;
+            // Sets the max capacity of the queue
+            void SetCapacity(int queue_size = 10);
+
+            slam::blocking_queue<standard_message_t> update_messages_queue =
+                    slam::blocking_queue<standard_message_t>(10);
 
             struct GroupImGuiVars {
                 std::set<std::string> field_names;

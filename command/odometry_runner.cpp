@@ -6,8 +6,9 @@ namespace ct_icp {
 #if CT_ICP_WITH_VIZ == 1
     namespace {
         struct SlamWindow : slam::MultiPolyDataWindow {
-            explicit SlamWindow(std::string &&winname, int queue_size = 40) : slam::MultiPolyDataWindow(queue_size) {
+            explicit SlamWindow(std::string &&winname, int queue_size = 40) : slam::MultiPolyDataWindow() {
                 window_ = std::make_shared<_Window>(std::move(winname));
+                window_->SetCapacity(queue_size);
             }
 
             struct _Window : slam::MultiPolyDataWindow::ChildVTKWindow {
@@ -31,6 +32,9 @@ namespace ct_icp {
                         stop = true;
                     ImGui::PopStyleColor();
 
+                    if (viz3d::ImGui_HorizontalButton("Show Dataset"))
+                        show_map = true;
+
                     slam::MultiPolyDataWindow::ChildVTKWindow::DrawImGuiWindowConfigurations();
                 }
 
@@ -41,6 +45,13 @@ namespace ct_icp {
                     }
                 }
 
+                bool ShowMap() {
+                    bool old_show_map = show_map;
+                    show_map = false;
+                    return old_show_map;
+                }
+
+                bool show_map = false;
                 bool is_playing = true;
                 bool stop = false;
             };
@@ -156,6 +167,12 @@ namespace ct_icp {
 
 #if CT_ICP_WITH_VIZ == 1
                 if (options.with_viz3d) {
+
+                    if (window_ptr->GetWindow().ShowMap()) {
+                        auto pc = odometry.GetMapPointer()->MapAsPointCloud();
+                        auto polydata = slam::polydata_from_pointcloud(*pc);
+                        window_ptr->AddPolyData("Map", 0, polydata);
+                    }
                     window_ptr->GetWindow().WaitIfPaused();
                     if (window_ptr->GetWindow().stop) {
                         SLAM_LOG(INFO) << "Stopped early by the user. Exiting..." << std::endl;

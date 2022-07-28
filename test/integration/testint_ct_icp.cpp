@@ -66,7 +66,7 @@ struct Config {
 /* ------------------------------------------------------------------------------------------------------------------ */
 struct TEST_CT_ICP_WINDOW : slam::MultiPolyDataWindow {
 
-    explicit TEST_CT_ICP_WINDOW(std::string &&winname) : slam::MultiPolyDataWindow(10) {
+    explicit TEST_CT_ICP_WINDOW(std::string &&winname) : slam::MultiPolyDataWindow() {
         auto window = std::make_shared<_Window>(std::move(winname));
 
         auto factory = std::make_unique<slam::PrototypeFactory<ct_icp::RegistrationReactor >>();

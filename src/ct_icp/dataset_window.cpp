@@ -4,7 +4,7 @@ namespace ct_icp {
 
     /* -------------------------------------------------------------------------------------------------------------- */
     DatasetVTKWindow::DatasetVTKWindow(std::string &&winname)
-            : MultiPolyDataWindow(10) {
+            : MultiPolyDataWindow() {
         window_ = std::make_shared<DatasetVTKWindow::_DatasetWindow>(std::move(winname));
         auto window = std::dynamic_pointer_cast<_DatasetWindow>(window_);
         SLAM_CHECK_STREAM(window, "The Window is not in a valid state");

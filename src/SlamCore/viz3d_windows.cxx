@@ -496,6 +496,9 @@ namespace slam {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
+    void MultiPolyDataWindow::ChildVTKWindow::SetCapacity(int queue_size) { update_messages_queue.set_max_capacity(queue_size); }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
     MultiPolyDataWindow::MultiPolyDataWindow(std::string &&winname, int max_capacity) {
         window_ = std::make_shared<ChildVTKWindow>(std::move(winname));
         window_->update_messages_queue.set_max_capacity(max_capacity);

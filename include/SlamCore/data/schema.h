@@ -2,6 +2,7 @@
 #define SlamCore_SCHEMA_H
 
 #include <map>
+#include <optional>
 
 #include <Eigen/Dense>
 #include <glog/logging.h>
