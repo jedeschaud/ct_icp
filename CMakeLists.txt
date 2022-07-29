@@ -8,8 +8,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(WITH_GTSAM "Search GTSAM dependency (disabled by default)" OFF)
 option(WITH_VIZ3D "Search and install viz3d (disabled by default)" OFF)
 option(WITH_PYTHON_BINDING "Install Python bindings" OFF)
-
 set(LOG_PREFIX " [CT_ICP] -- ")
+
 
 # --- Defining Install Location
 if (NOT SUPERBUILD_INSTALL_DIR)
@@ -45,9 +45,10 @@ if (UNIX)
     endif ()
 endif ()
 
-
 SLAM_DEFAULT_VARIABLES()
 SLAM_INCLUDE_SUPERBUILD()
+
+include(cmake/external.cmake)
 
 SLAM_INSTALL_DEFAULT_VARIABLES(TARGET CT_ICP PREFIX CT_ICP)
 set(CMAKE_INSTALL_PREFIX ${CT_ICP_INSTALL_DIR})
@@ -60,17 +61,9 @@ if (NOT TARGET OpenMP::OpenMP_CXX)
     message(INFO "[CT_ICP] Could not find OpenMP")
 endif ()
 
-SLAM_CHECK_TARGETS(Ceres::ceres glog::glog Eigen3::Eigen OpenMP::OpenMP_CXX)
-
 # -- Manually append to the RPATH for CT_ICP shared library the rpath to SlamCore
-#set(CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_RPATH} ${SLAM_CORE_RPATH})
-
-# use, i.e. don't skip the full RPATH for the build tree
-set(CMAKE_SKIP_BUILD_RPATH FALSE)
-set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
-set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
-# add the automatically determined parts of the RPATH
-# which point to directories outside the build tree to the install RPATH
+set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+set(CMAKE_INSTALL_RPATH "${EXTERNAL_DEPENDENCIES_INSTALL_RPATH}:${CMAKE_INSTALL_RPATH}:${CMAKE_INSTALL_PREFIX}/lib")
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 add_subdirectory(src)
