@@ -26,7 +26,6 @@ SLAM_ADD_SOURCES(
 
         algorithm/sampling)
 
-
 SLAM_ADD_LIBRARY(NAME CT_ICP)
 target_include_directories(CT_ICP PUBLIC
         "$<BUILD_INTERFACE:${CT_ICP_INCLUDE_DIR}>"

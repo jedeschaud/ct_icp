@@ -1,6 +1,6 @@
 # -- Main Script to run the Odometry --
 add_executable(run_odometry cmd_run_odometry.cpp odometry_runner.h odometry_runner.cpp)
-target_link_libraries(run_odometry PUBLIC CT_ICP)
+target_link_libraries(run_odometry PUBLIC CT_ICP SlamCore)
 
 if (WITH_VIZ3D)
     LINK_WITH_VIZ3D(TARGET run_odometry)

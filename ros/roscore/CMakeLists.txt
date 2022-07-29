@@ -31,6 +31,7 @@ endif ()
 SLAM_COMPILER_FLAGS()
 SLAM_DEFAULT_VARIABLES()
 SLAM_INCLUDE_SUPERBUILD()
+include(${CT_ICP_ROOT_DIR}/cmake/external.cmake)
 
 # -- SlamCore And SlamCore-viz3d
 find_package(SlamCore REQUIRED CONFIG PATHS ${CT_ICP_INSTALL_DIR} NO_DEFAULT_PATH)
