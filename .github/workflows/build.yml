@@ -59,3 +59,5 @@ jobs:
           find . -maxdepth 2 -type d -exec ls -ld "{}" \;
           cd install/CT_ICP
           readelf -d bin/run_odometry
+          readelf -d lib/libCT_ICP.so
+          readelf -d lib/libSlamCore.so
