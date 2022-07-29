@@ -106,6 +106,7 @@ if (WITH_VIZ3D)
             INSTALL_DIR ${CT_ICP_INSTALL_DIR}
             INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 endif ()
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/cmake DESTINATION ${CT_ICP_INSTALL_DIR}/lib/cmake)
 
 add_subdirectory(test)
 add_subdirectory(command)

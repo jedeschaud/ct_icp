@@ -9,21 +9,24 @@ if (NOT SUPERBUILD_INSTALL_DIR)
     message(FATAL_ERROR "The CMAKE variable `SUPERBUILD_INSTALL_DIR` pointing to the superbuild must be defined")
 endif ()
 
-# -- Find Slam Lib shared library dependencies
-if (NOT SlamCore_DIR)
-    set(SlamCore_DIR ${SUPERBUILD_INSTALL_DIR}/SlamCore/lib/cmake)
+# -- Find shared libcmake --build . --target install --config Release --parallel 12rary dependencies
+if (NOT CT_INSTALL_DIR)
+    set(CT_INSTALL_DIR ${SUPERBUILD_INSTALL_DIR}/CT_ICP)
 endif ()
 
-if (NOT CT_ICP_DIR)
-    set(CT_ICP_DIR ${SUPERBUILD_INSTALL_DIR}/CT_ICP/lib/cmake)
-endif ()
+set(SLAM_CMAKE_SCRIPTS_PATH ${CT_INSTALL_DIR}/cmake)
+include(${CT_INSTALL_DIR}/lib/cmake/cmake/includes.cmake)
+SLAM_DEFAULT_VARIABLES()
+SLAM_INCLUDE_SUPERBUILD()
+include(${CT_INSTALL_DIR}/lib/cmake/cmake/external.cmake)
 
-if (NOT ROSCore_DIR)
-    set(ROSCore_DIR ${SUPERBUILD_INSTALL_DIR}/ROSCore/lib/cmake)
-endif ()
+set(CT_ICP_DIR ${CT_INSTALL_DIR}/lib/cmake)
+set(SlamCore_DIR ${CT_ICP_DIR})
+set(ROSCore_DIR  ${CT_ICP_DIR})
 
 # -- SlamCore dependency
 find_package(SlamCore REQUIRED)
+find_package(CT_ICP REQUIRED)
 
 # -- Find Superbuild dependencies
 SLAM_COMPILER_FLAGS()
