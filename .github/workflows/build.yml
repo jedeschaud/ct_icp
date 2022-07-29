@@ -56,7 +56,6 @@ jobs:
           cmake --build . --target install --config Release --parallel 12
       - name: Run Tests
         run: |
-          cd ../.. && ls
           find . -maxdepth 2 -type d -exec ls -ld "{}" \;
           cd install/CT_ICP
           readelf -d bin/run_odometry
