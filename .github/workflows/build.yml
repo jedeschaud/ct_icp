@@ -56,8 +56,4 @@ jobs:
           cmake --build . --target install --config Release --parallel 12
       - name: Run Tests
         run: |
-          find . -maxdepth 2 -type d -exec ls -ld "{}" \;
-          cd install/CT_ICP
-          readelf -d bin/run_odometry
-          readelf -d lib/libCT_ICP.so
-          readelf -d lib/libSlamCore.so
+          ./install/CT_ICP/test/all_tests

@@ -10,4 +10,5 @@ if (WITH_VIZ3D)
 endif ()
 
 set(CT_ICP_TEST_FILES ${ALL_TEST_FILES} PARENT_SCOPE)
+install(TARGETS all_tests DESTINATION ${CT_ICP_INSTALL_DIR}/test)
 
