@@ -1,8 +1,9 @@
 list(APPEND EXTERNAL_DEPENDENCIES Eigen3::Eigen Ceres::ceres glog::glog
         tsl::robin_map yaml-cpp colormap::colormap tinyply::tinyply)
 if (WITH_VIZ3D)
-    list(APPEND EXTERNAL_DEPENDENCIES viz3d)
+    list(APPEND EXTERNAL_DEPENDENCIES viz3d VTK::FiltersCore)
 endif ()
+
 # --
 SLAM_CHECK_TARGETS(${EXTERNAL_DEPENDENCIES})
 
