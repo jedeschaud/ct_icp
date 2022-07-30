@@ -60,15 +60,15 @@ jobs:
   dev-linux-noros-with-viz3d-ubuntu-20-gcc11:
     runs-on: ubuntu-20.04
     env:
-      CC: gcc-11
-      CXX: g++-11
+      CC: clang-9
+      CXX: clang++-9
     steps:
       - uses: actions/checkout@v2
       - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          sudo apt-get install -y libsdl2-dev gcc-11-multilib g++-11-multilib libfreetype6-dev libvulkan-dev freeglut3-dev libxrandr-dev libglfw3-dev
+          sudo apt-get install -y libsdl2-dev clang-9 libfreetype6-dev libvulkan-dev freeglut3-dev libxrandr-dev libglfw3-dev
       - name: Install the superbuild
         run: |
           mkdir .cmake-build-superbuild && cd .cmake-build-superbuild
