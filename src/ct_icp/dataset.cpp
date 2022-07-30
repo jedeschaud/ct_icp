@@ -999,7 +999,7 @@ namespace ct_icp {
                                                const fs::path &sequence_path,
                                                const SequenceInfo &sequence_info) {
         std::vector<Pose> poses;
-        std::string filename;
+        std::string filename, filepath;
 
         auto transform_poses = [&poses, &options, &sequence_info] {
             Eigen::Matrix4d Calib = Eigen::Matrix4d::Identity();
@@ -1055,7 +1055,8 @@ namespace ct_icp {
             case KITTI:
                 filename = (sequence_info.sequence_name + ".txt");
                 if (fs::exists(sequence_path / filename)) {
-                    poses = slam::LoadPosesKITTIFormat(sequence_path / filename);
+                    filepath = sequence_path / filename;
+                    poses = slam::LoadPosesKITTIFormat(filepath);
                     transform_poses();
                     break;
                 }
@@ -1063,20 +1064,22 @@ namespace ct_icp {
 
             case HILTI_2022:
             case HILTI_2021:
-                return ReadHILTIPosesInLidarFrame(sequence_path / filename, options.dataset);
+                filepath = sequence_path / filename;
+                return ReadHILTIPosesInLidarFrame(filepath, options.dataset);
             case KITTI_CARLA:
                 filename = "poses_gt.txt";
-                if (fs::exists(sequence_path / filename)) {
-                    poses = slam::LoadPosesKITTIFormat(sequence_path / filename);
+                filepath = sequence_path / filename;
+                if (fs::exists(filepath)) {
+                    poses = slam::LoadPosesKITTIFormat(filepath);
                     transform_poses();
                     break;
                 }
                 break;
             case NCLT:
                 filename = "groundtruth_" + sequence_info.sequence_name + ".csv";
-
-                if (fs::exists(sequence_path / sequence_info.sequence_name / filename)) {
-                    poses = ReadNCLTPoses(sequence_path / sequence_info.sequence_name / filename);
+                filepath = sequence_path / sequence_info.sequence_name / filename;
+                if (fs::exists(filepath)) {
+                    poses = ReadNCLTPoses(filepath);
                     transform_poses();
                     break;
                 }
@@ -1087,7 +1090,7 @@ namespace ct_icp {
         }
         if (poses.empty()) {
             LOG(INFO) << "Could not load ground truth for sequence " << sequence_info.sequence_name
-                      << ". Expected at location " << sequence_path / filename << std::endl;
+                      << ". Expected at location " << filepath << std::endl;
             return {};
         }
 
