@@ -71,6 +71,10 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
+          
+          apt search ros-melodic
+          sudo apt install ros-melodic-desktop-full
+
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt-get install -y libsdl2-dev clang-9 libfreetype6-dev libvulkan-dev freeglut3-dev libxrandr-dev libglfw3-dev
       - name: Install the superbuild
@@ -85,6 +89,7 @@ jobs:
           cmake --build . --target install --config Release --parallel 12
       - name: Install ROSCore
         run: |
+          source /opt/ros/melodic/setup.bash
           cd ros/roscore
           mkdir cmake-build-release && cd  cmake-build-release
           cmake .. -DCMAKE_BUILD_TYPE=Release
@@ -116,6 +121,6 @@ jobs:
           mkdir cmake-build-release && cd cmake-build-release
           cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_VIZ3D=ON
           cmake --build . --target install --config Release --parallel 12
-      - name: Run Tests
-        run: |
-          ./install/CT_ICP/test/all_tests
+      #- name: Run Tests
+      #  run: |
+      #    ./install/CT_ICP/test/all_tests
