@@ -65,6 +65,9 @@ jobs:
       CXX: clang++-9
     steps:
       - uses: actions/checkout@v2
+      - uses: ros-tooling/setup-ros@v0.3
+        with:
+          required-ros-distributions: melodic
       - name: Install Dependencies
         run: |
           sudo apt-get update
