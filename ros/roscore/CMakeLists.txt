@@ -14,7 +14,7 @@ include(${CT_ICP_ROOT_DIR}/cmake/includes.cmake)
 
 # -- Default Superbuild Install Location
 if (NOT SUPERBUILD_INSTALL_DIR)
-    set(SUPERBUILD_INSTALL_DIR ${CT_ICP_ROOT_DIR}/../install)
+    set(SUPERBUILD_INSTALL_DIR ${CT_ICP_ROOT_DIR}/install)
     get_filename_component(SUPERBUILD_INSTALL_DIR ${SUPERBUILD_INSTALL_DIR} ABSOLUTE)
     message(INFO "${LOG_PREFIX}Variable \"SUPERBUILD_INSTALL_DIR\" not specified. Trying to set it to ${SUPERBUILD_INSTALL_DIR}")
 endif ()
