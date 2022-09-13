@@ -1,4 +1,4 @@
-list(APPEND EXTERNAL_DEPENDENCIES Eigen3::Eigen Ceres::ceres glog::glog
+list(APPEND EXTERNAL_DEPENDENCIES Ceres::ceres glog::glog
         tsl::robin_map yaml-cpp colormap::colormap tinyply::tinyply)
 if (WITH_VIZ3D)
     list(APPEND EXTERNAL_DEPENDENCIES viz3d VTK::FiltersCore)
