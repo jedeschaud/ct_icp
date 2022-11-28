@@ -3,6 +3,7 @@ cmake-*
 cmake-build*
 imgui.ini
 install/*
+benchmark/*
 wandb*
 
 # Configuration files (e.g. idea)
@@ -13,6 +14,7 @@ wandb*
 *.so
 *.exe
 slam
+*git.h*
 
 # Commit the .gitignore
 !.gitignore
