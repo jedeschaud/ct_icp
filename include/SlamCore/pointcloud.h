@@ -267,6 +267,11 @@ namespace slam {
         /// Schema Infos & Management
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+        // Returns Buffer information about the point cloud
+        // /!\ This is a dangerous operation, as the pointer allows to modify raw data despite the const of this method
+        BufferCollection::BufferInfo GetBufferInfoFromField(const Field &field) const;;
+
         // Returns a const reference to the underlying buffer collection
         const BufferCollection &GetCollection() const;
 

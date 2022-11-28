@@ -246,5 +246,61 @@ namespace slam {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
+    BufferCollection::BufferInfo BufferCollection::GetBufferInfoFromElement(const std::string &element_name) const {
+        SLAM_CHECK_STREAM(IsElementAValidBufferInfo(element_name),
+                          "The element " << element_name << " is not a valid element name in the point cloud.");
+        BufferCollection::BufferInfo buff_info;
+        auto &elem_info = GetElement(element_name);
+        auto &item_info = elem_info.parent;
+        buff_info.item_data_ptr = item_info->parent_buffer->view_data_ptr;
+        buff_info.item_data_ptr += elem_info.offset_in_item;
+        buff_info.item_size = item_info->item_size;
+        buff_info.property_type = elem_info.properties[0].type;
+        buff_info.num_items = item_info->parent_buffer->NumItems();
+        buff_info.property_type = elem_info.properties[0].type;
+        buff_info.dimensions = 0;
+        for (auto &pty: elem_info.properties)
+            buff_info.dimensions += pty.dimension;
+        buff_info.field_size = buff_info.dimensions * PropertySize(buff_info.property_type);
+        return buff_info;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    bool BufferCollection::IsElementAValidBufferInfo(const std::string &element_name) const {
+        if (!HasElement(element_name))
+            return false;
+        const auto &elem_info = GetElement(element_name);
+        if (elem_info.properties.empty())
+            return false;
+        const auto &type = elem_info.properties[0].type;
+        for (auto i(1); i < elem_info.properties.size(); i++) {
+            if (elem_info.properties[i].type != type)
+                return false;
+        }
+        return true;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    BufferCollection::BufferInfo BufferCollection::GetBufferInfoFromProperty(const std::string &element_name,
+                                                                             const std::string &pty_name) const {
+        SLAM_CHECK_STREAM(HasProperty(element_name, pty_name),
+                          "The (element, property) pair : (" << element_name << ","
+                                                             << pty_name << ") does not exist in the buffer");
+        BufferCollection::BufferInfo buff_info;
+        auto &elem_info = GetElement(element_name);
+        auto &pty_info = elem_info.GetProperty(pty_name);
+        auto &item_info = elem_info.parent;
+        buff_info.item_data_ptr = item_info->parent_buffer->view_data_ptr;
+        buff_info.item_data_ptr += elem_info.offset_in_item;
+        buff_info.item_data_ptr += pty_info.offset_in_elem;
+        buff_info.item_size = item_info->item_size;
+        buff_info.property_type = pty_info.type;
+        buff_info.num_items = item_info->parent_buffer->NumItems();
+        buff_info.dimensions = pty_info.dimension;
+        buff_info.field_size = buff_info.dimensions * PropertySize(buff_info.property_type);
+        return buff_info;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
 
 }

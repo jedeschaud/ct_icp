@@ -6,8 +6,7 @@ project(binding)
 pybind11_add_module(pyct_icp pyct_icp/pyct_icp.cpp)
 target_link_libraries(pyct_icp PUBLIC CT_ICP)
 
-
-set(LIB_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/pyct_icp") 
+set(LIB_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/pyct_icp")
 SET_TARGET_PROPERTIES(pyct_icp
         PROPERTIES
         PREFIX ""
