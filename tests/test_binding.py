@@ -15,15 +15,45 @@ class TestBinding(unittest.TestCase):
     def test_installation(self):
         self.assertEqual(True, _with_pct)  # add assertion here
 
-    def test_pointcloud_creation(self):
-        pc = pct.MakeEmptyPointCloud()
-        xyz = pc.GetXYZ()
-        xyz[:, :3] = 10.
+    def test_pointcloud_basics(self):
+        # ########## BASICS ########## #
+        pc = pct.PointCloud()  # Create an empty point cloud
+        pc.Resize(10)  # Resizes the point cloud
+        self.assertEqual(pc.Size(), 10)
+
+        xyz = pc.GetXYZ()  # The default point cloud only allocates a XYZ buffer
+        self.assertEqual(type(xyz), np.ndarray)  # The GetXYZ returns a numpy array which is a view of the C++ buffer
+
+        self.assertEqual(np.linalg.norm(xyz), 0.)  # It is null by default
+        xyz[:, :3] = 10.  # Uses the standard numpy API to access / modifies the C++ buffer (No resize !)
+
+        # xyz is a shallow copy, the buffer is modified, as shown below
         xyz_bis = pc.GetXYZ()
-        print(xyz[:10])
-        print(xyz_bis[:10])
-        self.assertEqual(xyz_bis[0, 0], 10.)
-        print(type(xyz))
+        self.assertEqual(xyz_bis[0, 0], 10.)  # The second xyz_bis array has the same modification than xyz
+
+        # ########## FIELDS ########## #
+        self.assertFalse(pc.HasRGBField())  # The point cloud does not yet have other fields defined
+        pc.AddRGBField()  # Adds a RGB Field to the point cloud
+        self.assertTrue(pc.HasRGBField())
+        rgb = pc.GetRGB()
+        self.assertTrue(rgb.shape == (pc.Size(), 3))
+
+        # ########## Collection of Fields ########## #
+        # pc.AddRGBField() : Throws an exception because the point cloud already has the field
+        pc.AddRawPointsField()
+        raw_xyz = pc.GetRawPoints()
+        pc.AddWorldPointsField()
+        world_xyz = pc.GetWorldPoints()
+        pc.AddNormalsField()
+        normals = pc.GetNormals()
+        pc.AddTimestampsField()
+        timestamps = pc.GetTimestamps()
+        pc.AddIntensityField()
+        intensity = pc.GetIntensity()
+
+        # Fields
+        for field in [raw_xyz, world_xyz, normals, timestamps, intensity]:
+            self.assertEqual(field.shape[0], pc.Size())
 
     # def test_frame(self):
     #     self.test_installation()

@@ -42,12 +42,121 @@ std::string SlamTypeToPybind11DTYPEForm(slam::PROPERTY_TYPE type) {
 
 // Wrapper for a point cloud
 // A point cloud should be interpretable as a numpy structured array (and reciprocally)
-struct PY_PointCloud {
+class PY_PointCloud {
+public:
+
+    PY_PointCloud() {
+        pointcloud = slam::PointCloud::DefaultXYZPtr<float>();
+    }
+
+    PY_PointCloud(slam::PointCloudPtr pc) : pointcloud(pc) {}
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// API
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    PY_PointCloud Clone() const {
+        return PY_PointCloud{pointcloud->DeepCopyPtr()};
+    }
+
+    void Resize(size_t num_points) {
+        pointcloud->resize(num_points);
+    }
+
+    size_t Size() const {
+        return pointcloud->size();
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// FIELDS GETTERS
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    /*! @brief  Defines a Getter for a PointCloud Field, and returns a numpy array providing a mutable view of the data
+     *          Without any copy (non const method) or with a copy (const method).
+     */
+#define GETTER_POINTCLOUD_FIELD(field) \
+    py::array Get## field () { \
+        SLAM_CHECK_STREAM(pointcloud, "The point cloud is null !"); \
+        SLAM_CHECK_STREAM(pointcloud->Has ##field (), "The point cloud does not have a " #field "Field");  \
+        auto _field = pointcloud->Get## field ##Field();           \
+        SLAM_CHECK_STREAM(!_field.IsItem(), "The xyz field is an item... This should not happen"); \
+        return py::array(BufferInfoFromField(_field), hack); \
+    };                                 \
+    py::array Get## field ##Copy () const { \
+        SLAM_CHECK_STREAM(pointcloud, "The point cloud is null !"); \
+        SLAM_CHECK_STREAM(pointcloud->Has ##field (), "The point cloud does not have a ##field## Field");  \
+        auto _field = pointcloud->Get## field ##Field();           \
+        SLAM_CHECK_STREAM(!_field.IsItem(), "The xyz field is an item... This should not happen"); \
+        return py::array(BufferInfoFromField(_field)); \
+    };                                 \
+    bool Has## field ##Field () const { \
+        SLAM_CHECK_STREAM(pointcloud, "The point cloud is null !"); \
+        return pointcloud->Has ##field ();  \
+    };                                      \
+
+
+    py::array GetXYZ() {
+        // Special treatment for XYZ, as it does not have a GetXYZField method
+        SLAM_CHECK_STREAM(pointcloud, "The point cloud is null !");
+        auto &field = pointcloud->GetXYZField();
+        SLAM_CHECK_STREAM(!field.IsItem(), "The xyz field is an item... This should not happen");
+        return py::array(BufferInfoFromField(field), hack); // Passes the handle to avoid a copy of the array
+    };
+
+    py::array GetXYZCopy() const {
+        // Special treatment for XYZ, as it does not have a GetXYZField method
+        SLAM_CHECK_STREAM(pointcloud, "The point cloud is null !");
+        auto &field = pointcloud->GetXYZField();
+        SLAM_CHECK_STREAM(!field.IsItem(), "The xyz field is an item... This should not happen");
+        return py::array(BufferInfoFromField(field));
+    };
+
+    GETTER_POINTCLOUD_FIELD(RawPoints)
+
+    GETTER_POINTCLOUD_FIELD(WorldPoints)
+
+    GETTER_POINTCLOUD_FIELD(Normals)
+
+    GETTER_POINTCLOUD_FIELD(RGB)
+
+    GETTER_POINTCLOUD_FIELD(Intensity)
+
+    GETTER_POINTCLOUD_FIELD(Timestamps)
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///  Add default fields
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define ADD_DEFAULT_FIELD(field) \
+    void Add ## field ##Field() { \
+        SLAM_CHECK_STREAM(pointcloud, "The point cloud is null"); \
+        SLAM_CHECK_STREAM(!pointcloud->Has ## field(), "The " #field " Field already exists !");  \
+        pointcloud->AddDefault ## field ## Field(); \
+    }
+
+    ADD_DEFAULT_FIELD(RawPoints)
+
+    ADD_DEFAULT_FIELD(WorldPoints)
+
+    ADD_DEFAULT_FIELD(RGB)
+
+    ADD_DEFAULT_FIELD(Timestamps)
+
+    ADD_DEFAULT_FIELD(Intensity)
+
+    ADD_DEFAULT_FIELD(Normals)
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// TODO : GENERIC PointCloud Fields API
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
     slam::PointCloudPtr pointcloud = nullptr;
-    py::str hack;
 
-    py::buffer_info BufferInfoFromField(const slam::PointCloud::Field &field) {
+private:
+    py::str hack; // Handle to prevent unsolicited copies when returning an array
+
+    py::buffer_info BufferInfoFromField(const slam::PointCloud::Field &field) const {
         SLAM_CHECK_STREAM(pointcloud, "The point cloud is null !");
         auto buff_info = pointcloud->GetBufferInfoFromField(field);
         return py::buffer_info(
@@ -59,14 +168,6 @@ struct PY_PointCloud {
                 {ssize_t(buff_info.item_size), ssize_t(slam::PropertySize(buff_info.property_type))}
         );
     }
-
-    py::array GetXYZ() {
-        SLAM_CHECK_STREAM(pointcloud, "The point cloud is null !");
-        auto &field = pointcloud->GetXYZField();
-        bool is_float = false;
-        SLAM_CHECK_STREAM(!field.IsItem(), "The xyz field is an item... This should not happen");
-        return py::array(BufferInfoFromField(field), hack);
-    };
 
 };
 
@@ -159,9 +260,25 @@ PYBIND11_MODULE(pyct_icp, m) {
     /// POINT CLOUD API
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#define MODULE_PC_FIELD(field) \
+    .def("Get"#field, &PY_PointCloud::Get## field)
+#define MODULE_PC_FIELD_WITH_DEFAULT(field) \
+    MODULE_PC_FIELD(field)                  \
+    .def("Add" #field "Field", &PY_PointCloud::Add## field ## Field) \
+    .def("Has" #field "Field", &PY_PointCloud::Has## field ## Field)
+
     py::class_<PY_PointCloud>(m, "PointCloud")
             .def(py::init())
-            .def("GetXYZ", &PY_PointCloud::GetXYZ);
+                    MODULE_PC_FIELD(XYZ)
+                    MODULE_PC_FIELD_WITH_DEFAULT(RawPoints)
+                    MODULE_PC_FIELD_WITH_DEFAULT(WorldPoints)
+                    MODULE_PC_FIELD_WITH_DEFAULT(Normals)
+                    MODULE_PC_FIELD_WITH_DEFAULT(Intensity)
+                    MODULE_PC_FIELD_WITH_DEFAULT(RGB)
+                    MODULE_PC_FIELD_WITH_DEFAULT(Timestamps)
+            .def("Size", &PY_PointCloud::Size)
+            .def("Resize", &PY_PointCloud::Resize)
+            .def("Clone", &PY_PointCloud::Clone);
 
     m.def("MakeEmptyPointCloud", []() -> PY_PointCloud {
         auto pc = PY_PointCloud{slam::PointCloud::DefaultXYZPtr<float>()};
