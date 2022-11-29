@@ -10,6 +10,7 @@
 
 #include <SlamCore/types.h>
 #include <SlamCore/pointcloud.h>
+#include <SlamCore/io.h>
 
 namespace py = pybind11;
 
@@ -328,6 +329,36 @@ PYBIND11_MODULE(pyct_icp, m) {
             .def("Size", &PY_PointCloud::Size)
             .def("Resize", &PY_PointCloud::Resize)
             .def("Clone", &PY_PointCloud::Clone);
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// IO Methods
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    m.def("WritePointCloudAsPLY", [](const std::string &filepath, const PY_PointCloud &pc) {
+        SLAM_CHECK_STREAM(pc.pointcloud, "The point cloud is null")
+        try {
+            slam::WritePLY(filepath, *pc.pointcloud,
+                           slam::PLYSchemaMapper::BuildDefaultFromBufferCollection(pc.pointcloud->GetCollection()));
+        } catch (std::exception &e) {
+            SLAM_LOG(ERROR) << "Failed to write the point cloud to the file " << filepath << std::endl;
+            SLAM_LOG(ERROR) << "Caught exception " << e.what() << std::endl;
+        }
+    });
+
+    m.def("ReadPointCloudFromPLY", [](const std::string &filepath) {
+        auto pc = slam::ReadPointCloudFromPLY(filepath);
+        pc->RegisterFieldsFromSchema();
+        return PY_PointCloud{pc};
+    });
+
+    m.def("ReadPosesFromPLY", [](const std::string &filepath) { return slam::ReadPosesFromPLY(filepath); });
+    m.def("WritePosesAsPLY", [](const std::string &filepath,
+                                const std::vector<slam::Pose> &poses) { slam::SavePosesAsPLY(filepath, poses); });
+    m.def("ReadKITTIPoses", [](const std::string &filepath) { slam::LoadPosesKITTIFormat(filepath); });
+    m.def("SaveKITTIPoses", [](const std::string &filepath,
+                               const std::vector<slam::Pose> &poses) { slam::SavePosesKITTIFormat(filepath, poses); });
+
 
 //    /// LiDARFrame : A wrapper around a vector of ct_icp::Point3D
 //    PYBIND11_NUMPY_DTYPE(PyLiDARPoint, raw_point, pt, alpha_timestamp, timestamp, frame_index);

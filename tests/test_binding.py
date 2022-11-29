@@ -119,6 +119,46 @@ class TestBinding(unittest.TestCase):
         for field in [raw_xyz, world_xyz, normals, timestamps, intensity]:
             self.assertEqual(field.shape[0], pc.Size())
 
+    def test_io(self):
+        # ########### READ / WRITE Point Cloud  ########### #
+        pc = pct.PointCloud()
+        pc.Resize(129)
+        xyz = pc.GetXYZ()
+        pc.AddRGBField()
+        rgb = pc.GetRGB()
+
+        xyz[:, :] = np.random.randn(129, 3)
+        rgb[:, :] = np.random.randn(129, 3)
+
+        pct.WritePointCloudAsPLY("/tmp/test.ply", pc)
+        pc_bis = pct.ReadPointCloudFromPLY("/tmp/test.ply")
+        self.assertTrue(pc_bis.HasRGBField())
+        self.assertEqual(pc_bis.Size(), pc.Size())
+
+        xyz_bis = pc_bis.GetXYZ()
+        rgb_bis = pc_bis.GetRGB()
+
+        diff_xyz = np.linalg.norm(xyz_bis - xyz)
+        diff_rgb = np.linalg.norm(rgb_bis - rgb)
+        self.assertLess(diff_xyz, 1.e-10)
+        self.assertLess(diff_rgb, 1.e-10)
+
+        # ########### Poses  ########### #
+        def rand_pose():
+            _pose = pct.Pose()
+            _pose.pose = pct.SE3.Random()
+            return _pose
+
+        poses = [rand_pose() for _ in range(10)]
+        pct.WritePosesAsPLY("/tmp/test_poses.ply", poses)
+        poses_bis = pct.ReadPosesFromPLY("/tmp/test_poses.ply")
+
+        self.assertEqual(len(poses), len(poses_bis))
+        self.assertEqual(len(poses), 10)
+        for pose1, pose2 in zip(poses, poses_bis):
+            diff = np.linalg.norm(pose1.Matrix() - pose2.Matrix())
+            self.assertLess(diff, 1.e-10)
+
     # def test_frame(self):
     #     self.test_installation()
     #

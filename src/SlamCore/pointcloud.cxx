@@ -250,6 +250,13 @@ namespace slam {
             }
         }
 
+        if (!rgb && collection_.HasElement("rgb")) {
+            auto item_idx = int(collection_.GetItemIndex("rgb"));
+            if (collection_.HasElement("rgb")) {
+                SetRGBField({item_idx, "rgb"});
+            }
+        }
+
         // Try to find the world point from the element named 'world_point' in the schema
         if (!world_point && (collection_.HasElement("world_point"))) {
             auto item_idx = int(collection_.GetItemIndex("world_point"));
