@@ -14,7 +14,6 @@
 #include <math.h>
 #endif
 
-
 namespace ct_icp {
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -381,193 +380,190 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-    /// NCLT Iterator for NCLT
-    class NCLTIterator final : public ADatasetSequence {
-    public:
+    slam::ItemSchema NCLTIterator::LidarPoint::DefaultSchema() {
+        return slam::ItemSchema::Builder(sizeof(LidarPoint))
+                .AddElement("vertex", offsetof(LidarPoint, xyz))
+                .AddElement("properties", 0)
+                .AddScalarProperty<double>("vertex", "xyz", 0, 3)
+                .AddScalarProperty<double>("properties", "x", 0)
+                .AddScalarProperty<double>("properties", "y", sizeof(double))
+                .AddScalarProperty<double>("properties", "z", sizeof(double) * 2)
+                .AddScalarProperty<double>("properties", "timestamp", offsetof(LidarPoint, timestamp))
+                .Build();
+    };
 
-        struct LidarPoint {
-            Eigen::Vector3d xyz;
-            double timestamp = -1.;
+    /* -------------------------------------------------------------------------------------------------------------- */
+    NCLTIterator::NCLTIterator(const std::string &hits_filepath,
+                               const std::string &seq_name,
+                               int num_aggregated_packets)
+            : ct_icp::ADatasetSequence(),
+              num_aggregated_pc_(num_aggregated_packets) {
+        sequence_name_ = seq_name;
+        hits_file_path_ = hits_filepath;
+        GetSequenceInfo().sequence_name = seq_name;
+        GetSequenceInfo().label = seq_name;
+        OpenFile(hits_file_path_);
+    }
 
-            static slam::ItemSchema DefaultSchema() {
-                return slam::ItemSchema::Builder(sizeof(LidarPoint))
-                        .AddElement("vertex", offsetof(LidarPoint, xyz))
-                        .AddElement("properties", 0)
-                        .AddScalarProperty<double>("vertex", "xyz", 0, 3)
-                        .AddScalarProperty<double>("properties", "x", 0)
-                        .AddScalarProperty<double>("properties", "y", sizeof(double))
-                        .AddScalarProperty<double>("properties", "z", sizeof(double) * 2)
-                        .AddScalarProperty<double>("properties", "timestamp", offsetof(LidarPoint, timestamp))
-                        .Build();
+    /* -------------------------------------------------------------------------------------------------------------- */
+    std::shared_ptr<NCLTIterator> NCLTIterator::NCLTIteratorFromHitsFile(const std::string &vel_hits_file,
+                                                                         const std::string &sequence_name) {
+        SLAM_CHECK_STREAM(fs::exists(vel_hits_file) && fs::is_regular_file(vel_hits_file),
+                          "The file path " << vel_hits_file << " is not a regular file");
+        auto nclt_sequence = std::make_shared<NCLTIterator>(vel_hits_file, sequence_name);
+        nclt_sequence->hits_file_path_ = vel_hits_file;
+        return nclt_sequence;
+    }
+
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    void NCLTIterator::SkipFrame() {
+        CHECK(HasNext()) << "Cannot skip this frame. No more frames available" << std::endl;
+        auto frame = DoNext(true);
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    bool NCLTIterator::HasNext() const {
+        CHECK(file != nullptr) << "An error has occured, the velodyne hits file is closed" << std::endl;
+        return !file->eof() && (max_num_frames_ < 0 || current_frame_id_ < max_num_frames_ + init_frame_id_);
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    void NCLTIterator::SetInitFrame(int frame_index) {
+        init_frame_id_ = frame_index;
+        OpenFile(hits_file_path_);
+        for (int i(0); i < frame_index; i++) {
+            std::cout << "[NCLT] Jumping frame " << i << std::endl;
+            DoNext(true);
+        }
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    void NCLTIterator::SetGroundTruth(std::vector<Pose> &&poses) {
+        ground_truth_.emplace(slam::LinearContinuousTrajectory::Create(std::move(poses)));
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    std::optional<std::vector<slam::Pose>> NCLTIterator::GroundTruth() {
+        if (ground_truth_) return ground_truth_->Poses();
+        return {};
+    };
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    size_t NCLTIterator::NumFrames() const {
+        return max_num_frames_;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    NCLTIterator::Frame NCLTIterator::DoNext(bool jump_frame) {
+        auto pc_ptr = slam::PointCloud::MakeEmptyPointCloud<LidarPoint, double>({LidarPoint::DefaultSchema()},
+                                                                                "vertex");
+        pc_ptr->RegisterFieldsFromSchema();
+        // Normalize timestamps
+        double min_timestamp = std::numeric_limits<double>::infinity(), max_timestamp = std::numeric_limits<double>::lowest();
+        for (int iter(0); iter < num_aggregated_pc_; ++iter) {
+            if (!HasNext())
+                break;
+
+            auto next_batch = NextBatch(jump_frame);
+
+            if (jump_frame)
+                continue;
+
+            auto old_size = pc_ptr->size();
+
+            if (!next_batch.empty()) {
+                auto timestamp = next_batch[0].timestamp;
+                if (timestamp < min_timestamp)
+                    min_timestamp = timestamp;
+                if (timestamp > max_timestamp)
+                    max_timestamp = timestamp;
             }
 
-            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-        };
-
-        explicit NCLTIterator(const DatasetOptions &options, SequenceInfo &&seq_info) : ct_icp::ADatasetSequence(
-                std::move(seq_info)), num_aggregated_pc_(options.nclt_num_aggregated_pc) {
-            sequence_name_ = std::string(NCLT_SEQUENCE_NAMES[seq_info_.sequence_id]);
-            root_path_ = options.root_path;
-            OpenFile();
+            pc_ptr->resize(old_size + next_batch.size());
+            auto points_view = pc_ptr->GetCollection().item<LidarPoint>(0);
+            std::copy(next_batch.begin(), next_batch.end(), points_view.begin() + old_size);
         }
 
-        void SkipFrame() override {
-            CHECK(HasNext()) << "Cannot skip this frame. No more frames available" << std::endl;
-            auto frame = DoNext(true);
+        Frame frame{pc_ptr, {}, {}};
+        if (ground_truth_ && frame.pointcloud->size() > 0) {
+            auto timestamps = frame.pointcloud->PropertyView<double>("properties", "timestamp");
+            auto min_max = std::minmax(timestamps.begin(), timestamps.end());
+            double min_t = *min_max.first;
+            double max_t = *min_max.second;
+            frame.begin_pose = ground_truth_->InterpolatePose(*min_max.first);
+            frame.end_pose = ground_truth_->InterpolatePose(*min_max.second);
+        }
+        current_frame_id_++;
+        return frame;
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    NCLTIterator::Frame NCLTIterator::NextUnfilteredFrame() {
+        return DoNext();
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    std::vector<NCLTIterator::LidarPoint> NCLTIterator::NextBatch(bool jump_batch) {
+        CHECK(HasNext()) << "No more points to read" << std::endl;
+        std::vector<LidarPoint> points;
+
+        unsigned short magic[4];
+        const unsigned short magic_number = 44444;
+        file->read(reinterpret_cast<char *>(magic), 8);
+
+        for (unsigned short i: magic) {
+            SLAM_CHECK_STREAM(i == magic_number, "The batch does not have a matching magic number");
         }
 
-        [[nodiscard]] bool HasNext() const override {
-            CHECK(file != nullptr) << "An error has occured, the velodyne hits file is closed" << std::endl;
-            return !file->eof() && (max_num_frames_ < 0 || current_frame_id_ < max_num_frames_ + init_frame_id_);
-        }
+        unsigned int num_hits, padding;
+        unsigned long long utime;
 
-        void SetInitFrame(int frame_index) override {
-            init_frame_id_ = frame_index;
-            OpenFile();
-            for (int i(0); i < frame_index; i++) {
-                std::cout << "[NCLT] Jumping frame " << i << std::endl;
-                DoNext(true);
-            }
-        }
+        file->read(reinterpret_cast<char *>(&num_hits), 4);
+        file->read(reinterpret_cast<char *>(&utime), 8);
+        file->read(reinterpret_cast<char *>(&padding), 4);
 
-        void SetGroundTruth(std::vector<Pose> &&poses) {
-            ground_truth_.emplace(slam::LinearContinuousTrajectory::Create(std::move(poses)));
-        }
-
-
-        std::optional<std::vector<slam::Pose>> GroundTruth() override {
-            if (ground_truth_) return ground_truth_->Poses();
-            return {};
-        };
-
-        size_t NumFrames() const override {
-            return max_num_frames_;
-        }
-
-        Frame DoNext(bool jump_frame = false) {
-            auto pc_ptr = slam::PointCloud::MakeEmptyPointCloud<LidarPoint, double>({LidarPoint::DefaultSchema()},
-                                                                                    "vertex");
-            pc_ptr->RegisterFieldsFromSchema();
-            // Normalize timestamps
-            double min_timestamp = std::numeric_limits<double>::infinity(), max_timestamp = std::numeric_limits<double>::lowest();
-            for (int iter(0); iter < num_aggregated_pc_; ++iter) {
-                if (!HasNext())
-                    break;
-
-                auto next_batch = NextBatch(jump_frame);
-
-                if (jump_frame)
-                    continue;
-
-                auto old_size = pc_ptr->size();
-
-                if (!next_batch.empty()) {
-                    auto timestamp = next_batch[0].timestamp;
-                    if (timestamp < min_timestamp)
-                        min_timestamp = timestamp;
-                    if (timestamp > max_timestamp)
-                        max_timestamp = timestamp;
-                }
-
-                pc_ptr->resize(old_size + next_batch.size());
-                auto points_view = pc_ptr->GetCollection().item<LidarPoint>(0);
-                std::copy(next_batch.begin(), next_batch.end(), points_view.begin() + old_size);
-            }
-
-            Frame frame{pc_ptr, {}, {}};
-            if (ground_truth_ && frame.pointcloud->size() > 0) {
-                auto timestamps = frame.pointcloud->PropertyView<double>("properties", "timestamp");
-                auto min_max = std::minmax(timestamps.begin(), timestamps.end());
-                double min_t = *min_max.first;
-                double max_t = *min_max.second;
-                frame.begin_pose = ground_truth_->InterpolatePose(*min_max.first);
-                frame.end_pose = ground_truth_->InterpolatePose(*min_max.second);
-            }
-            current_frame_id_++;
-            return frame;
-        }
-
-        Frame NextUnfilteredFrame() override {
-            return DoNext();
-        }
-
-        std::vector<LidarPoint> NextBatch(bool jump_batch) {
-            CHECK(HasNext()) << "No more points to read" << std::endl;
-            std::vector<LidarPoint> points;
-
-            unsigned short magic[4];
-            const unsigned short magic_number = 44444;
-            file->read(reinterpret_cast<char *>(magic), 8);
-
-            for (unsigned short i: magic) {
-                SLAM_CHECK_STREAM(i == magic_number, "The batch does not have a matching magic number");
-            }
-
-            unsigned int num_hits, padding;
-            unsigned long long utime;
-
-            file->read(reinterpret_cast<char *>(&num_hits), 4);
-            file->read(reinterpret_cast<char *>(&utime), 8);
-            file->read(reinterpret_cast<char *>(&padding), 4);
-
-            unsigned short xyz[3];
-            unsigned char il[2];
-            if (jump_batch) {
-                file->ignore((sizeof(xyz) + sizeof(il)) * num_hits);
-                return points;
-            }
-            points.resize(num_hits);
-
-            double _x, _y, _z;
-            for (int pid(0); pid < num_hits; pid++) {
-                file->read(reinterpret_cast<char *>(xyz), sizeof(xyz));
-                file->read(reinterpret_cast<char *>(il), sizeof(il));
-
-                _x = ((double) xyz[0]) * 0.005 - 100.0;
-                _y = ((double) xyz[1]) * 0.005 - 100.0;
-                _z = ((double) xyz[2]) * 0.005 - 100.0;
-
-                auto &point_3d = points[pid];
-                point_3d.xyz = Eigen::Vector3d(_x, _y, _z);
-                point_3d.timestamp = (double) utime; // TODO: Convert the time in seconds
-            }
+        unsigned short xyz[3];
+        unsigned char il[2];
+        if (jump_batch) {
+            file->ignore((sizeof(xyz) + sizeof(il)) * num_hits);
             return points;
         }
+        points.resize(num_hits);
 
+        double _x, _y, _z;
+        for (int pid(0); pid < num_hits; pid++) {
+            file->read(reinterpret_cast<char *>(xyz), sizeof(xyz));
+            file->read(reinterpret_cast<char *>(il), sizeof(il));
 
-        ~NCLTIterator() final {
-            Close();
+            _x = ((double) xyz[0]) * 0.005 - 100.0;
+            _y = ((double) xyz[1]) * 0.005 - 100.0;
+            _z = ((double) xyz[2]) * 0.005 - 100.0;
+
+            auto &point_3d = points[pid];
+            point_3d.xyz = Eigen::Vector3d(_x, _y, _z);
+            point_3d.timestamp = (double) utime; // TODO: Convert the time in seconds
         }
+        return points;
+    }
 
-    private:
+    /* -------------------------------------------------------------------------------------------------------------- */
+    NCLTIterator::~NCLTIterator() { Close(); }
 
-        void OpenFile() {
-            Close();
-#ifdef WITH_STD_FILESYSTEM
-            fs::path root_path(root_path_);
-            auto _hits_file_path = root_path / (sequence_name_ + "_vel") / sequence_name_ / "velodyne_hits.bin";
-            CHECK(fs::exists(_hits_file_path))
-                            << "The file " << _hits_file_path << " does not exist on disk" << std::endl;
-            auto hits_file_path = _hits_file_path.string();
-#elif
-            auto hits_file_path = root_path_ + sequence_name_ + "_vel/" + sequence_name_ + "/velodyne_hits.bin";
-#endif
-            file = std::make_unique<std::ifstream>(hits_file_path);
+    /* -------------------------------------------------------------------------------------------------------------- */
+    void NCLTIterator::OpenFile(const std::string &hits_file_path) {
+        Close();
+        file = std::make_unique<std::ifstream>(hits_file_path);
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    void NCLTIterator::Close() {
+        if (file) {
+            file->close();
+            file = nullptr;
         }
+    }
 
-        void Close() {
-            if (file) {
-                file->close();
-                file = nullptr;
-            }
-        }
-
-        int num_aggregated_pc_;
-
-        std::optional<slam::LinearContinuousTrajectory> ground_truth_{};
-        std::unique_ptr<std::ifstream> file = nullptr;
-        std::string sequence_name_, root_path_;
-    };
 
     /* -------------------------------------------------------------------------------------------------------------- */
     DATASET DATASETFromString(const std::string &dataset) {
@@ -598,7 +594,7 @@ namespace ct_icp {
         }
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     std::string DATASETEnumToString(DATASET dataset) {
         switch (dataset) {
             case KITTI_CARLA:
@@ -626,7 +622,7 @@ namespace ct_icp {
         }
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     bool IsDrivingDataset(DATASET dataset) {
         switch (dataset) {
             case HILTI_2021:
@@ -638,7 +634,7 @@ namespace ct_icp {
         }
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     std::vector<slam::Pose> ReadHILTIPosesInIMUFrame(const std::string &file_path) {
         std::ifstream input_file(file_path);
         std::vector<slam::Pose> poses;
@@ -661,7 +657,7 @@ namespace ct_icp {
         return poses;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     std::vector<slam::Pose> ReadHILTIPosesInLidarFrame(const std::string &file_path, DATASET hilti_dataset) {
         SLAM_CHECK_STREAM(hilti_dataset == HILTI_2021 || hilti_dataset == HILTI_2022,
                           "The dataset is not a HILTI dataset!");
@@ -676,11 +672,10 @@ namespace ct_icp {
         return poses;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     SyntheticSequence::SyntheticSequence(slam::SyntheticSensorAcquisition &&sensor_acquisition,
-                                         SequenceInfo &&seq_info,
                                          std::vector<slam::Pose> &&gt_poses) :
-            ct_icp::ADatasetSequence(std::move(seq_info)) {
+            ct_icp::ADatasetSequence() {
         acquisition_ = std::move(sensor_acquisition);
         ground_truth_poses_ = std::move(gt_poses);
         auto max_possible_num_frames = std::max(static_cast<int>(ground_truth_poses_.size()) - init_frame_id_, 0);
@@ -689,14 +684,14 @@ namespace ct_icp {
         seq_info_.with_ground_truth = true;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     std::shared_ptr<SyntheticSequence> SyntheticSequence::PtrFromDirectoryPath(const std::string &yaml_path) {
         CHECK(fs::is_regular_file(yaml_path));
         auto root_node = slam::config::RootNode(yaml_path);
         return PtrFromNode(root_node);;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     std::shared_ptr<SyntheticSequence> SyntheticSequence::PtrFromNode(const YAML::Node &root_node) {
         CHECK(root_node["acquisition"]) << "The root node does not contain a node `acquisition` at its root."
                                         << std::endl;
@@ -720,31 +715,31 @@ namespace ct_icp {
         double max_t = acquisition.GetTrajectory().MaxTimestamp();
         auto _poses = acquisition.GetTrajectory().Poses();
         auto ptr = std::make_shared<SyntheticSequence>(std::move(acquisition),
-                                                       SequenceInfo{name, "Synthetic_" + name,
-                                                                    -1, int(poses.size()), true},
                                                        std::move(poses));
+        ptr->GetSequenceInfo() = SequenceInfo{name, "Synthetic_" + name,
+                                              -1, int(poses.size()), true};
         ptr->options_ = options;
         return ptr;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     bool SyntheticSequence::HasNext() const {
         return current_frame_id_ < ground_truth_poses_.size() - 1 ||
                (max_num_frames_ > 0 && (current_frame_id_ - init_frame_id_) < max_num_frames_);
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     ADatasetSequence::Frame SyntheticSequence::NextUnfilteredFrame() {
         return GetUnfilteredFrame(current_frame_id_++);
 
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     size_t SyntheticSequence::NumFrames() const {
         return seq_info_.sequence_size;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     ADatasetSequence::Frame SyntheticSequence::GetUnfilteredFrame(size_t index) const {
         CHECK(index - init_frame_id_ < std::max(max_num_frames_, static_cast<int>(ground_truth_poses_.size() - 1)));
         Frame frame;
@@ -762,21 +757,21 @@ namespace ct_icp {
         return frame;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     void SyntheticSequence::SetInitFrame(int frame_index) {
         CHECK(frame_index < ground_truth_poses_.size() - 1);
         init_frame_id_ = frame_index;
         current_frame_id_ = frame_index;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
-    PLYDirectory::PLYDirectory(std::string &&root_path, SequenceInfo &&seq_info,
+/* -------------------------------------------------------------------------------------------------------------- */
+    PLYDirectory::PLYDirectory(std::string &&root_path,
                                size_t expected_size,
                                AFileSequence::FilePatternFunctionType &&optional_pattern) :
-            AFileSequence(std::move(root_path), std::move(seq_info), expected_size, std::move(optional_pattern)) {
+            AFileSequence(std::move(root_path), expected_size, std::move(optional_pattern)) {
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     ADatasetSequence::Frame PLYDirectory::ReadFrame(const std::string &filename) const {
         slam::PointCloudPtr pc = mapper_ ? slam::ReadPointCloudFromPLY(filename, *mapper_) :
                                  slam::ReadPointCloudFromPLY(filename);
@@ -797,12 +792,13 @@ namespace ct_icp {
         return new_frame;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     namespace {
 
         auto find_filenames = [](const std::string &dir_path) -> std::pair<fs::path, std::vector<std::string>> {
             fs::path root_path(dir_path);
-            CHECK(fs::exists(root_path) && fs::is_directory(root_path));
+            SLAM_CHECK_STREAM(fs::exists(root_path) && fs::is_directory(root_path),
+                              "The root path " << root_path << " either does not exist or is not a directory");
 
             std::vector<std::string> filenames;
             for (auto &entry: fs::directory_iterator(root_path)) {
@@ -816,37 +812,37 @@ namespace ct_icp {
 
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     std::shared_ptr<PLYDirectory> PLYDirectory::PtrFromDirectoryPath(const std::string &dir_path,
                                                                      std::optional<SequenceInfo> seq_info) {
         auto [path, filenames] = find_filenames(dir_path);
-        return std::make_shared<PLYDirectory>(std::move(path), seq_info ? *seq_info : SequenceInfo{"Unnamed Sequence"},
+        return std::make_shared<PLYDirectory>(std::move(path),
                                               std::move(filenames));
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     PLYDirectory PLYDirectory::FromDirectoryPath(const std::string &dir_path,
                                                  std::optional<SequenceInfo> seq_info) {
         auto [path, filenames] = find_filenames(dir_path);
         fs::path root_path(dir_path);
         CHECK(fs::exists(root_path) && fs::is_directory(root_path));
 
-        return PLYDirectory(std::move(path), seq_info ? *seq_info : SequenceInfo{"Unnamed Sequence"},
+        return PLYDirectory(std::move(path),
                             std::move(filenames));
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     bool AFileSequence::HasNext() const {
         return current_frame_id_ < full_sequence_size_ &&
                (max_num_frames_ < 0 || current_frame_id_ - init_frame_id_ < max_num_frames_);
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     ADatasetSequence::Frame AFileSequence::NextUnfilteredFrame() {
         return GetUnfilteredFrame(current_frame_id_++);
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     void AFileSequence::SetGroundTruth(std::vector<Pose> &&poses) {
         ground_truth_.reset();
         ground_truth_.emplace(slam::LinearContinuousTrajectory::Create(std::move(poses)));
@@ -854,13 +850,13 @@ namespace ct_icp {
     }
 
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     size_t AFileSequence::NumFrames() const {
         auto max_possible_num_frames = std::max(static_cast<int>(full_sequence_size_) - init_frame_id_, 0);
         return max_num_frames_ < 0 ? max_possible_num_frames : std::min(max_possible_num_frames, max_num_frames_);
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     ADatasetSequence::Frame AFileSequence::GetUnfilteredFrame(size_t index) const {
         std::string filepath;
         if (file_pattern_)
@@ -887,7 +883,7 @@ namespace ct_icp {
         return frame;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     std::optional<std::vector<slam::Pose>> AFileSequence::GroundTruth() {
         if (ground_truth_)
             return ground_truth_.value().Poses();
@@ -895,23 +891,35 @@ namespace ct_icp {
     }
 
 /* -------------------------------------------------------------------------------------------------------------- */
-    PLYDirectory::PLYDirectory(std::string &&root_path, SequenceInfo &&seq_info,
+    PLYDirectory::PLYDirectory(std::string &&root_path,
                                std::vector<std::string> &&file_names) :
-            ct_icp::AFileSequence(std::move(root_path), std::move(seq_info), file_names) {
+            ct_icp::AFileSequence(std::move(root_path), std::move(file_names)) {
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     void AFileSequence::SetInitFrame(int frame_index) {
         init_frame_id_ = frame_index;
         current_frame_id_ = frame_index;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
+    std::vector<std::string> AFileSequence::GetFilePaths() const {
+        std::vector<std::string> filepaths(full_sequence_size_);
+        for (auto idx(0); idx < full_sequence_size_; idx++) {
+            if (file_names_)
+                filepaths[idx] = (root_dir_path_ / file_names_->at(idx)).string();
+            else
+                filepaths[idx] = (root_dir_path_ / (*file_pattern_)(idx)).string();
+        }
+        return filepaths;
+    }
+
+/* -------------------------------------------------------------------------------------------------------------- */
     std::vector<SequenceInfo> Dataset::AllSequenceInfo() const {
         return sequence_infos_;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     std::vector<SequenceInfo> Dataset::AllSequenceInfoWithGT() const {
         std::vector<SequenceInfo> seq_infos;
         seq_infos.reserve(sequence_infos_.size());
@@ -922,12 +930,12 @@ namespace ct_icp {
         return seq_infos;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     std::vector<std::shared_ptr<ADatasetSequence>> Dataset::AllSequences() const {
         return dataset_sequences_;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     std::vector<std::shared_ptr<ADatasetSequence>> Dataset::AllSequencesWithGroundTruth() const {
         auto seq_infos = AllSequenceInfoWithGT();
         std::vector<std::shared_ptr<ADatasetSequence>> sequences_ptrs(seq_infos.size());
@@ -937,12 +945,12 @@ namespace ct_icp {
         return sequences_ptrs;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     bool Dataset::HasSequence(const std::string &sequence_name) const {
         return map_seqname_to_id_.find(sequence_name) != map_seqname_to_id_.end();
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     std::vector<Pose> Dataset::GetGroundTruth(const std::string &sequence_name) const {
         CHECK(map_seqname_to_id_.find(sequence_name) != map_seqname_to_id_.end()) <<
                                                                                   "The dataset does not contain sequences with name "
@@ -954,7 +962,7 @@ namespace ct_icp {
         return result.value();
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     namespace {
 
         std::function<bool(const fs::path &, const std::string &)> ExpectedSequenceDirNames(DATASET dataset) {
@@ -994,7 +1002,7 @@ namespace ct_icp {
         }
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     std::optional<std::vector<Pose>> LoadPoses(const DatasetOptions &options,
                                                const fs::path &sequence_path,
                                                const SequenceInfo &sequence_info) {
@@ -1097,7 +1105,7 @@ namespace ct_icp {
         return poses;
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     std::optional<std::shared_ptr<ADatasetSequence>> GetDatasetSequence(const DatasetOptions &options,
                                                                         const std::string &seq_dirname,
                                                                         const fs::path &sequence_path) {
@@ -1124,7 +1132,7 @@ namespace ct_icp {
                 seq_info.sequence_id = kKITTINamesToIds.at(seq_dirname);
                 seq_info.sequence_size = KITTI_SEQUENCES_SIZE[seq_info.sequence_id];
                 seq_info.sequence_name = KITTI_SEQUENCE_NAMES[seq_info.sequence_id];
-                ply_directory_ptr = std::make_shared<PLYDirectory>(sequence_path / "frames", SequenceInfo(seq_info),
+                ply_directory_ptr = std::make_shared<PLYDirectory>(sequence_path / "frames",
                                                                    seq_info.sequence_size,
                                                                    [](size_t index) {
                                                                        return DefaultFilePattern(index, 4);
@@ -1137,7 +1145,7 @@ namespace ct_icp {
                 seq_info.sequence_id = kKITTI360NamesToIds.at(seq_dirname);
                 seq_info.sequence_size = KITTI_360_SEQUENCES_SIZE[seq_info.sequence_id];
                 seq_info.sequence_name = KITTI_360_SEQUENCE_NAMES[seq_info.sequence_id];
-                ply_directory_ptr = std::make_shared<PLYDirectory>(sequence_path / "frames", SequenceInfo(seq_info),
+                ply_directory_ptr = std::make_shared<PLYDirectory>(sequence_path / "frames",
                                                                    seq_info.sequence_size,
                                                                    [](size_t index) {
                                                                        return DefaultFilePattern(index, 5);
@@ -1149,33 +1157,37 @@ namespace ct_icp {
                 seq_info.sequence_id = kKITTI_CARLANamesToIds.at(seq_dirname);
                 seq_info.sequence_size = 5000;
                 seq_info.sequence_name = KITTI_CARLA_SEQUENCE_NAMES[seq_info.sequence_id];
-                ply_directory_ptr = std::make_shared<PLYDirectory>(sequence_path / "frames", SequenceInfo(seq_info),
+                ply_directory_ptr = std::make_shared<PLYDirectory>(sequence_path / "frames",
                                                                    seq_info.sequence_size,
                                                                    [](size_t index) {
                                                                        return DefaultFilePattern(index, 4);
                                                                    });
                 convert_plydir_to_dataset_sequence();
                 break;
-            case NCLT:
+            case NCLT: {
                 CHECK(kNCLTDirNameToId.find(seq_dirname) != kNCLTDirNameToId.end());
                 seq_info.sequence_id = kNCLTDirNameToId.at(seq_dirname);
                 seq_info.sequence_name = NCLT_SEQUENCE_NAMES[seq_info.sequence_id];
                 seq_info.sequence_size = -1;
 
-                nclt_ptr = std::make_shared<NCLTIterator>(options, SequenceInfo(seq_info));
+                std::string filepath = (fs::path(options.root_path) / seq_info.sequence_name /
+                                        "velodyne_hits.bin").string();
+
+                nclt_ptr = std::make_shared<NCLTIterator>(filepath, seq_info.sequence_name);
                 gt_poses = LoadPoses(options, sequence_path, seq_info);
                 if (gt_poses) {
                     nclt_ptr->SetGroundTruth(std::move(gt_poses.value()));
                     seq_info.with_ground_truth = true;
                 }
                 dataset_sequence = std::move(nclt_ptr);
+            };
                 break;
             case HILTI_2021:
                 CHECK(kHILTINamesToIds.find(seq_dirname) != kHILTINamesToIds.end());
                 seq_info.sequence_id = kHILTINamesToIds.at(seq_dirname);
                 seq_info.sequence_name = seq_dirname;
                 seq_info.sequence_size = HILTI_SEQUENCES_SIZE[seq_info.sequence_id];
-                ply_directory_ptr = std::make_shared<PLYDirectory>(sequence_path / "frames", SequenceInfo(seq_info),
+                ply_directory_ptr = std::make_shared<PLYDirectory>(sequence_path / "frames",
                                                                    seq_info.sequence_size,
                                                                    [](size_t index) {
                                                                        return DefaultFilePattern(index, 5);
@@ -1210,7 +1222,7 @@ namespace ct_icp {
         return {dataset_sequence};
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     Dataset Dataset::LoadDataset(const DatasetOptions &options) {
         fs::path root_path(options.root_path);
         SLAM_CHECK_STREAM(fs::exists(root_path), "The path to the root directory does not exist" << std::endl);
@@ -1259,7 +1271,7 @@ namespace ct_icp {
         return Dataset(options.dataset, std::move(sequences), std::move(sequence_infos));
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     bool Dataset::HasGroundTruth(const std::string &sequence_name) const {
         auto it = std::find_if(sequence_infos_.begin(), sequence_infos_.end(), [&sequence_name](const auto &seq_info) {
             return seq_info.sequence_name == sequence_name && seq_info.with_ground_truth == true;
@@ -1268,13 +1280,13 @@ namespace ct_icp {
         return it != sequence_infos_.end();
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     SequenceInfo Dataset::GetSequenceInfo(const std::string &name) const {
         CHECK(HasSequence(name)) << "The dataset does not contain sequence " << name << std::endl;
         return sequence_infos_[map_seqname_to_id_.at(name)];
     }
 
-    /* -------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------------------------------------- */
     std::shared_ptr<ADatasetSequence> Dataset::GetSequence(const std::string &name) const {
         CHECK(HasSequence(name)) << "The dataset does not contain sequence " << name << std::endl;
         return dataset_sequences_[map_seqname_to_id_.at(name)];

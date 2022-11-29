@@ -2,6 +2,7 @@
 #define CT_ICP_DATASET_HPP
 
 #include <memory>
+#include <fstream>
 
 #include "types.h"
 #include "ct_icp/utils.h"
@@ -36,16 +37,11 @@ namespace ct_icp {
 
     /*! @brief A SequenceInformation */
     struct SequenceInfo {
-        std::string sequence_name; //< The name of the sequence
-
-        std::string label; //< Label of the sequence
-
-        int sequence_id = -1; //< The id of the sequence
-
+        std::string sequence_name = "Unknown"; //< The name of the sequence
+        std::string label = "Unknown"; //< Label of the sequence in the dataset
+        int sequence_id = -1; //< The id of the sequence in the dataset
         int sequence_size = -1; //< The size of the sequence
-
         bool with_ground_truth = false; //< Whether the sequence has ground truth
-
     };
 
     /**
@@ -101,9 +97,7 @@ namespace ct_icp {
             return seq_info_;
         }
 
-    protected:
-
-        explicit ADatasetSequence(SequenceInfo &&seq_info) : seq_info_(std::move(seq_info)) {}
+        explicit ADatasetSequence() {}
 
         // Returns the next frame (is the sequence contains one)
         virtual Frame NextUnfilteredFrame() = 0;
@@ -114,6 +108,7 @@ namespace ct_icp {
         // Throws an exception by default (only for random access datasets e.g. sequence of files)
         [[nodiscard]] virtual Frame GetUnfilteredFrame(size_t index) const;
 
+    protected:
         SequenceInfo seq_info_;
         int max_num_frames_ = -1;
         int init_frame_id_ = 0; // The initial frame index of the sequence
@@ -134,7 +129,6 @@ namespace ct_icp {
     public:
 
         SyntheticSequence(slam::SyntheticSensorAcquisition &&sensor_acquisition,
-                          SequenceInfo &&seq_info,
                           std::vector<slam::Pose> &&gt_poses);
 
         static std::shared_ptr<SyntheticSequence> PtrFromDirectoryPath(const std::string &yaml_path);
@@ -208,22 +202,23 @@ namespace ct_icp {
 
         void SetInitFrame(int frame_index) override;
 
+        /*! @brief Returns the file paths for each file in the directory*/
+        std::vector<std::string> GetFilePaths() const;
 
     protected:
 
-        explicit AFileSequence(std::string &&dir_path, SequenceInfo &&seq_info,
-                               const std::vector<std::string> &filenames_) : ADatasetSequence(std::move(seq_info)),
+        explicit AFileSequence(std::string &&dir_path,
+                               const std::vector<std::string> &filenames_) : ADatasetSequence(),
                                                                              root_dir_path_(std::move(dir_path)) {
             SLAM_CHECK_STREAM(fs::exists(root_dir_path_), "The Directory " << root_dir_path_ << " does not exist");
-            file_names_.emplace(std::vector<std::string>{});
-            file_names_->reserve(filenames_.size());
+            file_names_ = filenames_;
             full_sequence_size_ = file_names_->size();
             std::sort(file_names_->begin(), file_names_->end(), sorting_function);
         }
 
-        explicit AFileSequence(std::string &&root_path, SequenceInfo &&seq_info,
+        explicit AFileSequence(std::string &&root_path,
                                size_t expected_size, FilePatternFunctionType &&optional_pattern)
-                : ADatasetSequence(std::move(seq_info)),
+                : ADatasetSequence(),
                   root_dir_path_(std::move(root_path)) {
             file_pattern_ = {
                     std::move(optional_pattern),
@@ -231,7 +226,6 @@ namespace ct_icp {
             full_sequence_size_ = expected_size;
             seq_info_.sequence_size = int(expected_size);
         }
-
 
         SortingFunctionType sorting_function = [](const std::string &lhs, const std::string &rhs) { return lhs < rhs; };
         fs::path root_dir_path_;
@@ -247,19 +241,19 @@ namespace ct_icp {
     class PLYDirectory : public AFileSequence {
     public:
 
-        explicit PLYDirectory(std::string &&root_path, SequenceInfo &&seq_info,
+        explicit PLYDirectory(std::string &&root_path,
                               size_t expected_size, FilePatternFunctionType &&optional_pattern);
 
-        explicit PLYDirectory(std::string &&root_path, SequenceInfo &&seq_info, std::vector<std::string> &&file_names);
+        explicit PLYDirectory(std::string &&root_path, std::vector<std::string> &&file_names);
 
         static PLYDirectory FromDirectoryPath(const std::string &dir_path,
                                               std::optional<SequenceInfo> seq_info = {});
 
-        // Read a PLY Frame from disk
-        Frame ReadFrame(const std::string &filename) const override;
-
         static std::shared_ptr<PLYDirectory> PtrFromDirectoryPath(const std::string &dir_path,
                                                                   std::optional<SequenceInfo> seq_info = {});
+
+        // Read a PLY Frame from disk
+        Frame ReadFrame(const std::string &filename) const override;
 
         REF_GETTER(GetSchemaMapper, mapper_)
 
@@ -290,6 +284,59 @@ namespace ct_icp {
         bool use_all_datasets = true; // Whether to use all sequences, or only the ones specified in param `sequence_options`
 
         std::vector<SequenceOptions> sequence_options;
+    };
+
+
+    class NCLTIterator final : public ADatasetSequence {
+    public:
+
+        struct LidarPoint {
+            Eigen::Vector3d xyz;
+            double timestamp = -1.;
+
+            static slam::ItemSchema DefaultSchema();
+
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+        };
+
+        explicit NCLTIterator(const std::string &hits_filepath,
+                              const std::string &sequence_name,
+                              int num_aggregated_packets = 220);
+
+        static std::shared_ptr<NCLTIterator> NCLTIteratorFromHitsFile(const std::string &vel_hits_file,
+                                                                      const std::string &sequence_name);
+
+        void SkipFrame() override;
+
+        [[nodiscard]] bool HasNext() const override;
+
+        void SetInitFrame(int frame_index) override;
+
+        void SetGroundTruth(std::vector<Pose> &&poses);
+
+        std::optional<std::vector<slam::Pose>> GroundTruth() override;
+
+        size_t NumFrames() const override;
+
+        Frame DoNext(bool jump_frame = false);
+
+        Frame NextUnfilteredFrame() override;
+
+        std::vector<LidarPoint> NextBatch(bool jump_batch);
+
+        ~NCLTIterator() final;
+
+    private:
+
+        void OpenFile(const std::string &hits_file_path);
+
+        void Close();
+
+        int num_aggregated_pc_;
+
+        std::optional<slam::LinearContinuousTrajectory> ground_truth_{};
+        std::unique_ptr<std::ifstream> file = nullptr;
+        std::string sequence_name_, hits_file_path_;
     };
 
     /**

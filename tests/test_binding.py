@@ -1,8 +1,10 @@
 import unittest
 import numpy as np
+from pathlib import Path
 
 try:
     import pyct_icp as pct
+    import os
 
     _with_pct = True
 except ImportError as e:
@@ -158,6 +160,58 @@ class TestBinding(unittest.TestCase):
         for pose1, pose2 in zip(poses, poses_bis):
             diff = np.linalg.norm(pose1.Matrix() - pose2.Matrix())
             self.assertLess(diff, 1.e-10)
+
+    def test_ct_icp_types(self):
+        # ####### LidarIMUFrame ####### #
+        frame = pct.LidarIMUFrame()
+        frame.pointcloud = pct.PointCloud()
+        frame.pointcloud.Resize(100)
+        frame.imu_data = [pct.ImuData() for _ in range(20)]
+
+        # #######   ####### #
+
+    def test_ct_icp_datasets_NCLT(self):
+        env_var = os.environ
+        if "NCLT_HITS_FILE" not in env_var:
+            print("Cannot test the NCLT dataset, the var NCLT_HITS_FILE not present in the environment")
+            return
+        hits_path = env_var["NCLT_HITS_FILE"]
+        if not Path(hits_path).exists():
+            print("Cannot test the NCLT dataset, the var NCLT_HITS_FILE points to an non-existing file on disk")
+            return
+        dataset = pct.NCLTIterator(hits_path, "2012-01-08")
+        self.assertTrue(dataset.HasNext())
+        next = dataset.NextFrame()
+        next2 = dataset.NextFrame()
+        self.assertTrue(next.pointcloud.HasTimestampsField())
+        self.assertTrue(next2.pointcloud.HasTimestampsField())
+        self.assertTrue(next.pointcloud.Size() > 0)
+
+    def test_ct_icp_datasets_KITTI_RAW(self):
+        env_var = os.environ
+        if "KITTI_PATH" not in env_var:
+            print("Cannot Test the KITTI_RAW dataset, the var KITTI_PATH not present in the environment")
+            return
+
+        # ########## PLY DIRECTORY ########## #
+        root_path = str(Path(env_var["KITTI_PATH"]) / "01" / "frames")
+        if not Path(root_path).exists():
+            print("Cannot Test the KITTI dataset. The var KITTI_PATH points to a non existing path on disk")
+            return
+        sequence = pct.PLYDirectory(root_path)
+        paths = sequence.GetFilePaths()
+        self.assertTrue(sequence.HasNext())
+        self.assertGreater(len(paths), 0)
+        self.assertEqual(len(paths), sequence.NumFrames())
+        next = sequence.NextFrame()
+        next2 = sequence.NextFrame()
+        self.assertTrue(next.pointcloud.HasTimestampsField())
+        self.assertTrue(next2.pointcloud.HasTimestampsField())
+
+        xyz = next.pointcloud.GetXYZ()
+        timestamps = next.pointcloud.GetTimestamps()
+
+        self.assertGreater(xyz.shape[0], 1000)
 
     # def test_frame(self):
     #     self.test_installation()

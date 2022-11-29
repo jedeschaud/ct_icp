@@ -11,6 +11,10 @@
 #include <SlamCore/types.h>
 #include <SlamCore/pointcloud.h>
 #include <SlamCore/io.h>
+#include <SlamCore/imu.h>
+
+#include <ct_icp/dataset.h>
+#include <ct_icp/odometry.h>
 
 namespace py = pybind11;
 
@@ -254,6 +258,32 @@ private:
 //}
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// CT_ICP - DATASETS
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/*! Trampoline class to define python class extending a dataset sequence */
+class PyDatasetSequence : public ct_icp::ADatasetSequence {
+public:
+    using ct_icp::ADatasetSequence::ADatasetSequence;
+
+    void SetInitFrame(int frame_index) override {
+        PYBIND11_OVERRIDE_PURE(void, ct_icp::ADatasetSequence, SetInitFrame, frame_index);
+    };
+
+    Frame NextUnfilteredFrame() override {
+        PYBIND11_OVERRIDE_PURE(Frame, ct_icp::ADatasetSequence, NextUnfilteredFrame);
+    };
+
+    size_t NumFrames() const override {
+        PYBIND11_OVERRIDE_PURE(size_t, ct_icp::ADatasetSequence, NumFrames);
+    }
+
+    bool HasNext() const override {
+        PYBIND11_OVERRIDE(bool, ct_icp::ADatasetSequence, HasNext);
+    }
+};
+
 
 PYBIND11_MODULE(pyct_icp, m) {
 
@@ -306,6 +336,12 @@ PYBIND11_MODULE(pyct_icp, m) {
                  py::arg("other_pose"), py::arg("timestamp"), py::arg("dest_frame_id") = -1)
             .def_static("Identity", [] { return slam::Pose::Identity(); });
 
+    py::class_<slam::ImuData>(m, "ImuData")
+            .def(py::init())
+            .def_readwrite("angular_velocity", &slam::ImuData::angular_velocity)
+            .def_readwrite("linear_acceleration", &slam::ImuData::linear_acceleration)
+            .def_readwrite("orientation", &slam::ImuData::orientation);
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// POINT CLOUD API
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -329,7 +365,6 @@ PYBIND11_MODULE(pyct_icp, m) {
             .def("Size", &PY_PointCloud::Size)
             .def("Resize", &PY_PointCloud::Resize)
             .def("Clone", &PY_PointCloud::Clone);
-
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// IO Methods
@@ -359,6 +394,77 @@ PYBIND11_MODULE(pyct_icp, m) {
     m.def("SaveKITTIPoses", [](const std::string &filepath,
                                const std::vector<slam::Pose> &poses) { slam::SavePosesKITTIFormat(filepath, poses); });
 
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// CT_ICP - DATASETS
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    py::enum_<ct_icp::DATASET>(m, "DATASET")
+            .value("KITTI_raw", ct_icp::DATASET::KITTI_raw)
+            .value("KITTI_CARLA", ct_icp::DATASET::KITTI_CARLA)
+            .value("KITTI", ct_icp::DATASET::KITTI)
+            .value("KITTI_360", ct_icp::DATASET::KITTI_360)
+            .value("NCLT", ct_icp::DATASET::NCLT)
+            .value("HILTI_2021", ct_icp::DATASET::HILTI_2021)
+            .value("HILTI_2022", ct_icp::DATASET::HILTI_2022)
+            .value("PLY_DIRECTORY", ct_icp::DATASET::PLY_DIRECTORY)
+            .value("SYNTHETIC", ct_icp::DATASET::SYNTHETIC)
+            .value("CUSTOM", ct_icp::DATASET::CUSTOM)
+            .value("INVALID", ct_icp::DATASET::INVALID);
+
+    m.def("DATASETFromString", &ct_icp::DATASETFromString);
+    m.def("DATASETEnumToString", &ct_icp::DATASETEnumToString);
+
+    py::class_<ct_icp::SequenceInfo>(m, "SequenceInfo")
+            .def_readwrite("sequence_name", &ct_icp::SequenceInfo::sequence_name)
+            .def_readwrite("label", &ct_icp::SequenceInfo::label)
+            .def_readwrite("sequence_id", &ct_icp::SequenceInfo::sequence_id)
+            .def_readwrite("sequence_size", &ct_icp::SequenceInfo::sequence_size)
+            .def_readwrite("with_ground_truth", &ct_icp::SequenceInfo::with_ground_truth);
+
+    py::class_<ct_icp::LidarIMUFrame, ct_icp::LidarIMUFramePtr>(m, "LidarIMUFrame")
+            .def(py::init())
+            .def_property("pointcloud", [](const ct_icp::LidarIMUFrame &frame) {
+                              return PY_PointCloud{frame.pointcloud};
+                          },
+                          [](ct_icp::LidarIMUFrame &frame, const PY_PointCloud &pc) {
+                              frame.pointcloud = pc.pointcloud;
+                          })
+            .def_readwrite("timestamp_min", &ct_icp::LidarIMUFrame::timestamp_min)
+            .def_readwrite("timestamp_max", &ct_icp::LidarIMUFrame::timestamp_max)
+            .def_readwrite("imu_data", &ct_icp::LidarIMUFrame::imu_data)
+            .def_readwrite("file_path", &ct_icp::LidarIMUFrame::file_path);
+
+    py::class_<ct_icp::ADatasetSequence, PyDatasetSequence, std::shared_ptr<ct_icp::ADatasetSequence>>(m,
+                                                                                                       "DatasetSequence")
+            .def("HasNext", &ct_icp::ADatasetSequence::HasNext)
+            .def("NextFrame", &ct_icp::ADatasetSequence::NextFrame)
+            .def("NumFrames", &ct_icp::ADatasetSequence::NumFrames)
+            .def("WithRandomAccess", &ct_icp::ADatasetSequence::WithRandomAccess)
+            .def("GetFrame", &ct_icp::ADatasetSequence::GetFrame)
+            .def("HasGroundTruth", &ct_icp::ADatasetSequence::HasGroundTruth)
+            .def("SkipFrame", &ct_icp::ADatasetSequence::SkipFrame);
+
+    py::class_<ct_icp::AFileSequence, ct_icp::ADatasetSequence, std::shared_ptr<ct_icp::AFileSequence>>(m,
+                                                                                                        "FileSequence")
+            .def("HasNext", &ct_icp::AFileSequence::HasNext)
+            .def("NextUnfilteredFrame", &ct_icp::AFileSequence::NextUnfilteredFrame)
+            .def("NumFrames", &ct_icp::AFileSequence::NumFrames)
+            .def("GetFilePaths", &ct_icp::AFileSequence::GetFilePaths)
+            .def("SkipFrame", &ct_icp::AFileSequence::SkipFrame);
+
+    py::class_<ct_icp::PLYDirectory, ct_icp::AFileSequence, std::shared_ptr<ct_icp::PLYDirectory>>(m, "PLYDirectory")
+            .def(py::init([](const std::string &root_path) {
+                auto directory = ct_icp::PLYDirectory::PtrFromDirectoryPath(root_path);
+                return directory;
+            }))
+            .def("ReadFrame", &ct_icp::PLYDirectory::ReadFrame);
+
+    py::class_<ct_icp::NCLTIterator, ct_icp::ADatasetSequence, std::shared_ptr<ct_icp::NCLTIterator>>(m, "NCLTIterator")
+            .def(py::init([](const std::string &hits_file, const std::string &sequence_name) {
+                auto directory = ct_icp::NCLTIterator::NCLTIteratorFromHitsFile(hits_file, sequence_name);
+                return directory;
+            }))
+            .def("DoNext", &ct_icp::NCLTIterator::DoNext);
 
 //    /// LiDARFrame : A wrapper around a vector of ct_icp::Point3D
 //    PYBIND11_NUMPY_DTYPE(PyLiDARPoint, raw_point, pt, alpha_timestamp, timestamp, frame_index);
