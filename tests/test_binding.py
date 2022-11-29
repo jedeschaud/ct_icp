@@ -15,6 +15,70 @@ class TestBinding(unittest.TestCase):
     def test_installation(self):
         self.assertEqual(True, _with_pct)  # add assertion here
 
+    def test_basic_types(self):
+        # ####### SE3 ####### #
+        transform = pct.SE3()
+        rot = np.array([[0., 1., 0.], [-1., 0., 0.], [0., 0., 1.]])
+        transform.SetRotation(rot)
+        rot_bis = transform.Rotation()
+        self.assertLess(np.linalg.norm(rot - rot_bis), 1.e-10)
+
+        # The binding covers the operator * to transform poses
+        t1 = pct.SE3.Random()
+        t2 = pct.SE3.Random(10., 3.14)
+        t3 = t1 * t2
+        t4 = t1.Inverse() * t2
+
+        t3_mat = t1.Matrix().dot(t2.Matrix())
+        diff_t3 = np.linalg.norm(t3_mat - t3.Matrix())
+        diff_t4 = np.linalg.norm(np.linalg.inv(t1.Matrix()).dot(t2.Matrix()) - t4.Matrix())
+
+        self.assertLess(diff_t3, 1.e-10)
+        self.assertLess(diff_t4, 1.e-10)
+
+        # The binding also covers applying a transform to a point
+        xyz = np.array([1, 2, 3])
+        result = t1 * xyz
+        mat = t1.Matrix()
+        rot = mat[:3, :3]
+        tr = mat[:3, 3]
+        result_bis = rot.dot(xyz) + tr
+
+        t1 * np.random.randn(3, 1)
+        t1 * np.random.randn(3, )
+        # Invalid t1 * np.random.randn(1, 3)
+
+        diff_result = np.linalg.norm(result_bis - result)
+        self.assertLess(diff_result, 1.e-10)
+
+        # Angular distance between two poses
+        self.assertGreater(pct.AngularDistance(t1, t2), 0.)
+        self.assertEqual(pct.AngularDistance(t1, t1), 0.)
+
+        # ####### Pose ####### #
+        pose1 = pct.Pose()
+        pose1.pose = pct.SE3.Random()
+        pose1.dest_timestamp = 0.
+        pose1.dest_frame_id = 0
+        pose2 = pct.Pose()
+        pose2.pose = pct.SE3.Random()
+        pose2.dest_timestamp = 1.
+        pose2.dest_frame_id = 1
+
+        pose_mid = pose1.InterpolatePose(pose2, 0.5, 0)
+        xyz_mid = pose_mid.pose.tr
+        xyz_mid_real = 0.5 * (pose1.pose.tr + pose2.pose.tr)
+        diff = np.linalg.norm(xyz_mid - xyz_mid_real)
+        self.assertLess(diff, 1.e-10)
+
+        # Apply transformation on the point
+        xyz = np.random.randn(3, )
+        xyz_mid = pose_mid * xyz
+        xyz_mid2 = pose1.ContinuousTransform(xyz, pose2, 0.5)
+        diff = np.linalg.norm(xyz_mid - xyz_mid2)
+        self.assertLess(diff, 1.e-10)
+        print(pose1.pose)
+
     def test_pointcloud_basics(self):
         # ########## BASICS ########## #
         pc = pct.PointCloud()  # Create an empty point cloud

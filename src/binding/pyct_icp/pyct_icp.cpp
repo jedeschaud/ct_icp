@@ -1,14 +1,14 @@
+#include <iostream>
+
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/eigen.h>
 #include <pybind11/stl.h>
+#include <pybind11/operators.h>
+
 #include <Eigen/Dense>
-#include <iostream>
 
-//#include "ct_icp.hpp"
-//#include "odometry.hpp"
-//#include "dataset.hpp"
-
+#include <SlamCore/types.h>
 #include <SlamCore/pointcloud.h>
 
 namespace py = pybind11;
@@ -257,6 +257,55 @@ private:
 PYBIND11_MODULE(pyct_icp, m) {
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// BASIC TYPES
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    py::class_<slam::SE3>(m, "SE3")
+            .def(py::init())
+            .def_readwrite("tr", &slam::SE3::tr)
+            .def("Rotation", &slam::SE3::Rotation)
+            .def("Matrix", &slam::SE3::Matrix)
+            .def("Inverse", &slam::SE3::Inverse)
+            .def("Interpolate", [](const slam::SE3 &self, const slam::SE3 &other, double alpha_timestamp) {
+                return self.Interpolate(other, alpha_timestamp);
+            })
+            .def_static("Random", &slam::SE3::Random, "Generates a Random pose with optional scale parameters",
+                        py::arg("tr_scale") = 1., py::arg("rot_scale") = 1.)
+            .def("Parameters", &slam::SE3::Parameters)
+            .def(py::self * py::self)
+            .def(py::self * Eigen::Vector3d())
+            .def("__repr__", [](slam::SE3 &pose) {
+                std::stringstream ss_repr;
+                ss_repr << "{ tr: [" << pose.tr.x() << ", " << pose.tr.y() << ", " << pose.tr.z() << "], "
+                        << " quat: [" << pose.quat.coeffs()[0] << "," << pose.quat.coeffs()[1] << ","
+                        << pose.quat.coeffs()[2] << "," << pose.quat.coeffs()[2] << "] }";
+                return ss_repr.str();
+            })
+            .def("SetRotation", [](slam::SE3 &pose, Eigen::Matrix3d rot) {
+                pose.quat = Eigen::Quaterniond(rot);
+            });
+
+    m.def("AngularDistance",
+          [](const slam::SE3 &lhs, const slam::SE3 &rhs) { return slam::AngularDistance(lhs, rhs); });
+    m.def("AngularDistanceMat",
+          [](const Eigen::Matrix3d &lhs, const Eigen::Matrix3d &rhs) { return slam::AngularDistance(lhs, rhs); });
+
+    py::class_<slam::Pose>(m, "Pose")
+            .def(py::init())
+            .def_readwrite("pose", &slam::Pose::pose)
+            .def_readwrite("dest_timestamp", &slam::Pose::dest_timestamp)
+            .def_readwrite("dest_frame_id", &slam::Pose::dest_frame_id)
+            .def("Matrix", &slam::Pose::Matrix)
+            .def("Inverse", &slam::Pose::Inverse)
+            .def(py::self * py::self)
+            .def(py::self * Eigen::Vector3d())
+            .def("ContinuousTransform", &slam::Pose::ContinuousTransform)
+            .def("InterpolatePose", &slam::Pose::InterpolatePose,
+                 "Interpolates a pose at a timestamp between two poses",
+                 py::arg("other_pose"), py::arg("timestamp"), py::arg("dest_frame_id") = -1)
+            .def_static("Identity", [] { return slam::Pose::Identity(); });
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// POINT CLOUD API
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -279,12 +328,6 @@ PYBIND11_MODULE(pyct_icp, m) {
             .def("Size", &PY_PointCloud::Size)
             .def("Resize", &PY_PointCloud::Resize)
             .def("Clone", &PY_PointCloud::Clone);
-
-    m.def("MakeEmptyPointCloud", []() -> PY_PointCloud {
-        auto pc = PY_PointCloud{slam::PointCloud::DefaultXYZPtr<float>()};
-        pc.pointcloud->resize(100);
-        return pc;
-    });
 
 //    /// LiDARFrame : A wrapper around a vector of ct_icp::Point3D
 //    PYBIND11_NUMPY_DTYPE(PyLiDARPoint, raw_point, pt, alpha_timestamp, timestamp, frame_index);
