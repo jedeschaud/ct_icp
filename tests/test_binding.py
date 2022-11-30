@@ -1,6 +1,11 @@
+import time
 import unittest
 import numpy as np
 from pathlib import Path
+
+print("[DEBUG] REMOVE viz3d dependency")
+from viz3d.window import OpenGLWindow
+from viz3d.engineprocess import *
 
 try:
     import pyct_icp as pct
@@ -213,51 +218,61 @@ class TestBinding(unittest.TestCase):
 
         self.assertGreater(xyz.shape[0], 1000)
 
-    # def test_frame(self):
-    #     self.test_installation()
-    #
-    #     frame = pct.LiDARFrame()
-    #
-    #     n = 100
-    #     np_array = np.random.randn(n, 3)
-    #     np_raw_points = np.random.randn(n, 3)
-    #     timestamps = np.random.rand(n)
-    #     alpha_timestamps = np.random.rand(n)
-    #     index_frames = np.random.randint(0, 10, n)
-    #
-    #     struct_array = np.rec.fromarrays([np_raw_points, np_array, timestamps, alpha_timestamps, index_frames],
-    #                                      dtype=[
-    #                                          ("raw_point", 'f8', 3),
-    #                                          ("pt", 'f8', 3),
-    #                                          ("alpha_timestamp", 'f8', 1),
-    #                                          ("timestamp", 'f8', 1),
-    #                                          ("index_frame", 'i4', 1)])
-    #
-    #     frame.SetFrame(struct_array)
-    #     array = frame.GetStructuredArrayRef()
-    #
-    #     diff2 = np.abs(array["pt"] - np_array).max()
-    #     diff0 = np.abs(array["raw_point"] - np_raw_points).max()
-    #     self.assertEqual(diff2, 0.0)
-    #     self.assertEqual(diff0, 0.0)
-    #
-    #     array[:10]["pt"] = 0.0
-    #
-    #     array_bis = frame.GetStructuredArrayRef()
-    #
-    #     xs = array["pt"]
-    #     xs_bis = array_bis["pt"]
-    #     diff = np.abs(xs - xs_bis).max()
-    #     self.assertEqual(diff, 0.0)
-    #
-    #     # Check that GetWrappingArray returns a reference
-    #     # And SetFrame makes a copy
-    #
-    # def test_odometry(self):
-    #     self.test_installation()
-    #     options = pct.OdometryOptions()
-    #     options.motion_compensation = pct.NONE
-    #     pct.Odometry(options)
+    def test_ct_icp_map(self):
+        # ########## MAP ########## #
+        pc = pct.PointCloud()
+        N = 10000
+        pc.Resize(N)
+        xyz = pc.GetXYZ()
+        xyz[:] = np.random.rand(N, 3) * 30.  # Random points at a scale of 60m
+        xyz[:, 2] = 0.
+
+        default_map_options = pct.Map_Options()
+        resolution_param = pct.Map_ResolutionParam()
+        resolution_param.resolution = 4.
+        resolution_param.min_distance_between_points = 1.
+        resolution_param.max_num_points = 20
+
+        default_map_options.resolutions = [resolution_param]
+        map = pct.MultipleResolutionVoxelMap(default_map_options)
+        map.InsertPointCloud(pc, [pct.Pose()])
+        map_points = map.GetMapPoints(0)
+        map_points_bis = map.MapAsPointCloud()
+        print(map_points.GetXYZ())
+
+    def test_ct_icp_cticp(self):
+        # ########### CTICPOptions ########### #
+        # Parse / Save to YAML
+        yaml_options = r"""
+        num_iters_icp: 10
+        parametrization: SIMPLE 
+        distance: POINT_TO_POINT
+        solver: CERES
+        max_num_residuals: 700 
+        min_num_residuals: 200
+        weighting_scheme: ALL
+        weight_alpha: 1. 
+        weight_neighborhood: 0.2
+        power_planarity: 2.0
+        max_number_neighbors: 40
+        min_number_neighbors: 10
+        threshold_voxel_occupancy: 1
+        """
+
+        options = pct.CTICPOptionsFromYAMLStr(yaml_options)
+        self.assertEqual(options.num_iters_icp, 10)
+        self.assertEqual(options.parametrization, pct.POSE_PARAMETRIZATION.SIMPLE)
+        self.assertEqual(options.distance, pct.ICP_DISTANCE.POINT_TO_POINT)
+        self.assertEqual(options.solver, pct.CT_ICP_SOLVER.CERES)
+        self.assertEqual(options.max_num_residuals, 700)
+        self.assertEqual(options.min_num_residuals, 200)
+        self.assertEqual(options.weighting_scheme, pct.WEIGHTING_SCHEME.ALL)
+        self.assertEqual(options.weight_alpha, 1.)
+        self.assertEqual(options.weight_neighborhood, 0.2)
+        self.assertEqual(options.power_planarity, 2.)
+        self.assertEqual(options.max_number_neighbors, 40)
+        self.assertEqual(options.min_number_neighbors, 10)
+        self.assertEqual(options.threshold_voxel_occupancy, 1)
 
 
 if __name__ == '__main__':
