@@ -241,6 +241,9 @@ class TestBinding(unittest.TestCase):
         print(map_points.GetXYZ())
 
     def test_ct_icp_cticp(self):
+        """
+        Tests the CT-ICP registration binding
+        """
         # ########### CTICPOptions ########### #
         # Parse / Save to YAML
         yaml_options = r"""
@@ -340,11 +343,128 @@ class TestBinding(unittest.TestCase):
         # Verify that ICP correctly did register the frame onto the plane
         self.assertLess(abs(pose_to_update.end_pose.pose.tr[2] + 0.1), 1.e-8)
 
+    def test_cticp_odometry(self):
+        """
+        Unit Tests for CT_ICP Odometry
+        """
+        # ########### OdometryOptions ########### #
+        # Parse / Save to YAML
+        yaml_options = r"""
+  # -- Output Options
+  debug_print: true
 
-        
+  # -- Main Options
+  motion_compensation: NONE # The profile of the motion compensation (NONE, CONSTANT_VELOCITY, ITERATIVE, CONTINUOUS)
+  initialization: INIT_CONSTANT_VELOCITY
+
+  # -- Sampling Options
+  sample_voxel_size: 0.001 # The size of a voxel for the selection of `keypoints` by grid sampling
+  sampling: GRID 
+  init_sample_voxel_size: 0.01
+  init_num_frames: 0 
 
 
-        
+  # -- Frame Options
+  voxel_size: 0.01 # The voxel size for the grid sampling of the new frame (before keypoints extraction)
+  max_distance: 100.0 # The threshold of the distance to suppress voxels from the map
+  distance_error_threshold: 5.0 # The motion of the sensor between two frames which is considered erroneous (stops the odometry)
+
+  # -- Map Options
+  neighborhood_strategy:
+    type: NEAREST_NEIGHBOR_STRATEGY
+    max_num_neighbors: 20
+    min_num_neighbors: 10
+
+  map_options:
+    map_type: MULTI_RESOLUTION_VOXEL_HASHMAP
+    resolutions:
+      - resolution: 0.1
+        max_num_points: 100
+        min_distance_between_points: 0.01
+
+  max_num_keypoints: 1500
+
+  size_voxel_map: 0.1 # The voxel size of in the voxel map
+  voxel_neighborhood: 1
+  max_num_points_in_voxel: 20 # The maximum number of points per voxel of the map
+  min_distance_points: 0.1
+
+  # ---- CT_ICP OPTIONS ----
+  ct_icp_options:
+    # -- Output Options
+    debug_print: true 
+    output_weights: false
+
+    # -- Main Params
+    num_iters_icp: 20 # The number of iterations of the ICP
+    parametrization: SIMPLE 
+    distance: POINT_TO_PLANE
+    solver: CERES
+
+    # -- Robustness scheme
+    max_num_residuals: 1500
+    # min_num_residuals: 100
+    weighting_scheme: ALL
+    weight_alpha: 0.9
+    weight_neighborhood: 0.1
+
+    # -- Neighborhood params
+    min_number_neighbors: 10 # The minimum number of neighbor points to define a valid neighborhood
+    max_number_neighbors: 20
+    num_closest_neighbors: 1
+    power_planarity: 2
+    threshold_voxel_occupancy: 1
+
+    # -- Stop Criterion Params
+    threshold_orientation_norm: 0.1 #< In Degrees
+    threshold_translation_norm: 0.01 #< In Meters
+
+    # -- CT Trajectory constraint (if parametrizaton == CONTINUOUS_TIME)
+    # point_to_plane_with_distortion: true
+    beta_location_consistency: 0.001
+    beta_constant_velocity: 0.001
+    beta_small_velocity: 0.
+    beta_orientation_consistency: 0.
+
+    # -- CERES Solver Specific Params
+    loss_function: CAUCHY # Options: [STANDARD, CAUCHY, HUBER, TOLERANT, TRUNCATED] (for CERES solver)
+    ls_max_num_iters: 10 # The number of steps performed for each iteration of the ICP (for CERES solver)
+    ls_num_threads: 6 # The number of threads to build and solve the least square system (for CERES solver)
+    ls_sigma: 0.01 # The sigma parameter for loss CAUCHY, HUBER, TOLERANT, TRUNCATED (for CERES solver)
+    ls_tolerant_min_threshold: 0.05 # The tolerant parameter for loss TOLERANT (for CERES solver)
+        """
+        options = pct.OdometryOptionsFromYAMLStr(yaml_options)
+        self.assertEqual(options.ct_icp_options.loss_function, pct.LEAST_SQUARES.CAUCHY)
+        print(options.map_options.GetType())
+        options.map_options.GetType()
+        self.assertEqual(options.map_options.GetType(), "MULTI_RESOLUTION_VOXEL_HASHMAP")
+
+        # ########### Odometry ######### #
+        odometry = pct.Odometry(options)
+
+        def GetFrame(i : int):
+            N_cloud = 10000
+            cloud = pct.PointCloud()
+            cloud.Resize(N_cloud)
+
+            # Add The required point cloud field (The ICP needs Timestamps, RawPoints and WorldPoints field)
+            cloud.SetRawPointsFromXYZ() # Sets the Raw Points from the XYZ field
+            cloud.AddTimestampsField()  # Adds an empty Timestamps Field
+            cloud.AddWorldPointsField() # Adds an empty World Points Field
+
+            xyz = cloud.GetXYZ()
+            xyz[:, :2] = np.random.rand(N_cloud, 2)
+            xyz[:, 2] += 0.1 * i            
+            t = cloud.GetTimestamps()
+            t[:] = i
+
+            return cloud
+
+        for i in range(6):
+            frame_i = GetFrame(i)
+            summary = odometry.RegisterFrame(frame_i, i)
+            self.assertTrue(summary.success)
+            self.assertLess(abs(summary.frame.end_pose.pose.tr[2] + i * 0.1), 1.e-6)
 
 
 

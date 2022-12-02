@@ -12,6 +12,7 @@
 #include <SlamCore/pointcloud.h>
 #include <SlamCore/io.h>
 #include <SlamCore/imu.h>
+#include <SlamCore/algorithm/grid_sampling.h>
 
 #include <ct_icp/dataset.h>
 #include <ct_icp/odometry.h>
@@ -298,6 +299,20 @@ public:
     }
 };
 
+class PyIMapOptions : public ct_icp::IMapOptions
+{
+public:
+    std::string GetType() const override
+    {
+        PYBIND11_OVERRIDE(std::string, ct_icp::IMapOptions, GetType);
+    }
+
+    std::shared_ptr<ct_icp::ISlamMap> MakeMapFromOptions() const override
+    {
+        PYBIND11_OVERRIDE(std::shared_ptr<ct_icp::ISlamMap>, ct_icp::IMapOptions, MakeMapFromOptions);
+    }
+};
+
 PYBIND11_MODULE(pyct_icp, m)
 {
 
@@ -370,10 +385,10 @@ PYBIND11_MODULE(pyct_icp, m)
 
     py::class_<PY_PointCloud>(m, "PointCloud")
         .def(py::init())
-        .def("SetRawPointsFromXYZ", [](PY_PointCloud& pc) {
+        .def("SetRawPointsFromXYZ", [](PY_PointCloud &pc)
+             {
             SLAM_CHECK_STREAM((pc.pointcloud != nullptr), "The point cloud is not null !");
-            pc.pointcloud->SetRawPointsField(slam::PointCloud::Field(pc.pointcloud->GetXYZField()));
-        })
+            pc.pointcloud->SetRawPointsField(slam::PointCloud::Field(pc.pointcloud->GetXYZField())); })
             MODULE_PC_FIELD(XYZ)
                 MODULE_PC_FIELD_WITH_DEFAULT(RawPoints)
                     MODULE_PC_FIELD_WITH_DEFAULT(WorldPoints)
@@ -523,7 +538,11 @@ PYBIND11_MODULE(pyct_icp, m)
                 STRUCT_READWRITE(ct_icp::MultipleResolutionVoxelMap::ResolutionParam, min_distance_between_points)
                     STRUCT_READWRITE(ct_icp::MultipleResolutionVoxelMap::ResolutionParam, max_num_points);
 
-    py::class_<ct_icp::MultipleResolutionVoxelMap::Options>(m, "Map_Options")
+    py::class_<ct_icp::IMapOptions, PyIMapOptions, std::shared_ptr<ct_icp::IMapOptions>>(m, "IMapOptions")
+        .def("GetType", &ct_icp::IMapOptions::GetType)
+        .def("MakeMapFromOptions", &ct_icp::IMapOptions::MakeMapFromOptions);
+
+    py::class_<ct_icp::MultipleResolutionVoxelMap::Options, ct_icp::IMapOptions, std::shared_ptr<ct_icp::MultipleResolutionVoxelMap::Options>>(m, "Map_Options")
         .def(py::init())
         .def(py::init([](const std::string &yaml_str)
                       {
@@ -679,207 +698,127 @@ PYBIND11_MODULE(pyct_icp, m)
         .def("Register", [](ct_icp::CT_ICP_Registration &icp, const ct_icp::ISlamMap &map, PY_PointCloud &cloud, ct_icp::TrajectoryFrame &initial_frame)
              { return icp.Register(map, *cloud.pointcloud, initial_frame, nullptr, nullptr); });
 
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// CT_ICP Sampling
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    //    /// LiDARFrame : A wrapper around a vector of ct_icp::Point3D
-    //    PYBIND11_NUMPY_DTYPE(PyLiDARPoint, raw_point, pt, alpha_timestamp, timestamp, frame_index);
-    //
-    //    py::class_<LiDARFrame, std::shared_ptr<LiDARFrame>>(m, "LiDARFrame")
-    //            .def(py::init())
-    //            .def("SetFrame", &LiDARFrame::SetFrame)
-    //            .def("GetStructuredArrayCopy", [](LiDARFrame &self) {
-    //                return self.GetWrappingArray();
-    //            })
-    //            .def("GetStructuredArrayRef", [](py::object &self) {
-    //                auto &self_frame = py::cast<LiDARFrame &>(self);
-    //                return self_frame.GetWrappingArray(self);
-    //            });
-    //
-    //    py::class_<ct_icp::TrajectoryFrame, std::shared_ptr<ct_icp::TrajectoryFrame>>(m, "TrajectoryFrame")
-    //            .def(py::init())
-    //                    STRUCT_READWRITE(ct_icp::TrajectoryFrame, begin_R)
-    //                    STRUCT_READWRITE(ct_icp::TrajectoryFrame, end_R)
-    //                    STRUCT_READWRITE(ct_icp::TrajectoryFrame, end_t)
-    //                    STRUCT_READWRITE(ct_icp::TrajectoryFrame, begin_t)
-    //            .def("MidPose", &ct_icp::TrajectoryFrame::MidPose);
-    //
-    //
-    //    /// ODOMETRY
-    //    py::enum_<ct_icp::LEAST_SQUARES>(m, "LEAST_SQUARES")
-    //            ADD_VALUE(ct_icp::LEAST_SQUARES, CAUCHY)
-    //            ADD_VALUE(ct_icp::LEAST_SQUARES, TOLERANT)
-    //            ADD_VALUE(ct_icp::LEAST_SQUARES, TRUNCATED)
-    //            ADD_VALUE(ct_icp::LEAST_SQUARES, HUBER)
-    //            ADD_VALUE(ct_icp::LEAST_SQUARES, STANDARD)
-    //            .export_values();
-    //
-    //    py::enum_<ct_icp::INITIALIZATION>(m, "INITIALIZATION")
-    //            ADD_VALUE(ct_icp::INITIALIZATION, INIT_NONE)
-    //            ADD_VALUE(ct_icp::INITIALIZATION, INIT_CONSTANT_VELOCITY)
-    //            .export_values();
-    //
-    //    py::enum_<ct_icp::ICP_DISTANCE>(m, "ICP_DISTANCE")
-    //            ADD_VALUE(ct_icp::ICP_DISTANCE, POINT_TO_PLANE)
-    //            ADD_VALUE(ct_icp::ICP_DISTANCE, CT_POINT_TO_PLANE)
-    //            .export_values();
-    //
-    //    py::enum_<ct_icp::MOTION_COMPENSATION>(m, "MOTION_COMPENSATION")
-    //            ADD_VALUE(ct_icp::MOTION_COMPENSATION, NONE)
-    //            ADD_VALUE(ct_icp::MOTION_COMPENSATION, CONSTANT_VELOCITY)
-    //            ADD_VALUE(ct_icp::MOTION_COMPENSATION, ITERATIVE)
-    //            ADD_VALUE(ct_icp::MOTION_COMPENSATION, CONTINUOUS)
-    //            .export_values();
-    //
-    //    py::enum_<ct_icp::CT_ICP_SOLVER>(m, "CT_ICP_SOLVER")
-    //            ADD_VALUE(ct_icp::CT_ICP_SOLVER, CERES)
-    //            ADD_VALUE(ct_icp::CT_ICP_SOLVER, GN)
-    //            .export_values();
-    //
-    //    py::class_<ct_icp::SequenceInfo>(m, "SequenceInfo")
-    //            .def(py::init())
-    //                    STRUCT_READWRITE(ct_icp::SequenceInfo, sequence_size)
-    //                    STRUCT_READWRITE(ct_icp::SequenceInfo, sequence_name)
-    //                    STRUCT_READWRITE(ct_icp::SequenceInfo, sequence_id);
-    //
-    //
-    //    py::class_<ct_icp::CTICPOptions,
-    //            std::shared_ptr<ct_icp::CTICPOptions>>(m, "CTICPOptions")
-    //            .def(py::init())
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, distance)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, num_iters_icp)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, min_number_neighbors)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, voxel_neighborhood)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, max_number_neighbors)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, max_dist_to_plane_ct_icp)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, threshold_orientation_norm)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, threshold_translation_norm)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, debug_print)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, point_to_plane_with_distortion)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, distance)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, init_num_frames)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, num_closest_neighbors)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, beta_location_consistency)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, beta_constant_velocity)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, beta_small_velocity)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, beta_orientation_consistency)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, loss_function)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, ls_max_num_iters)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, ls_num_threads)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, size_voxel_map)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, ls_sigma)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, max_num_residuals)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, min_num_residuals)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, weight_alpha)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, weight_neighborhood)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, solver)
-    //                    STRUCT_READWRITE(ct_icp::CTICPOptions, ls_tolerant_min_threshold);
-    //
-    //    py::class_<ct_icp::OdometryOptions>(m, "OdometryOptions")
-    //            .def(py::init())
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, voxel_size)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, init_num_frames)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, sample_voxel_size)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, max_distance)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, max_num_points_in_voxel)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, motion_compensation)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, debug_print)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, min_distance_points)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, initialization)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, distance_error_threshold)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_registration)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_fail_early)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_minimal_level)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_full_voxel_threshold)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_empty_voxel_threshold)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_threshold_relative_orientation)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_threshold_ego_orientation)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_num_attempts)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, robust_max_voxel_neighborhood)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, log_file_destination)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, log_to_file)
-    //                    STRUCT_READWRITE(ct_icp::OdometryOptions, ct_icp_options);
-    //
-    //
-    //    m.def("DefaultDrivingProfile", &ct_icp::OdometryOptions::DefaultDrivingProfile);
-    //    m.def("RobustDrivingProfile", &ct_icp::OdometryOptions::RobustDrivingProfile);
-    //    m.def("DefaultRobustOutdoorLowInertia", &ct_icp::OdometryOptions::DefaultRobustOutdoorLowInertia);
-    //
-    //    using RegSummary = ct_icp::Odometry::RegistrationSummary;
-    //    py::class_<PyRegistrationSummary,
-    //            std::shared_ptr<PyRegistrationSummary>>(m, "RegistrationSummary")
-    //            .def_readonly("sample_size", &PyRegistrationSummary::sample_size)
-    //            .def_readonly("number_of_residuals", &PyRegistrationSummary::number_of_residuals)
-    //            .def_readonly("distance_correction", &PyRegistrationSummary::distance_correction)
-    //            .def_readonly("relative_distance", &PyRegistrationSummary::relative_distance)
-    //            .def_readonly("number_of_attempts", &PyRegistrationSummary::relative_orientation)
-    //            .def_readonly("number_of_attempts", &PyRegistrationSummary::ego_orientation)
-    //            .def_readonly("success", &PyRegistrationSummary::success)
-    //            .def_readonly("frame", &PyRegistrationSummary::frame)
-    //            .def_readonly("error_message", &PyRegistrationSummary::error_message)
-    //            .def_readonly("number_of_attempts", &PyRegistrationSummary::number_of_attempts)
-    //            .def_readonly("points", &PyRegistrationSummary::lidar_points);
-    //
-    //
-    //    py::class_<ct_icp::Odometry,
-    //            std::shared_ptr<ct_icp::Odometry>>(m, "Odometry")
-    //            .def(py::init([](ct_icp::OdometryOptions &options) {
-    //                return std::make_shared<ct_icp::Odometry>(options);
-    //            }))
-    //            .def("RegisterFrame", [](ct_icp::Odometry &odometry, const LiDARFrame &frame) {
-    //                return PyRegistrationSummary(odometry.RegisterFrame(frame.points));
-    //            })
-    //            .def("RegisterFrameWithEstimate", [](ct_icp::Odometry &odometry,
-    //                                                 const LiDARFrame &frame,
-    //                                                 const ct_icp::TrajectoryFrame &initial_estimate) {
-    //                return PyRegistrationSummary(odometry.RegisterFrameWithEstimate(frame.points,
-    //                                                                                initial_estimate));
-    //            })
-    //            .def("MapSize", &ct_icp::Odometry::MapSize)
-    //            .def("Trajectory", &ct_icp::Odometry::Trajectory)
-    //            .def("GetLocalMap", [](const ct_icp::Odometry &self) {
-    //                // Convert to numpy
-    //                return vector_to_ndarray<Eigen::Vector3d, double,
-    //                        Eigen::aligned_allocator<Eigen::Vector3d>>(self.GetLocalMap());
-    //            });
-    //
-    //
-    //    /// DATASETS
-    //    py::enum_<ct_icp::DATASET>(m, "CT_ICP_DATASET")
-    //            ADD_VALUE(ct_icp::DATASET, KITTI_raw)
-    //            ADD_VALUE(ct_icp::DATASET, KITTI_CARLA)
-    //            ADD_VALUE(ct_icp::DATASET, NCLT)
-    //            ADD_VALUE(ct_icp::DATASET, PLY_DIRECTORY)
-    //            ADD_VALUE(ct_icp::DATASET, KITTI_360)
-    //            .export_values();
-    //
-    //    py::class_<ct_icp::DatasetOptions>(m, "DatasetOptions")
-    //            .def(py::init())
-    //                    STRUCT_READWRITE(ct_icp::DatasetOptions, dataset)
-    //                    STRUCT_READWRITE(ct_icp::DatasetOptions, root_path)
-    //                    STRUCT_READWRITE(ct_icp::DatasetOptions, fail_if_incomplete)
-    //                    STRUCT_READWRITE(ct_icp::DatasetOptions, min_dist_lidar_center)
-    //                    STRUCT_READWRITE(ct_icp::DatasetOptions, max_dist_lidar_center)
-    //                    STRUCT_READWRITE(ct_icp::DatasetOptions, nclt_num_aggregated_pc);
-    //
-    //    py::class_<ct_icp::DatasetSequence, std::shared_ptr<ct_icp::DatasetSequence>>(m, "DatasetSequence")
-    //            .def("HasNext", &ct_icp::DatasetSequence::HasNext)
-    //            .def("Next", [](ct_icp::DatasetSequence &iterator) {
-    //                LiDARFrame frame;
-    //                frame.points = iterator.Next();
-    //                return frame;
-    //            })
-    //            .def("NumFrames", &ct_icp::DatasetSequence::NumFrames)
-    //            .def("WithRandomAccess", &ct_icp::DatasetSequence::WithRandomAccess)
-    //            .def("Frame", [](ct_icp::DatasetSequence &self, int index_frame) {
-    //                CHECK(self.WithRandomAccess()) << "Random Access is not available for the dataset";
-    //                LiDARFrame frame;
-    //                frame.points = self.Frame(size_t(index_frame));
-    //                return frame;
-    //            });
-    //
-    //    m.def("sequence_name", &ct_icp::sequence_name);
-    //    m.def("get_sequences", &ct_icp::get_sequences);
-    //    m.def("has_ground_truth", &ct_icp::has_ground_truth);
-    //    m.def("get_dataset_sequence", &ct_icp::get_dataset_sequence);
-    //    m.def("load_sensor_ground_truth", &ct_icp::load_sensor_ground_truth);
-    //    m.def("load_ground_truth", &ct_icp::load_sensor_ground_truth);
-}
+    py::class_<slam::GridSamplingOptions>(m, "GridSamplingOptions")
+        .def(py::init())
+            STRUCT_READWRITE(slam::GridSamplingOptions, grid_size)
+                STRUCT_READWRITE(slam::GridSamplingOptions, num_points_per_voxel)
+                    STRUCT_READWRITE(slam::GridSamplingOptions, max_num_points);
+
+    m.def("SamplePointCloudInGrid", [](const PY_PointCloud &pc, const slam::GridSamplingOptions &options)
+          { return PY_PointCloud{slam::SamplePointCloudInGrid(*pc.pointcloud, options)}; });
+
+    py::class_<ct_icp::AdaptiveGridSamplingOptions>(m, "AdaptiveGridSamplingOptions")
+        .def(py::init())
+            STRUCT_READWRITE(ct_icp::AdaptiveGridSamplingOptions, num_points_per_voxel)
+                STRUCT_READWRITE(ct_icp::AdaptiveGridSamplingOptions, max_num_points)
+                    STRUCT_READWRITE(ct_icp::AdaptiveGridSamplingOptions, distance_voxel_size);
+
+    m.def("AdaptivePointCloudInGrid", [](const PY_PointCloud &pc,
+                                         const ct_icp::AdaptiveGridSamplingOptions &options)
+          { return PY_PointCloud{
+                ct_icp::AdaptiveSamplePointCloudInGrid(*pc.pointcloud, options)}; });
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// CT_ICP Odometry
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    py::enum_<ct_icp::MOTION_COMPENSATION>(m, "MOTION_COMPENSATION")
+        ADD_VALUE(ct_icp::MOTION_COMPENSATION, NONE)
+            ADD_VALUE(ct_icp::MOTION_COMPENSATION, CONSTANT_VELOCITY)
+                ADD_VALUE(ct_icp::MOTION_COMPENSATION, ITERATIVE)
+                    ADD_VALUE(ct_icp::MOTION_COMPENSATION, CONTINUOUS)
+                        .export_values();
+
+    py::enum_<ct_icp::INITIALIZATION>(m, "INITIALIZATION")
+        ADD_VALUE(ct_icp::INITIALIZATION, INIT_NONE)
+            ADD_VALUE(ct_icp::INITIALIZATION, INIT_CONSTANT_VELOCITY)
+                .export_values();
+
+    py::enum_<ct_icp::sampling::SAMPLING_OPTION>(m, "SAMPLING_OPTION")
+        ADD_VALUE(ct_icp::sampling::SAMPLING_OPTION, NONE)
+            ADD_VALUE(ct_icp::sampling::SAMPLING_OPTION, GRID)
+                ADD_VALUE(ct_icp::sampling::SAMPLING_OPTION, ADAPTIVE)
+                    .export_values();
+
+    py::class_<ct_icp::OdometryOptions>(m, "OdometryOptions")
+        .def(py::init())
+        .def_static("DefaultDrivingProfile", ct_icp::OdometryOptions::DefaultDrivingProfile)
+        .def_static("DefaultRobustOutdoorLowInertia", ct_icp::OdometryOptions::DefaultRobustOutdoorLowInertia)
+            STRUCT_READWRITE(ct_icp::OdometryOptions, ct_icp_options)
+                STRUCT_READWRITE(ct_icp::OdometryOptions, motion_compensation)
+                    STRUCT_READWRITE(ct_icp::OdometryOptions, initialization)
+                        STRUCT_READWRITE(ct_icp::OdometryOptions, init_voxel_size)
+                            STRUCT_READWRITE(ct_icp::OdometryOptions, init_sample_voxel_size)
+                                STRUCT_READWRITE(ct_icp::OdometryOptions, init_num_frames)
+                                    STRUCT_READWRITE(ct_icp::OdometryOptions, sample_voxel_size)
+                                        STRUCT_READWRITE(ct_icp::OdometryOptions, max_num_keypoints)
+                                            STRUCT_READWRITE(ct_icp::OdometryOptions, sampling)
+                                                STRUCT_READWRITE(ct_icp::OdometryOptions, map_options)
+                                                    STRUCT_READWRITE(ct_icp::OdometryOptions, neighborhood_strategy)
+                                                        STRUCT_READWRITE(ct_icp::OdometryOptions, size_voxel_map)
+                                                            STRUCT_READWRITE(ct_icp::OdometryOptions, max_num_points_in_voxel)
+                                                                STRUCT_READWRITE(ct_icp::OdometryOptions, voxel_neighborhood)
+                                                                    STRUCT_READWRITE(ct_icp::OdometryOptions, max_radius_neighborhood)
+                                                                        STRUCT_READWRITE(ct_icp::OdometryOptions, min_distance_points)
+                                                                            STRUCT_READWRITE(ct_icp::OdometryOptions, voxel_size)
+                                                                                STRUCT_READWRITE(ct_icp::OdometryOptions, max_distance)
+                                                                                    STRUCT_READWRITE(ct_icp::OdometryOptions, distance_error_threshold)
+                                                                                        STRUCT_READWRITE(ct_icp::OdometryOptions, orientation_error_threshold)
+                                                                                            STRUCT_READWRITE(ct_icp::OdometryOptions, quit_on_error)
+                                                                                                STRUCT_READWRITE(ct_icp::OdometryOptions, always_insert)
+                                                                                                    STRUCT_READWRITE(ct_icp::OdometryOptions, do_no_insert)
+                                                                                                        STRUCT_READWRITE(ct_icp::OdometryOptions, debug_print)
+                                                                                                            STRUCT_READWRITE(ct_icp::OdometryOptions, debug_viz)
+                                                                                                                STRUCT_READWRITE(ct_icp::OdometryOptions, log_to_file)
+                                                                                                                    STRUCT_READWRITE(ct_icp::OdometryOptions, log_file_destination)
+                                                                                                                        STRUCT_READWRITE(ct_icp::OdometryOptions, default_motion_model)
+                                                                                                                            STRUCT_READWRITE(ct_icp::OdometryOptions, with_default_motion_model)
+                                                                                                                                STRUCT_READWRITE(ct_icp::OdometryOptions, adaptive_options);
+
+    m.def("OdometryOptionsFromYAMLStr", [](const std::string &yaml_str)
+          {
+        YAML::Node node = YAML::Load(yaml_str);
+        return ct_icp::yaml_to_odometry_options(node); });
+
+    m.def("OdometryOptionsFromYAMLFile", [](const std::string &yaml_file)
+          {
+        YAML::Node node = YAML::LoadFile(yaml_file);
+        return ct_icp::yaml_to_odometry_options(node); });
+
+    py::class_<ct_icp::Odometry::RegistrationSummary>(m, "Odometry_RegistrationSummary")
+        .def(py::init())
+            STRUCT_READWRITE(ct_icp::Odometry::RegistrationSummary, frame)
+                STRUCT_READWRITE(ct_icp::Odometry::RegistrationSummary, initial_frame)
+                    STRUCT_READWRITE(ct_icp::Odometry::RegistrationSummary, sample_size)
+                        STRUCT_READWRITE(ct_icp::Odometry::RegistrationSummary, number_of_residuals)
+                            STRUCT_READWRITE(ct_icp::Odometry::RegistrationSummary, robust_level)
+                                STRUCT_READWRITE(ct_icp::Odometry::RegistrationSummary, distance_correction)
+                                    STRUCT_READWRITE(ct_icp::Odometry::RegistrationSummary, relative_distance)
+                                        STRUCT_READWRITE(ct_icp::Odometry::RegistrationSummary, relative_orientation)
+                                            STRUCT_READWRITE(ct_icp::Odometry::RegistrationSummary, ego_orientation)
+                                                STRUCT_READWRITE(ct_icp::Odometry::RegistrationSummary, success)
+                                                    STRUCT_READWRITE(ct_icp::Odometry::RegistrationSummary, points_added)
+                                                        STRUCT_READWRITE(ct_icp::Odometry::RegistrationSummary, number_of_attempts)
+                                                            STRUCT_READWRITE(ct_icp::Odometry::RegistrationSummary, error_message)
+                                                                STRUCT_READWRITE(ct_icp::Odometry::RegistrationSummary, icp_summary)
+                                                                    STRUCT_READWRITE(ct_icp::Odometry::RegistrationSummary, logged_values);
+
+    py::class_<ct_icp::Odometry, std::shared_ptr<ct_icp::Odometry>>(m, "Odometry")
+        .def(py::init([](const ct_icp::OdometryOptions &options)
+                      { return std::make_shared<ct_icp::Odometry>(options); }))
+        .def("RegisterFrame", [](ct_icp::Odometry &odometry, const PY_PointCloud &pc, int frame_id)
+             { return odometry.RegisterFrame(*pc.pointcloud, frame_id); })
+        .def("GetTrajectory", &ct_icp::Odometry::Trajectory)
+        .def("GetMapPointCloud", [](const ct_icp::Odometry &odom)
+             { return odom.GetMapPointCloud(); })
+        .def("GetMapSize", &ct_icp::Odometry::MapSize)
+        .def("GetMap", &ct_icp::Odometry::GetMapPointer)
+        .def("Reset", [](ct_icp::Odometry &odom)
+             { odom.Reset(); })
+        .def("ResetWithOptions", [](ct_icp::Odometry &odom, const ct_icp::OdometryOptions &options)
+             { odom.Reset(options); });
+    }
