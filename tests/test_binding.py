@@ -274,6 +274,81 @@ class TestBinding(unittest.TestCase):
         self.assertEqual(options.min_number_neighbors, 10)
         self.assertEqual(options.threshold_voxel_occupancy, 1)
 
+        # ########### CTICP Registration ########### #
+        # Build the Map         
+        map_points = pct.PointCloud()
+        N_map = 10000
+        map_points.Resize(N_map)
+        xyz = map_points.GetXYZ()
+        xyz[:, :2] = np.random.rand(N_map, 2) * 1. # Z = 0 Plane
+
+        # Build the Registration point cloud
+        N_cloud = 100
+        cloud = pct.PointCloud()
+        cloud.Resize(N_cloud)
+
+        # Add The required point cloud field (The ICP needs Timestamps, RawPoints and WorldPoints field)
+        cloud.SetRawPointsFromXYZ() # Sets the Raw Points from the XYZ field
+        cloud.AddTimestampsField()  # Adds an empty Timestamps Field
+        cloud.AddWorldPointsField() # Adds an empty World Points Field
+
+        xyz = cloud.GetXYZ()
+        xyz[:, :2] = np.random.rand(N_cloud, 2)
+        xyz[:, 2] += 0.1 # Z = 0.5 plane
+
+        world_points = cloud.GetWorldPoints()
+        world_points[:] = np.array(xyz)
+        timestamps = cloud.GetTimestamps()
+        timestamps[:] = 1.
+
+        # Build the map
+        default_map_options = pct.Map_Options()
+        resolution_param = pct.Map_ResolutionParam()
+        resolution_param.resolution = 0.3 # 10 cm per voxel
+        resolution_param.min_distance_between_points = 0.01 #
+        resolution_param.max_num_points = 100
+
+        default_map_options.resolutions = [resolution_param]
+        map = pct.MultipleResolutionVoxelMap(default_map_options)
+        map.InsertPointCloud(map_points, [pct.Pose()])
+
+        # Build the Initial Trajectory
+        pose_to_update = pct.TrajectoryFrame()
+        pose_to_update.begin_pose.dest_timestamp = 0.
+        pose_to_update.end_pose.dest_timestamp = 1.
+        pose_to_update.begin_pose.dest_frame_id = 0
+        pose_to_update.end_pose.dest_frame_id = 1 
+
+        yaml_options = r"""
+        num_iters_icp: 8 
+        parametrization: SIMPLE 
+        distance: POINT_TO_PLANE
+        solver: CERES
+        # max_num_residuals: 700 
+        weighting_scheme: ALL
+        weight_alpha: 1. 
+        weight_neighborhood: 0.2
+        power_planarity: 2.0
+        max_number_neighbors: 40
+        min_number_neighbors: 10
+        threshold_voxel_occupancy: 1
+        """
+        options = pct.CTICPOptionsFromYAMLStr(yaml_options)
+        icp = pct.CTICP_Registration(options)
+        result = icp.Register(map, cloud, pose_to_update)
+
+        # Verify that ICP correctly did register the frame onto the plane
+        self.assertLess(abs(pose_to_update.end_pose.pose.tr[2] + 0.1), 1.e-8)
+
+
+        
+
+
+        
+
+
+
+
 
 if __name__ == '__main__':
     unittest.main()

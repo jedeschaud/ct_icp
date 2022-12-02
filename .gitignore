@@ -5,6 +5,7 @@ imgui.ini
 install/*
 benchmark/*
 wandb*
+build/*
 
 # Configuration files (e.g. idea)
 .*
