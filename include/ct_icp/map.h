@@ -18,6 +18,9 @@ namespace ct_icp {
         /// Insertions
         /////////////////////////////////////////
 
+        void InsertPointCloud(const slam::PointCloud &pointcloud,
+                              const std::vector<slam::Pose> &frame_poses);
+
         /*!
          * @brief Inserts a point cloud, providing the poses the point cloud was built from
          *

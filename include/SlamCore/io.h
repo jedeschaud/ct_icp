@@ -177,10 +177,10 @@ namespace slam {
     void WritePLY(const std::string &file, const std::vector<slam::WPoint3D> &points);
 
     // Writes a point cloud to a file
-    void WritePLY(std::ostream &output_file, const PointCloud &pointcloud, const PLYSchemaMapper &schema);;
+    void WritePLY(std::ostream &output_file, const PointCloud &pointcloud, const PLYSchemaMapper &schema);
 
     // Writes a point cloud to a file
-    void WritePLY(const std::string &file, const PointCloud &points, const PLYSchemaMapper &schema);;
+    void WritePLY(const std::string &file, const PointCloud &points, const PLYSchemaMapper &schema);
 
     // Writes a buffer collection to a file
     void WritePLY(const std::string &output_file, const BufferCollection &collection, const PLYSchemaMapper &schema);

@@ -80,7 +80,35 @@ cmake --build . --target install --config Release --parallel 12       #< Build a
 > You can use the config files located at `<SUPERBUILD_INSTALL_DIR>/CT_ICP/lib/cmake` to load the libraries in a cmake
 > project, or use ROS or the specified executables.
 
-### Step 3: ROS
+### Step 3: Python Bindings
+
+> **CT-ICP** comes with python bindings. To build the python bindings, follow the following instructions:
+
+- 1. Install the superbuild (**with pybind11** /!\ )
+- 2. Install `CT_ICP` (see Step 1., with the CMake option `WITH_PYTHON_BINDING` activated) 
+- 3. Verify that the python binding library has been installed. Its location should be something like `<build_dir>/src/binding/pyct_icp/pyct_icp.cpython-38-x86_64-linux-gnu.so`
+
+- 4.  Install locally the python package:
+```bash
+cd <build_dir>/src/binding                  # Go to the parent folder of setup.py
+pip uninstall -y pyct_icp && pip install .  # Install locally the library
+```
+
+> An example script using the binding is located at `python/run_slam.py`. It launches CT-ICP on a dataset specified from the command line. The output of running `python python/run_slam.py -h` should be : 
+
+![COMMAND](./doc/run_slam_image.png)
+
+
+
+> There is currently no documentation for the binding, but outside the examples (which can be seen either at `python/run_slam.py` or `tests/test_binding.py`), the reference to understand the python binding is the file `src/binding/pyct_icp.cpp`
+
+> /!\ Set the CMAKE argument ```-DWITH_PYTHON_BINDING=ON``` to build CT-ICP binding library
+
+> /!\ Make sure that the superbuild has installed `pybind11` (see `superbuild/CMakeLists.txt`)
+
+> /!\ When calling the installation script, make sure to activate the target virtual or conda environment (cmake will build the binding using the default python interpreter)
+
+### Step 4: ROS
 
 To build the ROS wrapping for **CT-ICP**, first build and install the CT-ICP library (see *Steps 1 and 2* ).
 

@@ -32,6 +32,19 @@ namespace ct_icp {
         options.ct_icp_options.solver = CERES;
         options.ct_icp_options.ls_num_threads = 6;
         options.ct_icp_options.num_iters_icp = 5;
+        options.motion_compensation = CONTINUOUS;
+        options.initialization = INIT_CONSTANT_VELOCITY;
+        options.sample_voxel_size = 1.5;
+        auto nn_strategy = std::make_shared<ct_icp::DefaultNearestNeighborStrategy::Options>();
+        nn_strategy->max_num_neighbors = 20;
+        nn_strategy->min_num_neighbors = 10;
+        options.neighborhood_strategy = nn_strategy;
+
+        auto map_options = std::make_shared<ct_icp::MultipleResolutionVoxelMap::Options>();
+        map_options->default_radius = 0.75;
+        map_options->resolutions = {ct_icp::MultipleResolutionVoxelMap::ResolutionParam{0.8, 0.1, 30}};
+        options.map_options = map_options;
+
         return options;
     }
 

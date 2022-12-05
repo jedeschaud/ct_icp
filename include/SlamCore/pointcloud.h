@@ -183,7 +183,7 @@ namespace slam {
             int name ## Dimension() const { return sizeof(default_type) / PropertySize(property_type);};\
         public:                                                                                         \
         inline Field Get ## name ## Field() const {                                                     \
-            SLAM_CHECK_STREAM(element_name .has_value(), "The field ##element_name is not defined !");  \
+            SLAM_CHECK_STREAM(element_name .has_value(), "The field " #element_name " is not defined !");  \
             return element_name .value();                                                               \
             }                                                                                           \
         inline bool IsValid ## name  () const {                                                         \
@@ -194,22 +194,22 @@ namespace slam {
         }                                                                                               \
         template<typename DataT>                                                                        \
         View<DataT> name() {                                                                            \
-            SLAM_CHECK_STREAM(element_name.has_value(), "The field ##element_name is not defined !");   \
+            SLAM_CHECK_STREAM(element_name.has_value(), "The field " #element_name " is not defined !");   \
             return FieldView<DataT>(*element_name);                                                     \
         }                                                                                               \
         template<typename ScalarT>                                                                      \
         const View<ScalarT> name() const {                                                              \
-            SLAM_CHECK_STREAM(element_name.has_value(), "The field ##element_name is not defined !");   \
+            SLAM_CHECK_STREAM(element_name.has_value(), "The field " #element_name " is not defined !");   \
             return FieldView<ScalarT>(*element_name);                                                   \
         }                                                                                               \
         template<typename ScalarT>                                                                      \
         ProxyView<ScalarT> name ## Proxy() {                                                            \
-            SLAM_CHECK_STREAM(element_name.has_value(), "The field ##element_name is not defined !");   \
+            SLAM_CHECK_STREAM(element_name.has_value(), "The field " #element_name " is not defined !");   \
             return ProxyFieldView<ScalarT>(*element_name);                                              \
         }                                                                                               \
         template<typename ScalarT>                                                                      \
         const ProxyView<ScalarT> name ## Proxy() const {                                                \
-            SLAM_CHECK_STREAM(element_name.has_value(), "The field ##element_name is not defined !");   \
+            SLAM_CHECK_STREAM(element_name.has_value(), "The field " #element_name " is not defined !");   \
             return ProxyFieldView<ScalarT>(*element_name);                                              \
         }                                                                                               \
         void Set ## name ## Field(Field&& field ) {                                                     \
@@ -266,6 +266,11 @@ namespace slam {
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         /// Schema Infos & Management
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+        // Returns Buffer information about the point cloud
+        // /!\ This is a dangerous operation, as the pointer allows to modify raw data despite the const of this method
+        BufferCollection::BufferInfo GetBufferInfoFromField(const Field &field) const;;
 
         // Returns a const reference to the underlying buffer collection
         const BufferCollection &GetCollection() const;

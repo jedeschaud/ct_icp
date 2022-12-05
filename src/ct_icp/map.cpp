@@ -77,6 +77,9 @@ namespace ct_icp {
     }
 
     /* -------------------------------------------------------------------------------------------------------------- */
-
+    void ISlamMap::InsertPointCloud(const slam::PointCloud &pointcloud, const std::vector<slam::Pose> &frame_poses) {
+        std::vector<size_t> _;
+        InsertPointCloud(pointcloud, frame_poses, _);
+    }
 } // namespace ct_icp
 

@@ -147,8 +147,38 @@ namespace slam {
          */
         BufferCollection SelectItems(const std::vector<size_t> &indices) const;
 
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        /// Buffer protocol
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        // BufferInfo possess all information to construct numpy buffer protocol bindings
+        // From ItemBuffer(s)
+        struct BufferInfo {
+            char *item_data_ptr = nullptr; // The item buffer, starting at the first element of the field
+            size_t num_items = 0; // The number of items in the buffer
+            size_t item_size = 0; // The item size (or the stride between two field in the item buffer)
+            size_t field_size = 0; // The size of each field
+            size_t dimensions = 0; // The dimension of the field
+            slam::PROPERTY_TYPE property_type; // The elementary property type of the field
+        };
+
+        bool IsElementAValidBufferInfo(const std::string &element_name) const;
+
+        /*! @returns A buffer info corresponding to an element
+         *
+         *  @warning A BufferInfo is only valid if the element has an homogeneous type (with one unique property type)
+         *           If this is not the case, the
+         */
+        BufferInfo GetBufferInfoFromElement(const std::string &element_name) const;
+
+        /*! @returns A buffer info corresponding to a property
+         */
+        BufferInfo GetBufferInfoFromProperty(const std::string &element_name, const std::string &pty_name) const;
+
     private:
         std::vector<ItemBufferPtr> item_buffers;
+
+        friend struct PointCloud; // Allows the Point Cloud access the item buffers
 
         // Returns whether the sizes are consistent
         static bool AreSizesConsistent(const std::vector<ItemBufferPtr> &buffer);

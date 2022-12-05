@@ -4,6 +4,10 @@ if (WITH_VIZ3D)
     list(APPEND EXTERNAL_DEPENDENCIES viz3d VTK::FiltersCore)
 endif ()
 
+if (WITH_PYTHON_BINDING)
+    list(APPEND EXTERNAL_DEPENDENCIES pybind11::pybind11)
+endif ()
+
 # --
 SLAM_CHECK_TARGETS(${EXTERNAL_DEPENDENCIES})
 
@@ -22,4 +26,4 @@ foreach (target ${EXTERNAL_DEPENDENCIES})
     set(__LOCATION "")
 endforeach ()
 
-message(INFO " -- [CT-ICP] -- Appending to the INSTALL RPATH the RPATH to the external libraries: \n\t\t[${EXTERNAL_DEPENDENCIES_INSTALL_RPATH}]" )
+message(INFO " -- [CT-ICP] -- Appending to the INSTALL RPATH the RPATH to the external libraries: \n\t\t[${EXTERNAL_DEPENDENCIES_INSTALL_RPATH}]")

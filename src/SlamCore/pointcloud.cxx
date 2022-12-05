@@ -250,6 +250,13 @@ namespace slam {
             }
         }
 
+        if (!rgb && collection_.HasElement("rgb")) {
+            auto item_idx = int(collection_.GetItemIndex("rgb"));
+            if (collection_.HasElement("rgb")) {
+                SetRGBField({item_idx, "rgb"});
+            }
+        }
+
         // Try to find the world point from the element named 'world_point' in the schema
         if (!world_point && (collection_.HasElement("world_point"))) {
             auto item_idx = int(collection_.GetItemIndex("world_point"));
@@ -352,6 +359,18 @@ namespace slam {
             Eigen::Vector3d _raw_point = raw_points[idx];
             world_points[idx] = pose * _raw_point;
         }
+    }
+
+    /* -------------------------------------------------------------------------------------------------------------- */
+    BufferCollection::BufferInfo PointCloud::GetBufferInfoFromField(const PointCloud::Field &field) const {
+        SLAM_CHECK_STREAM(field.IsElement() || field.IsProperty(),
+                          "Can only query an element or a property field as buffer info from a point cloud");
+        if (field.IsElement()) {
+            SLAM_CHECK_STREAM(collection_.IsElementAValidBufferInfo(*field.element_name),
+                              "The element is not a valid element name");
+            return collection_.GetBufferInfoFromElement(*field.element_name);
+        }
+        return collection_.GetBufferInfoFromProperty(*field.element_name, *field.property_name);
     }
 
 }
