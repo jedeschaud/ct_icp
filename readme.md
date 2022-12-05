@@ -90,7 +90,7 @@ cmake --build . --target install --config Release --parallel 12       #< Build a
 
 - 4.  Install locally the python package:
 ```bash
-cd <build_dir>/src/pyct_icp                 # Go to the parent folder of setup.py
+cd <build_dir>/src/binding                  # Go to the parent folder of setup.py
 pip uninstall -y pyct_icp && pip install .  # Install locally the library
 ```
 
