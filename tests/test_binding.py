@@ -432,7 +432,7 @@ class TestBinding(unittest.TestCase):
     ls_num_threads: 6 # The number of threads to build and solve the least square system (for CERES solver)
     ls_sigma: 0.01 # The sigma parameter for loss CAUCHY, HUBER, TOLERANT, TRUNCATED (for CERES solver)
     ls_tolerant_min_threshold: 0.05 # The tolerant parameter for loss TOLERANT (for CERES solver)
-        """
+    """
         options = pct.OdometryOptionsFromYAMLStr(yaml_options)
         self.assertEqual(options.ct_icp_options.loss_function, pct.LEAST_SQUARES.CAUCHY)
         print(options.map_options.GetType())

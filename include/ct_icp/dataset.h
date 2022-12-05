@@ -12,9 +12,11 @@
 #include <SlamCore/experimental/synthetic.h>
 #include <SlamCore/pointcloud.h>
 
-namespace ct_icp {
+namespace ct_icp
+{
 
-    enum DATASET {
+    enum DATASET
+    {
         KITTI_raw = 0,
         KITTI_CARLA = 1,
         KITTI = 2,
@@ -34,20 +36,21 @@ namespace ct_icp {
 
     bool IsDrivingDataset(DATASET dataset);
 
-
     /*! @brief A SequenceInformation */
-    struct SequenceInfo {
+    struct SequenceInfo
+    {
         std::string sequence_name = "Unknown"; //< The name of the sequence
-        std::string label = "Unknown"; //< Label of the sequence in the dataset
-        int sequence_id = -1; //< The id of the sequence in the dataset
-        int sequence_size = -1; //< The size of the sequence
-        bool with_ground_truth = false; //< Whether the sequence has ground truth
+        std::string label = "Unknown";         //< Label of the sequence in the dataset
+        int sequence_id = -1;                  //< The id of the sequence in the dataset
+        int sequence_size = -1;                //< The size of the sequence
+        bool with_ground_truth = false;        //< Whether the sequence has ground truth
     };
 
     /**
      * @brief An ADatasetSequence allows access to the frames for a sequence of a dataset
      */
-    class ADatasetSequence {
+    class ADatasetSequence
+    {
     public:
         virtual ~ADatasetSequence() = 0;
 
@@ -89,11 +92,13 @@ namespace ct_icp {
         // Returns whether the dataset has a ground truth
         virtual bool HasGroundTruth() const { return seq_info_.with_ground_truth; }
 
-        const SequenceInfo &GetSequenceInfo() const {
+        const SequenceInfo &GetSequenceInfo() const
+        {
             return seq_info_;
         }
 
-        SequenceInfo &GetSequenceInfo() {
+        SequenceInfo &GetSequenceInfo()
+        {
             return seq_info_;
         }
 
@@ -111,12 +116,13 @@ namespace ct_icp {
     protected:
         SequenceInfo seq_info_;
         int max_num_frames_ = -1;
-        int init_frame_id_ = 0; // The initial frame index of the sequence
+        int init_frame_id_ = 0;    // The initial frame index of the sequence
         int current_frame_id_ = 0; // The current frame index of the iterator
         std::optional<std::function<void(slam::PointCloud &)>> filter_{};
     };
 
-    inline std::string DefaultFilePattern(size_t index_file, int zero_padding = 6) {
+    inline std::string DefaultFilePattern(size_t index_file, int zero_padding = 6)
+    {
         std::stringstream ss;
         ss << "frame_" << std::setw(zero_padding) << std::setfill('0') << index_file << ".ply";
         return ss.str();
@@ -125,9 +131,9 @@ namespace ct_icp {
     /**
      * @brief A Synthetic Acquisition simulates the acquisition of a Depth Sensor in a synthetic environment
      */
-    class SyntheticSequence : public ADatasetSequence {
+    class SyntheticSequence : public ADatasetSequence
+    {
     public:
-
         SyntheticSequence(slam::SyntheticSensorAcquisition &&sensor_acquisition,
                           std::vector<slam::Pose> &&gt_poses);
 
@@ -143,7 +149,8 @@ namespace ct_icp {
         [[nodiscard]] size_t NumFrames() const override;
 
         // Returns a frame at `index`. Throws an exception if the dataset does not support Random Access
-        [[nodiscard]] Frame GetUnfilteredFrame(size_t index) const override;;
+        [[nodiscard]] Frame GetUnfilteredFrame(size_t index) const override;
+        ;
 
         // Whether the dataset support random access
         [[nodiscard]] bool WithRandomAccess() const override { return true; };
@@ -154,10 +161,11 @@ namespace ct_icp {
         void SetInitFrame(int frame_index) override;
 
     private:
-        struct Options {
+        struct Options
+        {
             size_t num_points_per_primitives = 300; // The number of points per primitive to sample
-            double max_lidar_distance = 100.0; // The maximum distance to the lidar sensor for points of a new frame
-            double sample_frequency = 10.; // The frequency in Hz of the frame sampling
+            double max_lidar_distance = 100.0;      // The maximum distance to the lidar sensor for points of a new frame
+            double sample_frequency = 10.;          // The frequency in Hz of the frame sampling
         } options_;
         slam::SyntheticSensorAcquisition acquisition_;
         std::vector<slam::Pose> ground_truth_poses_;
@@ -166,7 +174,8 @@ namespace ct_icp {
     /**
      * @brief A abstract Sequence of files to iterate over
      */
-    class AFileSequence : public ADatasetSequence {
+    class AFileSequence : public ADatasetSequence
+    {
     public:
         typedef std::function<std::string(size_t)> FilePatternFunctionType;
         typedef std::function<bool(const std::string &, const std::string &)> SortingFunctionType;
@@ -175,9 +184,11 @@ namespace ct_icp {
         virtual Frame ReadFrame(const std::string &filename) const = 0;
 
         /*! @brief  Defines the Sorting function  */
-        void SetSortingFunction(SortingFunctionType &&function) {
+        void SetSortingFunction(SortingFunctionType &&function)
+        {
             sorting_function = std::move(function);
-            if (file_names_) {
+            if (file_names_)
+            {
                 std::sort(file_names_->begin(), file_names_->end(), sorting_function);
             }
         }
@@ -206,10 +217,10 @@ namespace ct_icp {
         std::vector<std::string> GetFilePaths() const;
 
     protected:
-
         explicit AFileSequence(std::string &&dir_path,
                                const std::vector<std::string> &filenames_) : ADatasetSequence(),
-                                                                             root_dir_path_(std::move(dir_path)) {
+                                                                             root_dir_path_(std::move(dir_path))
+        {
             SLAM_CHECK_STREAM(fs::exists(root_dir_path_), "The Directory " << root_dir_path_ << " does not exist");
             file_names_ = filenames_;
             full_sequence_size_ = file_names_->size();
@@ -218,16 +229,18 @@ namespace ct_icp {
 
         explicit AFileSequence(std::string &&root_path,
                                size_t expected_size, FilePatternFunctionType &&optional_pattern)
-                : ADatasetSequence(),
-                  root_dir_path_(std::move(root_path)) {
+            : ADatasetSequence(),
+              root_dir_path_(std::move(root_path))
+        {
             file_pattern_ = {
-                    std::move(optional_pattern),
+                std::move(optional_pattern),
             };
             full_sequence_size_ = expected_size;
             seq_info_.sequence_size = int(expected_size);
         }
 
-        SortingFunctionType sorting_function = [](const std::string &lhs, const std::string &rhs) { return lhs < rhs; };
+        SortingFunctionType sorting_function = [](const std::string &lhs, const std::string &rhs)
+        { return lhs < rhs; };
         fs::path root_dir_path_;
         std::optional<std::vector<std::string>> file_names_;
         std::optional<slam::LinearContinuousTrajectory> ground_truth_{};
@@ -238,9 +251,9 @@ namespace ct_icp {
     /**
      * @brief A Generic Sequence to iterate over a directory consisting of point cloud PLY files
      */
-    class PLYDirectory : public AFileSequence {
+    class PLYDirectory : public AFileSequence
+    {
     public:
-
         explicit PLYDirectory(std::string &&root_path,
                               size_t expected_size, FilePatternFunctionType &&optional_pattern);
 
@@ -261,36 +274,18 @@ namespace ct_icp {
         std::optional<slam::PLYSchemaMapper> mapper_ = {}; //< The default Schema Mapper.
     };
 
-    struct SequenceOptions {
+    struct SequenceOptions
+    {
         std::string sequence_name; // The name of the sequence
-        int start_frame_id = 0; // The first frame of the sequence
-        int max_num_frames = -1; // The maximum number of frames to run for (-1 to run on all frames)
+        int start_frame_id = 0;    // The first frame of the sequence
+        int max_num_frames = -1;   // The maximum number of frames to run for (-1 to run on all frames)
     };
 
-    struct DatasetOptions {
-
-        DATASET dataset;
-
-        std::string root_path;
-
-        bool fail_if_incomplete = false; // Whether to fail if all sequences are not present on disk
-
-        double min_dist_lidar_center = 3.0; // Threshold to filter points too close to the LiDAR center
-
-        double max_dist_lidar_center = 100.0; // Threshold to filter points too far to the LiDAR center
-
-        int nclt_num_aggregated_pc = 220; // The number of hits to aggregate for NCLT Dataset
-
-        bool use_all_datasets = true; // Whether to use all sequences, or only the ones specified in param `sequence_options`
-
-        std::vector<SequenceOptions> sequence_options;
-    };
-
-
-    class NCLTIterator final : public ADatasetSequence {
+    class NCLTIterator final : public ADatasetSequence
+    {
     public:
-
-        struct LidarPoint {
+        struct LidarPoint
+        {
             Eigen::Vector3d xyz;
             double timestamp = -1.;
 
@@ -327,7 +322,6 @@ namespace ct_icp {
         ~NCLTIterator() final;
 
     private:
-
         void OpenFile(const std::string &hits_file_path);
 
         void Close();
@@ -339,10 +333,31 @@ namespace ct_icp {
         std::string sequence_name_, hits_file_path_;
     };
 
+    struct DatasetOptions
+    {
+
+        DATASET dataset;
+
+        std::string root_path;
+
+        bool fail_if_incomplete = false; // Whether to fail if all sequences are not present on disk
+
+        double min_dist_lidar_center = 3.0; // Threshold to filter points too close to the LiDAR center
+
+        double max_dist_lidar_center = 100.0; // Threshold to filter points too far to the LiDAR center
+
+        int nclt_num_aggregated_pc = 220; // The number of hits to aggregate for NCLT Dataset
+
+        bool use_all_datasets = true; // Whether to use all sequences, or only the ones specified in param `sequence_options`
+
+        std::vector<SequenceOptions> sequence_options;
+    };
+
     /**
      * An ADataset regroups multiple sequences
      */
-    class Dataset {
+    class Dataset
+    {
     public:
         // Returns all detected sequences
         std::vector<SequenceInfo> AllSequenceInfo() const;
@@ -374,14 +389,16 @@ namespace ct_icp {
         static Dataset LoadDataset(const DatasetOptions &options);
 
         // Builds a dataset from a set of sequences
-        static Dataset BuildCustomDataset(std::vector<std::shared_ptr<ADatasetSequence>> &&custom_sequences) {
+        static Dataset BuildCustomDataset(std::vector<std::shared_ptr<ADatasetSequence>> &&custom_sequences)
+        {
             std::vector<SequenceInfo> sequence_infos;
             std::set<std::string> sequence_names;
-            for (auto &sequence: custom_sequences) {
+            for (auto &sequence : custom_sequences)
+            {
                 auto &seq_info = sequence->GetSequenceInfo();
-                if (sequence_names.find(seq_info.sequence_name) != sequence_names.end()) {
-                    SLAM_LOG(WARNING) << "A sequence with the name " <<
-                                      seq_info.sequence_name << " already exists" << std::endl;
+                if (sequence_names.find(seq_info.sequence_name) != sequence_names.end())
+                {
+                    SLAM_LOG(WARNING) << "A sequence with the name " << seq_info.sequence_name << " already exists" << std::endl;
                 }
                 sequence_infos.push_back(seq_info);
             }
@@ -391,12 +408,13 @@ namespace ct_icp {
     private:
         Dataset(DATASET dataset,
                 std::vector<std::shared_ptr<ADatasetSequence>> &&dataset_sequences,
-                std::vector<SequenceInfo> &&sequence_infos) :
-                dataset_(dataset),
-                sequence_infos_(std::move(sequence_infos)),
-                dataset_sequences_(std::move(dataset_sequences)) {
+                std::vector<SequenceInfo> &&sequence_infos) : dataset_(dataset),
+                                                              sequence_infos_(std::move(sequence_infos)),
+                                                              dataset_sequences_(std::move(dataset_sequences))
+        {
             int i(0);
-            for (auto &seq_info: sequence_infos_) {
+            for (auto &seq_info : sequence_infos_)
+            {
                 map_seqname_to_id_[seq_info.sequence_name] = i;
                 seq_info.sequence_id = i++;
             }
@@ -418,5 +436,4 @@ namespace ct_icp {
     std::vector<slam::Pose> ReadHILTIPosesInLidarFrame(const std::string &file_path, DATASET hilti_dataset);
 }
 
-
-#endif //CT_ICP_DATASET_HPP
+#endif // CT_ICP_DATASET_HPP

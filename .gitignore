@@ -6,6 +6,7 @@ install/*
 benchmark/*
 wandb*
 build/*
+.outputs/*
 
 # Configuration files (e.g. idea)
 .*

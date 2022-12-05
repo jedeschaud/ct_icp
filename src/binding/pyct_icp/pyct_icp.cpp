@@ -481,7 +481,10 @@ PYBIND11_MODULE(pyct_icp, m)
         .def("WithRandomAccess", &ct_icp::ADatasetSequence::WithRandomAccess)
         .def("GetFrame", &ct_icp::ADatasetSequence::GetFrame)
         .def("HasGroundTruth", &ct_icp::ADatasetSequence::HasGroundTruth)
-        .def("SkipFrame", &ct_icp::ADatasetSequence::SkipFrame);
+        .def("SkipFrame", &ct_icp::ADatasetSequence::SkipFrame)
+        .def("GetSequenceName", [](const ct_icp::ADatasetSequence& seq) {
+            return seq.GetSequenceInfo().sequence_name;
+        });
 
     py::class_<ct_icp::AFileSequence, ct_icp::ADatasetSequence, std::shared_ptr<ct_icp::AFileSequence>>(m,
                                                                                                         "FileSequence")
@@ -504,6 +507,39 @@ PYBIND11_MODULE(pyct_icp, m)
                 auto directory = ct_icp::NCLTIterator::NCLTIteratorFromHitsFile(hits_file, sequence_name);
                 return directory; }))
         .def("DoNext", &ct_icp::NCLTIterator::DoNext);
+
+    py::class_<ct_icp::DatasetOptions>(m, "DatasetOptions")
+        .def(py::init())
+        .def_readwrite("dataset", &ct_icp::DatasetOptions::dataset)
+        .def_readwrite("root_path", &ct_icp::DatasetOptions::root_path)
+        .def_readwrite("fail_if_incomplete", &ct_icp::DatasetOptions::fail_if_incomplete)
+        .def_readwrite("min_dist_lidar_center", &ct_icp::DatasetOptions::min_dist_lidar_center)
+        .def_readwrite("max_dist_lidar_center", &ct_icp::DatasetOptions::max_dist_lidar_center)
+        .def_readwrite("nclt_num_aggregated_pc", &ct_icp::DatasetOptions::nclt_num_aggregated_pc);
+
+    m.def("DatasetOptionsFromYAMLStr", [](const std::string& yaml_str) {
+        YAML::Node node = YAML::Load(yaml_str);
+        return ct_icp::yaml_to_dataset_options(node);
+    });
+
+    m.def("DatasetOptionsFromYAMLFile", [](const std::string& yaml_file) {
+        YAML::Node node = YAML::LoadFile(yaml_file);
+        return ct_icp::yaml_to_dataset_options(node);
+    });
+
+    py::class_<ct_icp::Dataset>(m, "Dataset")
+        .def(py::init([](const ct_icp::DatasetOptions& options){
+            return ct_icp::Dataset::LoadDataset(options);
+        }))
+        .def(py::init([](const std::vector<std::shared_ptr<ct_icp::ADatasetSequence>>& sequences) {
+            return ct_icp::Dataset::BuildCustomDataset(std::vector<std::shared_ptr<ct_icp::ADatasetSequence>>(sequences));
+        }))
+        .def("AllSequences", &ct_icp::Dataset::AllSequences)
+        .def("HasSequence", &ct_icp::Dataset::HasSequence)
+        .def("HasGroundTruth", &ct_icp::Dataset::HasGroundTruth)
+        .def("GetSequence", &ct_icp::Dataset::GetSequence)
+        .def("DatasetType", &ct_icp::Dataset::DatasetType)
+        .def("GetGroundTruth", &ct_icp::Dataset::GetGroundTruth);
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// CT_ICP Map
@@ -821,4 +857,4 @@ PYBIND11_MODULE(pyct_icp, m)
              { odom.Reset(); })
         .def("ResetWithOptions", [](ct_icp::Odometry &odom, const ct_icp::OdometryOptions &options)
              { odom.Reset(options); });
-    }
+}
